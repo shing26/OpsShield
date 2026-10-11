@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" href="data:,">
-<title>OpsPilot · 排障问答（交互）</title>
+<title>OpsShield · 排障问答（交互）</title>
 <!--
   排障交互查询页：输入报错堆栈或口语化描述，SSE 流式接收排障答案 + 溯源引用。
   与 index.html（监控面板）共享 JWT（localStorage 'opspilot.jwt'）与 CSS 设计系统。
@@ -147,7 +147,7 @@
 </head>
 <body>
 <header>
-  <div class="brand"><b>OpsPilot</b><span>排障问答 · 交互调试</span></div>
+  <div class="brand"><b>OpsShield</b><span>排障问答 · 交互调试</span></div>
   <div class="nav">
     <a href="/">← 返回 Ops Console 监控面板</a>
   </div>
@@ -207,7 +207,7 @@
 <footer><span id="footstate">idle</span><span>SSE · POST /api/v1/copilot/chat/stream</span></footer>
 
 <div id="auth"><div class="card">
-  <b>OpsPilot 凭证</b>
+  <b>OpsShield 凭证</b>
   <div class="msg" id="authmsg"></div>
   <input id="jwt" type="password" placeholder="粘贴 JWT（login 获取）" autocomplete="off">
   <button id="authgo">接入</button>

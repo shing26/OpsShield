@@ -30,7 +30,7 @@ sys.path.insert(0, str(REPO / "scripts"))
 # 于是"把不变量改坏再跑用例"这种变异验证传导不进去，回归锁等于没被验证过。
 import liveness as lv  # noqa: E402
 
-OK_HTML = "<html><title>OpsPilot · Ops Console</title></html>"
+OK_HTML = "<html><title>OpsShield · Ops Console</title></html>"
 
 
 class FakeResponse(io.BytesIO):
@@ -77,7 +77,7 @@ def test_wrong_service_is_distinguished_from_down():
     })
     state, detail = lv.probe("http://localhost:8081", opener=op)
     assert state == lv.WRONG
-    assert "not OpsPilot" in detail or "不是 OpsPilot" in detail
+    assert "not OpsShield" in detail or "不是 OpsShield" in detail
 
 
 def test_unreachable_when_root_refuses_connection():

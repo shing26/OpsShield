@@ -71,7 +71,7 @@
 | `seed_demo_users.sh` | 幂等初始化四个账号：三演示角色（含跨租户矩阵靶）+ 告警主体 `sre-watcher` |
 | `gen_tokens.py` | 生成红队畸形 token 样本（合法账号走 login，不预签 token） |
 | `check_upstream.py` | **核色前置**：DashScope 三路（LLM / embedding / rerank）探活，全通过才 exit 0——降级会静默掩盖上游故障，故核色前必跑 |
-| `liveness.py` | **外部存活探测**（补 OPS §5.1 盲区）：身份（`/` 的 `OpsPilot` 锚点）+ 存活（health）双信号，只探不修，退出码给 cron/任务计划程序。**身份先于存活**是实测反推的——本机另一个 Spring Boot 应用的 health 同样回 `{"status":"UP"}`，只探 health 会在 OpsPilot 全死时**报健康** |
+| `liveness.py` | **外部存活探测**（补 OPS §5.1 盲区）：身份（`/` 的 `OpsShield` 锚点）+ 存活（health）双信号，只探不修，退出码给 cron/任务计划程序。**身份先于存活**是实测反推的——本机另一个 Spring Boot 应用的 health 同样回 `{"status":"UP"}`，只探 health 会在本应用全死时**报健康** |
 | `watchdog_alerts.py` | **真实 Docker 告警源**（ADR-0011 的输入从"造的"变"真的"）：监视容器状态翻转（exited/unhealthy），翻转即以 `source=alert` 走完整编排链（指纹/收敛/检索）；**首见即刚死也算事故**（否则看门狗冷启动恰逢故障时静默漏报）。复用 `localapi.assert_local` 不自带 HTTP 客户端；自带 `.env` 装载（计划任务环境无人 source）。只观测不重启 |
 | `check_coverage.py` | 覆盖率棘轮（读 jacoco 产物按 LINE 设闸、BRANCH 只报不闸；门槛贴实测值留 1pp 抖动余量） |
 | `daily_usage.py` | 从审计日志聚合当日用量（cron 友好） |

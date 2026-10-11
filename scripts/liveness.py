@@ -11,7 +11,8 @@
 `{"status":"UP"}`**——只看 HTTP 码或只看这个 JSON，等于在给别人的进程做体检：
 "UP 了所以我活着"是最危险的假绿（反过来它回 503 时又会被误读成"我半死"）。
 因此本脚本用两个信号：
-  1. **身份**：GET `/` 的 HTML 里有 `OpsPilot`（面板壳是匿名可开的静态页，零凭据）；
+  1. **身份**：GET `/` 的 HTML 里有 `OpsShield`（面板壳是匿名可开的静态页，零凭据；
+     OpsShield 是对外项目名，`opspilot` 是内部工程代号——页面品牌随对外名走）；
   2. **存活**：`/actuator/health` 的 `status == "UP"`。
 两者都满足才算健康。身份不符 → 报 `WRONG_SERVICE`，与" DOWN"区分开，
 因为这两个的处置动作完全不同（前者去查端口被谁占了，后者去查中间件）。
@@ -40,7 +41,7 @@ DEFAULT_INTERVAL = 30
 DEFAULT_THRESHOLD = 2
 # 身份锚点：面板静态页的标题。它是**匿名可开**的（ADR-0009 的"零信息壳"设计），
 # 所以拿来做身份校验不需要任何凭据，也不会因为拿不到 token 而失去探测能力。
-IDENTITY_MARK = "OpsPilot"
+IDENTITY_MARK = "OpsShield"
 
 # 状态取值：
 HEALTHY = "healthy"          # 身份对 + UP
@@ -73,7 +74,7 @@ def probe(base: str = DEFAULT_BASE, timeout: float = 5.0, opener=urllib.request.
     except Exception as e:  # noqa: BLE001 - 连不上根路径就是不可达，按钮怎么点都一样
         return UNREACHABLE, f"{type(e).__name__}: {e}"
     if code != 200 or IDENTITY_MARK not in body:
-        return WRONG, f"{base}/ 返回 {code} 且无 {IDENTITY_MARK!r} 锚点——不是 OpsPilot，端口多半被别的项目占了"
+        return WRONG, f"{base}/ 返回 {code} 且无 {IDENTITY_MARK!r} 锚点——不是 OpsShield，端口多半被别的项目占了"
     # ② 存活
     try:
         code, body = _http_get(base + "/actuator/health", timeout, opener)
@@ -122,7 +123,7 @@ def append_log(path: Path, state: str, detail: str, base: str) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="OpsPilot 外部存活探测（只探不修）")
+    ap = argparse.ArgumentParser(description="OpsShield 外部存活探测（只探不修）")
     ap.add_argument("--base", default=DEFAULT_BASE, help="网关根 URL（默认 %(default)s）")
     ap.add_argument("--interval", type=float, default=DEFAULT_INTERVAL, help="轮询间隔秒（默认 %(default)s）")
     ap.add_argument("--threshold", type=int, default=DEFAULT_THRESHOLD,

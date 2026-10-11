@@ -1,11 +1,13 @@
-# OpsPilot Gateway
+# OpsShield
 
 > **面向 AIOps 与 SRE 场景的生产级 LLM 韧性治理与流量防御网关** —— 告警风暴打不穿、模型挂了不雪崩、运维指令零幻觉。
 
-[![CI](https://github.com/shing26/opspilot-aiops/actions/workflows/ci.yml/badge.svg)](https://github.com/shing26/opspilot-aiops/actions)
+[![CI](https://github.com/shing26/OpsShield/actions/workflows/ci.yml/badge.svg)](https://github.com/shing26/OpsShield/actions)
 [![Java](https://img.shields.io/badge/Java-21-orange.svg)]()
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.3-green.svg)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+> **命名说明**：OpsShield 是对外项目名；`opspilot` 是内部工程代号（Java 包名 `com.opspilot`、配置前缀 `opspilot.*`、`/v1` 协议的 model 名）——展示名与命名空间解耦是开源基础设施的常见形态，改名不触碰任何代码与配置。
 
 Java 21 虚拟线程 · ES 倒排 + Qdrant 向量双路召回（RRF 融合）· 双层缓存 · 三级自适应降级 · 多租户引擎层硬隔离 · 只读行动契约。
 
@@ -106,7 +108,7 @@ flowchart TD
 ## 快速开始（三条命令，零 key 零成本）
 
 ```bash
-git clone https://github.com/shing26/opspilot-aiops && cd opspilot-aiops
+git clone https://github.com/shing26/OpsShield && cd OpsShield
 bash scripts/quickstart.sh   # 生成随机凭据 .env（key 留空=mock）→ Docker 全栈 → seed 演示账号
 bash scripts/demo.sh         # 预检全 PASS = 机制全链路就绪
 ```
