@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 演示预检：只读检查，零 LLM/embedding 成本。全 PASS 后按 DEMO.md 开演。
+# 演示预检：只读检查，零 LLM/embedding 成本。全 PASS 后按 docs/DEMO.md 开演。
 set -u
 cd "$(dirname "$0")/.."
 fails=0
@@ -14,7 +14,7 @@ done
 
 # 2) 服务健康
 h=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8081/actuator/health || echo 000)
-[ "$h" = "200" ] && ok "网关 UP (8081)" || bad "网关未响应（见 DEMO.md §0 启动）"
+[ "$h" = "200" ] && ok "网关 UP (8081)" || bad "网关未响应（见 docs/DEMO.md §0 启动）"
 
 # 3) 凭据就绪：口令在环境（P2 login 体系）+ 红队畸形样本文件可再生
 [ -f .env ] && { set -a; . ./.env; set +a; }
@@ -93,6 +93,6 @@ else
 fi
 
 echo "---"
-[ "$fails" = "0" ] && echo "READY：按 DEMO.md 开演（底幕=Ops Console 面板 http://localhost:8081/）" \
+[ "$fails" = "0" ] && echo "READY：按 docs/DEMO.md 开演（底幕=Ops Console 面板 http://localhost:8081/）" \
   || echo "预检 $fails 项失败，先修复"
 exit "$fails"

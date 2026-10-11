@@ -92,7 +92,7 @@ def main():
     # A3-8 物料完备
     root = ROOT.parent
     readme = (root / "README.md").exists()
-    ctx = (root / "CONTEXT.md").exists()
+    ctx = (root / "docs" / "CONTEXT.md").exists()
     adrs = len(list((root / "docs" / "adr").glob("*.md"))) >= 6   # 随生产化增补（0005/0006），下限断言防删
     check("A3-8 物料完备(README+CONTEXT+>=6ADR)", readme and ctx and adrs,
           f"README={readme} CONTEXT={ctx} ADR={adrs}")

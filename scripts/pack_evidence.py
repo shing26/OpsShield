@@ -98,7 +98,7 @@ REGISTRY: list[tuple[str, str, str]] = [
     ("README.md", "门面：正文引用的每个数字都应能在本档内找到出处", CLEAN),
     ("docs/repo-map.md", "仓库地图与文档分工（维护者向：目录职责 / scripts 一览 / 收纳规矩）", CLEAN),
     ("OPS.md", "运维速查：债务闹钟表与 SOP", CLEAN),
-    ("DEMO.md", "演示主线（幕①–⑧）与讲解稿", CLEAN),
+    ("docs/DEMO.md", "演示主线（幕①–⑧）与讲解稿", CLEAN),
     # 运行态证据：gitignore，干净检出里不存在——只在存在时纳入并标 local
     ("logs/audit.jsonl", "运行期由网关自动落盘（合规审计，14 天滚动）", LOCAL),
     ("logs/alert-producer.jsonl", "bash scripts/alert_producer.sh 或 python offline/alert_producer.py", LOCAL),

@@ -35,7 +35,7 @@
       "format": "int",
       "cited_in": [
         {
-          "file": "README.md",
+          "file": "docs/repo-map.md",
           "pattern": "(\\d+) 项架构决策"
         }
       ]
@@ -50,7 +50,7 @@
       "format": "int",
       "cited_in": [
         {
-          "file": "README.md",
+          "file": "OPS.md",
           "pattern": "(\\d+) chunks"
         },
         {
@@ -58,7 +58,7 @@
           "pattern": "(\\d+) chunks"
         },
         {
-          "file": "DEMO.md",
+          "file": "docs/DEMO.md",
           "pattern": "(\\d+) chunks"
         }
       ]
@@ -76,7 +76,7 @@
       "format": "int",
       "cited_in": [
         {
-          "file": "README.md",
+          "file": "docs/positioning-aiops.md",
           "pattern": "(\\d+) 篇复盘/Runbook"
         }
       ]
@@ -92,10 +92,6 @@
       "cited_in": [
         {
           "file": "README.md",
-          "pattern": "评测集扩至 (\\d+) 样本"
-        },
-        {
-          "file": "README.md",
           "pattern": "golden（(\\d+) 样本"
         },
         {
@@ -103,11 +99,7 @@
           "pattern": "# (\\d+) 样本"
         },
         {
-          "file": "README.md",
-          "pattern": "评测集 (\\d+) 样本"
-        },
-        {
-          "file": "CONTEXT.md",
+          "file": "docs/CONTEXT.md",
           "pattern": "(\\d+) 组标注样本"
         }
       ]
@@ -133,7 +125,7 @@
           "pattern": "(\\d+) 精确码"
         },
         {
-          "file": "CONTEXT.md",
+          "file": "docs/CONTEXT.md",
           "pattern": "（(\\d+) 精确错误码"
         }
       ]
@@ -159,7 +151,7 @@
           "pattern": "(\\d+) 语义"
         },
         {
-          "file": "CONTEXT.md",
+          "file": "docs/CONTEXT.md",
           "pattern": "\\+ (\\d+) 口语化语义"
         }
       ]
@@ -312,10 +304,6 @@
         {
           "file": "README.md",
           "pattern": "(\\d+) 条越狱用例"
-        },
-        {
-          "file": "README.md",
-          "pattern": "实测 (\\d+) 用例零泄漏"
         }
       ]
     },

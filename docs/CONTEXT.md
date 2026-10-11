@@ -58,7 +58,7 @@ Qdrant 专属 Collection，余弦相似度 > 0.95 判定命中，跳过检索与
 ### 降级域
 
 **Level 0（正常）**: ES+Qdrant 双路 + Rerank + LLM 全链路；相关性门控生效。
-**Level 1（高负载）**: 摘除向量路与 Rerank，纯 ES 关键词召回（检索侧等同 `es_only` 模式）。**代价有两项**：检索质量下降（语义 Hit@1 88.2%→70.6%），且**门控降级**——摘除 Rerank 后无相关性分数可依，门控从「相关性级」退为「零召回级」，即"不知道就不答"在降级期被弱化。取舍与重开触发线见 [ADR-0012](docs/adr/0012-degradation-cost-semantics.md)。
+**Level 1（高负载）**: 摘除向量路与 Rerank，纯 ES 关键词召回（检索侧等同 `es_only` 模式）。**代价有两项**：检索质量下降（语义 Hit@1 88.2%→70.6%），且**门控降级**——摘除 Rerank 后无相关性分数可依，门控从「相关性级」退为「零召回级」，即"不知道就不答"在降级期被弱化。取舍与重开触发线见 [ADR-0012](adr/0012-degradation-cost-semantics.md)。
 **Level 2（熔断）**: 切断 LLM，直出 Redis 预热的静态 SOP 止损清单。
 _Avoid_: 熔断级别、降级档位（统一 Level 0/1/2）
 

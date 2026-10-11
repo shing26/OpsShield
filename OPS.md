@@ -1,6 +1,22 @@
 # OpsPilot 运维速查（OPS）
 
-> 读者 = 管理员。演示话术在 [DEMO.md](DEMO.md)，架构叙事在 README/ADR——本文只放**日常要做的事**。
+> 读者 = 管理员。演示话术在 [docs/DEMO.md](docs/DEMO.md)，架构叙事在 README/ADR——本文只放**日常要做的事**。
+
+## 0. 脚本索引（按用途分组；逐脚本职责与坑见 [docs/repo-map.md](docs/repo-map.md)）
+
+| 分组 | 脚本 | 一句话 |
+| --- | --- | --- |
+| **服务生命周期** | `scripts/quickstart.sh` | 三条命令入口：随机凭据 .env → Docker 全栈 → seed 账号 |
+| | `scripts/start_gateway.sh` | 起停网关（占用预检 + `Started` 判据；端口/堆可 env 覆盖） |
+| | `scripts/backup.sh` / `scripts/user_admin.sh` / `scripts/seed_demo_users.sh` | 备份 / 账号 CLI（容器形态先停网关）/ 演示账号 |
+| | `scripts/console_token.sh` / `scripts/gen_tokens.py` | 取面板 JWT / 红队畸形 token（A2 依赖，勿删） |
+| **门禁与契约检查** | `scripts/check_panel_contract.sh` | 面板↔后端字面量契约 + actuator 暴露面（CI 独立 job） |
+| | `scripts/check_coverage.py` | 覆盖率棘轮（CI-only：本机目录名含长破折号量不了） |
+| | `offline/doc_numbers.py` / `offline/provenance.py` | 文档数字现算比对 / 报告↔语料同代门闩 |
+| | `scripts/pack_evidence.py` | 证据一键打包（逐项注明出处） |
+| **故障注入与演示** | `scripts/demo.sh` / `scripts/demo_self_alert.sh` | 演示预检（全 PASS 才开演）/ 自举闭环一幕到底 |
+| | `scripts/watchdog_alerts.py` | 真实 Docker 告警源（容器翻转 → source=alert） |
+| | `scripts/audit_timeline.py` / `scripts/check_upstream.py` | 审计时间线回放 / DashScope 三路探活（核色前置） |
 
 ## 1. 账号生命周期（不再手工签 token）
 

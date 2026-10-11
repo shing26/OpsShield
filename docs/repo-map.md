@@ -5,14 +5,15 @@
 > GitHub 访客扫不到底，而接手的人需要它。**新文档一律先进 `docs/`，确实属于必读门面才升到根**
 > （见文末「收纳规矩」第 4 条——本文自己就是按这条办的）。
 
-## 四份根文档的分工
+## 文档分工（根目录只留 README/OPS/LICENSE；开发态备忘收在 docs/）
 
 | 你在做什么 | 打开哪份 |
 | --- | --- |
-| 判断这项目值不值得看 | [README.md](../README.md)（门面与实测指标） |
-| 起服务 / 跑演示 / 录屏 | [DEMO.md](../DEMO.md)（六幕主线 + 幕⑦/幕⑧，前置 `scripts/demo.sh` 自检） |
+| 判断这项目值不值得看 | [README.md](../README.md)（展厅：定位/指标/架构/快速开始） |
+| 起服务 / 跑演示 / 录屏 | [DEMO.md](DEMO.md)（六幕主线 + 幕⑦/幕⑧，前置 `scripts/demo.sh` 自检） |
 | 日常运维：开号、离职、配额、告警、债务闹钟 | [OPS.md](../OPS.md)（管理员速查——**债务与触发线的单一事实源是它的 §5 / §5.1**） |
-| 对齐领域词汇（Query / Chunk / 指纹…） | [CONTEXT.md](../CONTEXT.md)（术语表——**改名词先改这里**） |
+| 对齐领域词汇（Query / Chunk / 指纹…） | [CONTEXT.md](CONTEXT.md)（术语表——**改名词先改这里**） |
+| 定位自证：AIOps 谱系 / 与朴素 RAG 的差异 / 与 agent 的关系 | [positioning-aiops.md](positioning-aiops.md)（五域三分类表 + 五条机制级差异） |
 | 已经做完什么、证据在哪 | [docs/ops/production-readiness-2026-09-12.md](ops/production-readiness-2026-09-12.md)（生产就绪度台账） |
 | 缺陷与验证的原始记录 | [docs/qa/](qa/)（三份台账：Persona 测评 / 模块复验 / 自举闭环验收） |
 | 架构决策与否决理由 | [docs/adr/](adr/) |
