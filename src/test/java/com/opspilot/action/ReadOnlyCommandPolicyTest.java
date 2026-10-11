@@ -271,4 +271,90 @@ class ReadOnlyCommandPolicyTest {
         assertTrue(ReadOnlyCommandPolicy.isReadOnly("grep -E \"Full GC|Evacuation Pause\" /var/log/app/gc.log"));
         assertTrue(ReadOnlyCommandPolicy.isReadOnly("echo 'a;b'"));
     }
+
+    // ─────────────── 2026-10-11 评审批（Reviewer-Security）：绕过修复回归锁 ───────────────
+    // 变异验证口径：把下列任一闸门改坏（env 拉回白名单 / SUBSTITUTION_MARKERS 删 "<(" /
+    // ssh 分支改回"跳全部旗标再跳 host"），对应断言必红。
+
+    @Test
+    @DisplayName("env 是执行器不是纯读工具：env rm 必须拒（评审批 F2）")
+    void envIsAnExecutorNotARedReader() {
+        assertFalse(ReadOnlyCommandPolicy.isReadOnly("env rm -rf /data"), "env 执行器被当纯读放行");
+        assertFalse(ReadOnlyCommandPolicy.isReadOnly("env journalctl --vacuum-time=1s"));
+        // 无参 env 也是信息泄漏面，且语料无此用法：整体移出白名单，fail-closed
+        assertFalse(ReadOnlyCommandPolicy.isReadOnly("env"));
+    }
+
+    @Test
+    @DisplayName("纯读工具的旗标级写面：sort -o / date -s / dmesg -C / journalctl --vacuum / hostname 改名 / openssl x509 -out")
+    void flagLevelWriteFacesRejected() {
+        List.of(
+                "sort -o /tmp/passwd /etc/passwd",
+                "sort --output=/tmp/x /etc/passwd",
+                "date -s '2026-10-11 00:00:00'",
+                "date --set='2038-01-01'",
+                "dmesg -C",
+                "dmesg --read-clear",
+                "journalctl --vacuum-time=1s",
+                "journalctl --rotate",
+                "hostname gw-backup-2",
+                "openssl x509 -in a.pem -out forged.pem",
+                "openssl x509 -in a.pem -out=forged.pem"
+        ).forEach(cmd -> assertFalse(ReadOnlyCommandPolicy.isReadOnly(cmd), "旗标级写面被放行: " + cmd));
+        // 现役语料的只读形态必须原样放行（收紧不能把语料打残）
+        assertTrue(ReadOnlyCommandPolicy.isReadOnly("openssl x509 -in /etc/certs/payment-client.pem -noout -enddate"));
+        assertTrue(ReadOnlyCommandPolicy.isReadOnly("sort /etc/passwd"));
+        assertTrue(ReadOnlyCommandPolicy.isReadOnly("date"));
+        assertTrue(ReadOnlyCommandPolicy.isReadOnly("dmesg -T"));
+        assertTrue(ReadOnlyCommandPolicy.isReadOnly("journalctl -u opspilot-gateway --since \"1 hour ago\""));
+    }
+
+    @Test
+    @DisplayName("进程替换与 $( 同罪：<( / =( 判拒（评审批 F3）")
+    void processSubstitutionRejected() {
+        List.of(
+                "cat <(rm -rf /data)",
+                "diff <(sort a) <(sort b)",      // 合法读用法也拒：已知保守偏差（ADR-0017）
+                "tar cf >(gzip > /tmp/x) /data"
+        ).forEach(cmd -> assertFalse(ReadOnlyCommandPolicy.isReadOnly(cmd), "进程替换被放行: " + cmd));
+    }
+
+    @Test
+    @DisplayName("ssh 取值旗标下负载不许逃逸：-i key host rm 必须拒（评审批 F4）")
+    void sshPayloadNotEscapedByValuedFlags() {
+        List.of(
+                "ssh -i ~/.ssh/id_rsa gateway-1 rm -rf /data",   // 旧判据：key 被当 host，负载整体漏校验
+                "ssh -p 2222 gateway-1 rm -rf /data",
+                "ssh -o ProxyCommand='nc %h %p' gateway-1 cat /etc/shadow",
+                "ssh -L 6379:redis:6379 gateway-1 journalctl --vacuum-time=1s",
+                "ssh gateway-1 systemctl restart redis",
+                "ssh -v gateway-1 cat /etc/shadow"               // 闭集外旗标 fail-closed
+        ).forEach(cmd -> assertFalse(ReadOnlyCommandPolicy.isReadOnly(cmd), "ssh 负载逃逸: " + cmd));
+        // 合法只读形态放行
+        assertTrue(ReadOnlyCommandPolicy.isReadOnly("ssh gateway-1 'journalctl -u opspilot-gateway | tail -50'"));
+        assertTrue(ReadOnlyCommandPolicy.isReadOnly("ssh -i ~/.ssh/id_rsa gateway-1 'cat /var/log/app/error.log'"));
+    }
+
+    @Test
+    @DisplayName("占位符掩码只认纯 <名> 段：<in>out 的 > 是真重定向（评审批 F5）")
+    void impurePlaceholderKeepsItsRedirect() {
+        // bash 语义：stdin←in 且 stdout→out——是落盘写，掩码不得吞掉那个 >
+        assertFalse(ReadOnlyCommandPolicy.isReadOnly("grep x <in>out"));
+        assertFalse(ReadOnlyCommandPolicy.isReadOnly("cat <in> > out"));
+        // 纯占位符照旧掩码（2026-10-10 活体教训的回归锁不回退）
+        assertTrue(ReadOnlyCommandPolicy.isReadOnly("jstack <pid> | grep -A 20 \"ConsumeMessageThread\""));
+        assertTrue(ReadOnlyCommandPolicy.isReadOnly("kubectl logs <pod> -n prod 2>&1 | tail -50"));
+    }
+
+    @Test
+    @DisplayName("git 元数据写旗标：branch/tag/remote 整体出白名单（评审批 F6）")
+    void gitMetadataWritersRejected() {
+        List.of(
+                "git tag -d v1.0.0",
+                "git branch -D feature/x",
+                "git remote add evil https://evil.example/x.git"
+        ).forEach(cmd -> assertFalse(ReadOnlyCommandPolicy.isReadOnly(cmd), "git 元数据写被放行: " + cmd));
+        assertTrue(ReadOnlyCommandPolicy.isReadOnly("git status"));
+        assertTrue(ReadOnlyCommandPolicy.isReadOnly("git log --oneline -5"));
+    }
 }

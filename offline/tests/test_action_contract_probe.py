@@ -235,6 +235,26 @@ def test_placeholders_are_not_redirects():
     assert acp._redirect_to_file("cat < input.txt > out.txt")   # 真输入重定向 + 落盘输出
 
 
+def test_impure_placeholder_keeps_its_redirect():
+    """评审批 2026-10-11（F5）：掩码只认**纯 `<名>` 段**——`<in>out` 的 `>` 是真重定向，
+    bash 语义下 stdin←in 且 stdout→out，真会把 out 落盘。掩码吞掉它=写面漏判。"""
+    assert acp._pure_placeholder_end("grep x <in>out", 7) == -1
+    assert ">" in acp._mask_placeholders("grep x <in>out")
+    assert acp._redirect_to_file("grep x <in>out")
+    # 纯占位符照旧掩码（不回退 2026-10-10 的活体回归锁）
+    assert "<" not in acp._mask_placeholders("kubectl logs <pod> -n prod")
+    assert "<" not in acp._mask_placeholders("top -H -p <pid> -n 1")
+    assert not acp._redirect_to_file("top -H -p <pid> -n 1")
+
+
+def test_process_substitution_is_rejected_like_command_substitution():
+    """评审批 2026-10-11（F3）：`<(`/`>(`/`=(` 进程替换与 `$( ` 同罪——替换体里的命令会真实
+    执行，argv 首词是 cat 也挡不住。标记表与 ReadOnlyCommandPolicy 同一份（Java+Python 双镜像）。"""
+    for cmd in ("cat <(rm -rf /data)", "tar cf >(gzip > /tmp/x) /data", "diff <(sort a) <(sort b)"):
+        assert "命令替换" in acp.redline_hits(cmd), cmd
+    assert "命令替换" not in acp.redline_hits("jstack <pid> | grep -A 20 pool")
+
+
 # ---------------------------------------------------------------- Prometheus（AC-8）
 
 BODY = """# HELP aiops_guard_action_commands_rejected_total 判拒次数

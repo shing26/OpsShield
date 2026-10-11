@@ -319,9 +319,10 @@ public class ChatOrchestrator {
     }
 
     /** 服务端日志带异常 message 供运维归因（LlmClient 的 message 自拼：状态码/网络错类，
-     *  不含凭据；对外 error 帧仍是脱敏固定话术，SLO 面零泄露）。 */
+     *  不含凭据；对外 error 帧仍是脱敏固定话术，SLO 面零泄露）。控制符压平成空格再截断：
+     *  上游 message 里若带换行，落日志就是可伪造的行（2026-10-11 评审批）。 */
     private static void logWarn(Throwable e) {
-        String m = String.valueOf(e.getMessage());
+        String m = String.valueOf(e.getMessage()).replaceAll("[\\r\\n\\t]+", " ");
         log.warn("stream error: {}: {}", e.getClass().getSimpleName(),
                 m.substring(0, Math.min(300, m.length())));
     }

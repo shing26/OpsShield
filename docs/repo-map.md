@@ -22,7 +22,7 @@
 | 路径 | 是什么 | 入库 |
 | --- | --- | --- |
 | `src/main/java/com/opspilot/` | 在线面：`gateway`(协议/编排) `retrieval` `llm` `resilience` `auth` `cache` `storm` `metrics` `health` `ingest` `chunk` `config` | ✅ |
-| `src/test/java/` | 单测与集成（223 用例，`@Test` 声明数） | ✅ |
+| `src/test/java/` | 单测与集成（229 用例，`@Test` 声明数） | ✅ |
 | `docs/adr/` | 17 项架构决策（每份含否决项与后果）——**改架构先写 ADR** | ✅ |
 | `docs/qa/` | 红队缺陷台账 / 模块复验台账（缺陷与验证的单一事实源） | ✅ |
 | `docs/ops/` | 生产化就绪度台账（现行状态置顶 + 历史归档） | ✅ |

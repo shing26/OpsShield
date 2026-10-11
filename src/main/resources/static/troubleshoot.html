@@ -427,7 +427,10 @@ $('go').onclick = async () => {
 function esc(s) {
   const d = document.createElement('div');
   d.textContent = s == null ? '' : s;
-  return d.innerHTML;
+  // textContent→innerHTML 只转义 & < >。命令原文经策略放行时可以带引号（策略不拒引号），
+  // 而本页把命令放进 data-cmd="…" 属性——引号不转义，第一个 " 就把属性提前闭合，
+  // 后续字节变成攻击者可控的属性（onfocus/autofocus 类）。属性上下文必须补齐引号。
+  return d.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 /* 复制只读命令：clipboard 在高安全上下文不可用时退回 execCommand（本地 http 常见） */

@@ -162,8 +162,9 @@ REDLINE_SUBVERBS = [
     (re.compile(r"\bredis-cli\b.*\b(flushall|flushdb)\b", re.I), "redis 清库"),
     (re.compile(r"\b(mysql|psql|mongosh)\b.*\b(drop|truncate)\b", re.I), "落库破坏语句"),
 ]
-# 命令替换标记与 ReadOnlyCommandPolicy.SUBSTITUTION_MARKERS 同一份（$(…)/反引号/system(/popen(/exec(
-SUBSTITUTION_MARKERS = ("$(", "`", "system(", "popen(", "exec(")
+# 命令替换标记与 ReadOnlyCommandPolicy.SUBSTITUTION_MARKERS 同一份（$(…)/反引号/
+# system(/popen(/exec(，外加 bash/zsh 进程替换 <(…)/=(…)
+SUBSTITUTION_MARKERS = ("$(", "`", "<(", ">(", "=(", "system(", "popen(", "exec(")
 
 
 def _first_token(segment: str) -> str:
@@ -179,29 +180,41 @@ def _first_token(segment: str) -> str:
 def _mask_placeholders(text: str) -> str:
     """把 `<pid>`/`<orderId>` 这类占位符掩成等长填充（maskPlaceholders 的镜像）。
 
-    判据与 Java 侧逐字相同：`<` 后紧跟非空白，且**同一空白分隔段内**能配上 `>`。真输入
-    重定向（`cat < f`）`<` 后有空白，不会被掩掉——所以这里掩的是占位符，不是重定向。
+    判据与 Java 侧逐字相同（2026-10-11 评审批收紧）：**整个空白分隔段恰好是 `<名>`**
+    ——名字只含字母/数字/下划线/点/横杠，且 `>` 后紧跟空白或串尾。`<in>out` 这种
+    "`>` 后贴着字"的形态不是占位符：那个 `>` 必须留给重定向判据（bash 语义下它真会把
+    out 落盘）。真输入重定向（`cat < f`）`<` 后有空白，不会被掩掉。
     """
     out: list[str] = []
     i, n = 0, len(text)
     while i < n:
-        if text[i] == "<" and i + 1 < n and not text[i + 1].isspace():
-            close = -1
-            k = i + 1
-            while k < n:
-                if text[k] == ">":
-                    close = k
-                    break
-                if text[k].isspace():
-                    break     # 跨空白的尖括号不当占位符（很可能是两个不同的重定向）
-                k += 1
-            if close > i:
-                out.append("P" * (close - i + 1))
-                i = close + 1
-                continue
+        close = _pure_placeholder_end(text, i)
+        if close > i:
+            out.append("P" * (close - i + 1))
+            i = close + 1
+            continue
         out.append(text[i])
         i += 1
     return "".join(out)
+
+
+def _pure_placeholder_end(text: str, start: int) -> int:
+    """`start` 处的 `<` 是否起一个纯占位符段，是则返回其 `>` 的下标，否则 -1（Java 镜像）。"""
+    if start + 1 >= len(text) or text[start] != "<":
+        return -1
+    k = start + 1
+    while k < len(text):
+        c = text[k]
+        if c == ">":
+            break
+        if c.isspace() or not (c.isalnum() or c in "_.-"):
+            return -1
+        k += 1
+    if k >= len(text) or k == start + 1:
+        return -1            # 没配上 >，或空名字
+    if k + 1 < len(text) and not text[k + 1].isspace():
+        return -1            # > 后贴着字符：<in>out 形态，不掩
+    return k
 
 
 def _redirect_to_file(command: str) -> bool:

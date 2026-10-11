@@ -52,11 +52,11 @@ public class SseEvents {
         Map<String, Object> done = new LinkedHashMap<>();
         done.put("ttft_ms", ttftMs);
         done.put("refs", refs);
-        // ADRs 0017：只读行动契约随 done 下发（键恒给，空表给 []——客户端不必区分"没有"与"空了"）；
+        // ADRs 0017：只读行动契约随 done 下发（键恒给，空表给 []——客户端不必判存在性）；
         // 每条命令都摘自已引用的 chunk 原文并经只读策略核准，网关自身不执行
         done.put("actions", actions == null ? List.of() : actions);
         trySend(emitter, "done", done);
-        emitter.complete();
+        completeQuietly(emitter);
     }
 
     /**
@@ -78,7 +78,20 @@ public class SseEvents {
             err.put("actions", actions);
         }
         trySend(emitter, "error", err);
-        emitter.complete();
+        completeQuietly(emitter);
+    }
+
+    /**
+     * 客户端超时/断连后 emitter 已被容器收尾，第二次 {@code complete()} 会抛
+     * {@link IllegalStateException}——与 {@link #trySend} 同口径静默（收尾权归先到者，
+     * 异常帧丢失只是噪音，degrade 计数在编排层 finally 兜底不受影响）。
+     */
+    private static void completeQuietly(SseEmitter emitter) {
+        try {
+            emitter.complete();
+        } catch (IllegalStateException already) {
+            log.debug("SSE already completed (client gone): {}", already.getMessage());
+        }
     }
 
     public void trySend(SseEmitter emitter, String event, Object data) {

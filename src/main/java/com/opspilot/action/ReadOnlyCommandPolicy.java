@@ -14,27 +14,29 @@ import java.util.Set;
  * {@code aiops.guard.action_commands_rejected}（Prometheus 侧，不进 /state 面板契约）。
  * 静默丢弃比误放一条写操作好——后者会直接推翻 ADR-0013 的「只读、零写、非侵入」。
  *
- * <p><b>四层判据</b>（任一层不过即拒）：
- * <ol>
- *   <li><b>工具白名单</b>：第一 token 必须在闭集内。`rm`/`mv`/`chmod`/`taskkill`/`mysql`/
- *       `python -c` 等天然不在表内——这是最主要的一道闸。</li>
- *   <li><b>多态工具的子动词</b>：{@code kubectl}/{@code docker}/{@code redis-cli}/{@code git}
- *       等单二进制多语义工具，按「动词（必要时再看子动词）」收敛到闭集：
- *       {@code kubectl delete}、{@code redis-cli FLUSHALL}、{@code git push} 在此层被拒。</li>
- *   <li><b>外壳/执行型前缀递归校验</b>：{@code sh -c '…'}、{@code ssh host '…'}、
- *       {@code kubectl exec … -- …}、{@code docker exec … -- …} 不许"整体放行"——
- *       外壳里装的负载要用<b>同一套策略</b>再判一遍（深度上限防 {@code sh -c 'sh -c …'} 嵌套炸弹）。
- *       负载判不过，外壳一起拒。</li>
- *   <li><b>旗标与重定向</b>：命令替换（{@code $(…)}/反引号/{@code system(}）是唯一能把写操作
- *       藏进"已核准工具"参数里的通道，一律判拒；重定向目标只允许 {@code /dev/null}
- *       （{@code 2>/dev/null} 无害，{@code > /tmp/x} 是写文件）。</li>
- * </ol>
- *
- * <p><b>已知的保守偏差</b>（刻意接受，均记入 ADRs 0017）：判据是词法级的，不解析 SQL 字符串
- * 字面量（{@code SELECT * FROM t WHERE s='DELETE'} 会被拒），也不识别 PromQL 等查询语
- * （{@code container_memory_working_set_bytes{…}} 无命令形态，整块丢弃），awk 的
- * {@code $(NF)} 字段语法同样撞在第 4 层上。这些都是"少给一条建议"，不是"给错一条建议"。
- */
+     * <p><b>四层判据</b>（任一层不过即拒）：
+     * <ol>
+     *   <li><b>工具白名单</b>：第一 token 必须在闭集内。`rm`/`mv`/`chmod`/`taskkill`/`mysql`/
+     *       `python -c` 等天然不在表内——这是最主要的一道闸。</li>
+     *   <li><b>多态工具的子动词</b>：{@code kubectl}/{@code docker}/{@code redis-cli}/{@code git}
+     *       等单二进制多语义工具，按「动词（必要时再看子动词）」收敛到闭集：
+     *       {@code kubectl delete}、{@code redis-cli FLUSHALL}、{@code git push} 在此层被拒。</li>
+     *   <li><b>外壳/执行型前缀递归校验</b>：{@code sh -c '…'}、{@code ssh host '…'}、
+     *       {@code kubectl exec … -- …}、{@code docker exec … -- …} 不许"整体放行"——
+     *       外壳里装的负载要用<b>同一套策略</b>再判一遍（深度上限防 {@code sh -c 'sh -c …'} 嵌套炸弹）。
+     *       负载判不过，外壳一起拒。</li>
+     *   <li><b>旗标与重定向</b>：命令替换（{@code $(…)}/反引号/{@code system(}）与进程替换
+     *       （{@code <(…)}/{@code =(…)}）是唯一能把写操作藏进"已核准工具"参数里的通道，一律判拒；
+     *       重定向目标只允许 {@code /dev/null}（{@code 2>/dev/null} 无害，{@code > /tmp/x} 是写文件）。</li>
+     * </ol>
+     *
+     * <p><b>已知的保守偏差</b>（刻意接受，均记入 ADRs 0017）：判据是词法级的，不解析 SQL 字符串
+     * 字面量（{@code SELECT * FROM t WHERE s='DELETE'} 会被拒），也不识别 PromQL 等查询语
+     * （{@code container_memory_working_set_bytes{…}} 无命令形态，整块丢弃），awk 的
+     * {@code $(NF)} 字段语法同样撞在第 4 层上；进程替换的合法读用法（{@code diff <(sort a) <(sort b)}）
+     * 与 {@code ssh} 的取值旗标闭集外形态（{@code -o}/-v 等）一并判拒。这些都是"少给一条建议"，
+     * 不是"给错一条建议"。
+     */
 public final class ReadOnlyCommandPolicy {
 
     private ReadOnlyCommandPolicy() {}
@@ -52,9 +54,11 @@ public final class ReadOnlyCommandPolicy {
      * {@code mysql}/{@code psql}——客户端语义随语句走，无法在词法层收敛）、
      * 文件/进程变更器（{@code rm}/{@code mv}/{@code cp}/{@code tee}/{@code chmod}/{@code chown}/
      * {@code kill}/{@code taskkill}/{@code truncate}）、流量捕获（{@code tcpdump} 默认落 pcap 文件）、
-     * 落盘型下载（{@code wget} 默认把响应写进当前目录），以及多态但未收敛子动词的网络配置三件套
-     * （{@code ip}/{@code route}/{@code arp} 都能改路由表与网卡）。后两者收敛成本高于收益、语料也没
-     * 用到——真需要时照 {@code VERBS} 的现例补子动词闭集即可。
+     * 落盘型下载（{@code wget} 默认把响应写进当前目录）、执行器 {@code env}
+     * （{@code env rm -rf /} 的首词会过任何白名单，2026-10-11 评审批移出），
+     * 以及多态但未收敛子动词的网络配置四件套
+     * （{@code ip}/{@code ifconfig}/{@code route}/{@code arp} 都能改路由表与网卡）。后两者的
+     * 收敛成本高于收益、语料也没用到——真需要时照 {@code VERBS} 的现例补子动词闭集即可。
      */
     private static final Set<String> TOOLS = Set.of(
             // 进程与系统
@@ -63,10 +67,10 @@ public final class ReadOnlyCommandPolicy {
             "ls", "cat", "file", "stat", "head", "tail", "wc", "sort", "uniq", "cut", "tr", "jq",
             "grep", "egrep", "fgrep", "rg",
             // 环境
-            "echo", "printf", "date", "env", "printenv", "id", "whoami", "hostname", "uname",
+            "echo", "printf", "date", "printenv", "id", "whoami", "hostname", "uname",
             "dmesg", "lsb_release",
             // 网络探测（只发不收）
-            "ping", "traceroute", "tracepath", "ss", "netstat", "ifconfig", "dig", "nslookup",
+            "ping", "traceroute", "tracepath", "ss", "netstat", "dig", "nslookup",
             "host", "curl",
             // 时间同步
             "timedatectl", "chronyc", "ntpq", "ntpstat",
@@ -87,8 +91,10 @@ public final class ReadOnlyCommandPolicy {
                     "version", "cluster-info", "events", "exec"),
             "docker", Set.of("ps", "logs", "inspect", "stats", "top", "images", "version",
                     "info", "port", "exec"),
+            // git 刻意不收 branch/tag/remote：-d/-D/add 是元数据写，旗标闭集成本高于收益
+            // （语料零使用，2026-10-11 评审批收紧）
             "git", Set.of("status", "log", "ls-files", "show", "diff", "blame", "rev-parse",
-                    "check-ignore", "remote", "branch", "tag", "describe", "shortlog", "grep"),
+                    "check-ignore", "describe", "shortlog", "grep"),
             "systemctl", Set.of("status", "list-units", "list-unit-files", "is-active",
                     "is-enabled", "show", "cat"),
             "service", Set.of("status"),
@@ -120,6 +126,20 @@ public final class ReadOnlyCommandPolicy {
 
     /** {@code redis-cli} 取值型旗标：跳过后才是动词（{@code -h host INFO clients}）。 */
     private static final Set<String> REDIS_VALUE_FLAGS = Set.of("-h", "-p", "-n", "-a", "-s", "-u");
+
+    /**
+     * {@code ssh} 取值型旗标闭集：跳值后才轮到 host（{@code ssh -i key host cat log}）。
+     * 闭集外的旗标一律判拒——{@code -o} 的值是任意配置（RemoteCommand/ProxyCommand 能藏命令）、
+     * {@code -L}/-R/-D/-W/-J 是隧道与跳板，词法层收敛不了，fail-closed。旧判据"跳过全部
+     * {@code -} 再跳一个 host"会把 {@code ssh -i key host rm -rf /} 的负载整体漏校验
+     * （2026-10-11 评审批）。
+     */
+    private static final Set<String> SSH_VALUE_FLAGS = Set.of("-i", "-p", "-F", "-l", "-b", "-c", "-m");
+    private static final Set<String> SSH_REJECT_FLAGS = Set.of("-o", "-L", "-R", "-D", "-W", "-J", "-O");
+
+    /** {@code dmesg} 只读旗标闭集（{@code -c}/{@code -C} 清内核环形缓冲，是写面）。 */
+    private static final Set<String> DMESG_FLAGS = Set.of("-T", "-H", "-w", "-k", "-x", "-e",
+            "--human", "--kernel", "--userspace", "--follow", "--ctime", "--notime");
 
     /** {@code keytool} 只读旗标闭集（{@code -genkey}/{-import} 之类是写，不在表内）。 */
     private static final Set<String> KEYTOOL_FLAGS = Set.of("-list", "-printcert");
@@ -155,8 +175,13 @@ public final class ReadOnlyCommandPolicy {
             Set.of("--latency", "--latency-history", "--bigkeys", "--stat", "--hotkeys",
                     "--intrinsic-latency", "--scan");
 
-    /** 第 4 层：命令替换/任意执行入口。 */
-    private static final List<String> SUBSTITUTION_MARKERS = List.of("$(", "`", "system(", "popen(", "exec(");
+    /**
+     * 第 4 层：命令替换/进程替换/任意执行入口。{@code <(…)}/{@code >(…)}（bash/zsh 进程替换）与
+     * {@code =(…)}（zsh）和 {@code $(…)} 同罪——{@code cat <(rm -rf /)} 的 argv 首词是 cat，
+     * 替换体里的命令却会真实执行，不判进程替换就整个漏网（2026-10-11 评审批）。
+     */
+    private static final List<String> SUBSTITUTION_MARKERS =
+            List.of("$(", "`", "<(", ">(", "=(", "system(", "popen(", "exec(");
 
     /** {@code curl} 的方法改写/载荷/上传旗标——出现即视为非 GET 请求。 */
     private static final Set<String> CURL_MUTATION_FLAGS = Set.of(
@@ -300,6 +325,26 @@ public final class ReadOnlyCommandPolicy {
         if (tool.equals("curl")) {
             return curlReadOnly(args);
         }
+        // 纯读工具里的旗标级写面（2026-10-11 评审批收紧：读是这些工具的常态语义，
+        // 但个别旗标落盘/改状态——闭集外判拒，不逐个枚举全部旗标）
+        if (tool.equals("sort")) {
+            // --output=/tmp/x 是单 token：startsWith 才兜得住
+            return args.stream().noneMatch(a -> a.equals("-o") || a.startsWith("--output"));
+        }
+        if (tool.equals("hostname")) {
+            return args.size() == 1;   // 带参数=改主机名
+        }
+        if (tool.equals("dmesg")) {
+            return args.size() == 1 || args.stream().skip(1).allMatch(DMESG_FLAGS::contains);
+        }
+        if (tool.equals("journalctl")) {
+            // --vacuum-* 删归档日志；--rotate/--sync 触发日志轮转与刷写——都是状态变更
+            return args.stream().noneMatch(a -> a.startsWith("--vacuum")
+                    || a.equals("--rotate") || a.equals("--sync"));
+        }
+        if (tool.equals("date")) {
+            return args.stream().noneMatch(a -> a.equals("-s") || a.startsWith("--set"));
+        }
         // 动词型工具
         Set<String> verbs = VERBS.get(tool);
         if (verbs == null) {
@@ -326,6 +371,10 @@ public final class ReadOnlyCommandPolicy {
             if (vi + 1 >= args.size() || !allowed.contains(args.get(vi + 1).toLowerCase(Locale.ROOT))) {
                 return false;
             }
+        }
+        if (tool.equals("openssl") && verb.equals("x509")
+                && args.stream().anyMatch(a -> a.equals("-out") || a.startsWith("-out="))) {
+            return false;   // -out 把转换结果写盘（语料现役的 -noout 只读形态不受影响）
         }
         return true;
     }
@@ -411,10 +460,22 @@ public final class ReadOnlyCommandPolicy {
         if (tool.equals("ssh")) {
             int i = 1;
             while (i < args.size() && args.get(i).startsWith("-")) {
-                i++;   // 跳过 ssh 自身旗标
+                if (SSH_REJECT_FLAGS.contains(args.get(i))) {
+                    return List.of();          // 隧道/代理/任意配置：fail-closed
+                }
+                if (SSH_VALUE_FLAGS.contains(args.get(i))) {
+                    if (i + 1 >= args.size()) {
+                        return List.of();      // 取值旗标缺值
+                    }
+                    i += 2;                    // 旗标 + 旗标值
+                } else {
+                    return List.of();          // 闭集外旗标：不猜
+                }
             }
-            i++;       // 跳过 host
-            return args.subList(Math.min(i, args.size()), args.size());
+            if (i >= args.size()) {
+                return List.of();              // 连 host 都没有
+            }
+            return args.subList(i + 1, args.size());   // host 之后的负载全量递归校验
         }
         return args.subList(1, args.size());
     }
@@ -509,35 +570,57 @@ public final class ReadOnlyCommandPolicy {
 
     /**
      * 把 {@code <pid>}/{@code <pod>}/{@code <orderId>} 这类占位符掩成等长填充，免得重定向扫描
-     * 把尖括号当成 {@code <}/@code >}。判据：{@code <} 后紧跟非空白，且同一空白分隔段内能配上 {@code >}。
-     * 真输入重定向（{@code cat < f}）{@code <} 后有空白，不会被掩掉。
+     * 把尖括号当成 {@code <}/@code >}。判据（2026-10-11 评审批收紧）：整个空白分隔段
+     * <b>恰好是</b> {@code <名>}——名字只含字母/数字/下划线/点/横杠，且 {@code >} 后紧跟
+     * 空白或串尾。{@code <in>out} 这种"{@code >} 后还贴着字"的形态不是占位符：那个
+     * {@code >} 必须留给重定向扫描（bash 语义下它真会把 out 落盘）；跨空白的尖括号
+     * 同样不当占位符（很可能是两个不同的重定向）。真输入重定向（{@code cat < f}）
+     * {@code <} 后有空白，不会被掩掉。
      */
     private static String maskPlaceholders(String segment) {
         StringBuilder sb = new StringBuilder(segment.length());
         int i = 0;
         while (i < segment.length()) {
-            char ch = segment.charAt(i);
-            if (ch == '<' && i + 1 < segment.length() && !Character.isWhitespace(segment.charAt(i + 1))) {
-                int close = -1;
-                for (int k = i + 1; k < segment.length(); k++) {
-                    if (segment.charAt(k) == '>') {
-                        close = k;
-                        break;
-                    }
-                    if (Character.isWhitespace(segment.charAt(k))) {
-                        break;   // 跨空白的尖括号不当占位符（很可能是两个不同的重定向）
-                    }
-                }
-                if (close > i) {
-                    sb.append("P".repeat(close - i + 1));
-                    i = close + 1;
-                    continue;
-                }
+            int close = purePlaceholderEnd(segment, i);
+            if (close > i) {
+                sb.append("P".repeat(close - i + 1));
+                i = close + 1;
+                continue;
             }
-            sb.append(ch);
+            sb.append(segment.charAt(i));
             i++;
         }
         return sb.toString();
+    }
+
+    /** {@code start} 处的 {@code <} 是否起一个纯占位符段，是则返回其 {@code >} 的下标，否则 -1。 */
+    private static int purePlaceholderEnd(String segment, int start) {
+        if (start + 1 >= segment.length() || segment.charAt(start) != '<') {
+            return -1;
+        }
+        int k = start + 1;
+        while (k < segment.length()) {
+            char c = segment.charAt(k);
+            if (c == '>') {
+                break;
+            }
+            if (Character.isWhitespace(c) || !isPlaceholderNameChar(c)) {
+                return -1;
+            }
+            k++;
+        }
+        if (k >= segment.length() || k == start + 1) {
+            return -1;   // 没配上 >，或空名字
+        }
+        if (k + 1 < segment.length() && !Character.isWhitespace(segment.charAt(k + 1))) {
+            return -1;   // > 后贴着字符：<in>out 形态，不掩
+        }
+        return k;
+    }
+
+    /** 占位符名的字符集：字母（含 CJK）、数字、下划线、点、横杠。 */
+    private static boolean isPlaceholderNameChar(char c) {
+        return Character.isLetterOrDigit(c) || c == '_' || c == '.' || c == '-';
     }
 
     /** 命令替换是唯一能把任意写操作藏进"已核准工具"参数里的通道（{@code ls $(rm -rf /)}）。 */
