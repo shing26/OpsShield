@@ -1,19 +1,59 @@
-# OpsShield
+<div align="center">
 
-> **面向 AIOps 与 SRE 场景的生产级 LLM 韧性治理与流量防御网关** —— 告警风暴打不穿、模型挂了不雪崩、运维指令零幻觉。
+# 🛡️ OpsShield
 
-[![CI](https://github.com/shing26/OpsShield/actions/workflows/ci.yml/badge.svg)](https://github.com/shing26/OpsShield/actions)
-[![Java](https://img.shields.io/badge/Java-21-orange.svg)]()
-[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.3-green.svg)]()
+**面向 AIOps 与 SRE 场景的生产级 LLM 韧性治理与流量防御网关**
+
+*告警风暴打不穿、模型挂了不雪崩、运维指令零幻觉。*
+
+[![CI Status](https://github.com/shing26/OpsShield/actions/workflows/ci.yml/badge.svg)](https://github.com/shing26/OpsShield/actions)
+[![Java](https://img.shields.io/badge/Java-21-ED8B00?style=flat&logo=openjdk&logoColor=white)](https://openjdk.org/)
+[![Spring Boot](https://img.shields.io/badge/Spring_Boot-3.3.5-6DB33F?style=flat&logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)
+[![Metrics](https://img.shields.io/badge/Metrics-Micrometer_%7C_Prometheus-498BA3?style=flat&logo=prometheus&logoColor=white)](https://prometheus.io/)
+[![Java Tests](https://img.shields.io/badge/Java_Tests-229_Passed-4CAF50?style=flat&logo=openjdk&logoColor=white)](#-测试体系与变异验证)
+[![Python Probes](https://img.shields.io/badge/Probes-238_Passed-3776AB?style=flat&logo=python&logoColor=white)](#-测试体系与变异验证)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-> **命名说明**：OpsShield 是对外项目名；`opspilot` 是内部工程代号（Java 包名 `com.opspilot`、配置前缀 `opspilot.*`、`/v1` 协议的 model 名）——展示名与命名空间解耦是开源基础设施的常见形态，改名不触碰任何代码与配置。
+<p align="center">
+  <a href="#-项目定位与核心立场">📖 项目定位</a> •
+  <a href="#-30-秒版本">📊 30 秒版本</a> •
+  <a href="#-系统架构与流量管道">🏗️ 系统架构</a> •
+  <a href="#-快速开始">🚀 快速开始</a> •
+  <a href="#-端点与可观测性矩阵">🖥️ 端点矩阵</a> •
+  <a href="#-测试体系与变异验证">🧪 测试与验证</a> •
+  <a href="#-架构决策记录">📐 架构决策</a>
+</p>
 
-Java 21 虚拟线程 · ES 倒排 + Qdrant 向量双路召回（RRF 融合）· 双层缓存 · 三级自适应降级 · 多租户引擎层硬隔离 · 只读行动契约。
+</div>
 
 ---
 
-## 30 秒版本
+## 📖 项目定位与核心立场
+
+Java 21 虚拟线程 · ES 倒排 + Qdrant 向量双路召回（RRF 融合）· 双层缓存 · 三级自适应降级 · 多租户引擎层硬隔离 · 只读行动契约。
+
+<p align="center">
+  <a href="https://redis.io/"><img src="https://img.shields.io/badge/Redis-7-DC382D?style=flat&logo=redis&logoColor=white" alt="Redis 7"/></a>
+  <a href="https://qdrant.tech/"><img src="https://img.shields.io/badge/Qdrant-1.12-24386C?style=flat&logo=qdrant&logoColor=white" alt="Qdrant 1.12"/></a>
+  <a href="https://www.elastic.co/elasticsearch"><img src="https://img.shields.io/badge/Elasticsearch-8.14-005571?style=flat&logo=elasticsearch&logoColor=white" alt="Elasticsearch 8.14"/></a>
+  <a href="https://jwt.io/"><img src="https://img.shields.io/badge/JWT-jjwt_0.12-000000?style=flat&logo=json-web-tokens&logoColor=white" alt="JWT jjwt 0.12"/></a>
+  <a href="https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events"><img src="https://img.shields.io/badge/Stream-SSE-009688?style=flat" alt="SSE"/></a>
+  <a href="https://www.docker.com/"><img src="https://img.shields.io/badge/Deploy-Docker-2496ED?style=flat&logo=docker&logoColor=white" alt="Docker"/></a>
+</p>
+
+大模型进生产排障，撞的是四堵墙：**告警风暴**在数秒内打爆外部 API 配额、**模型依赖**让排障链路自身先雪崩、**指令幻觉**让值班的人照着编造的危险命令执行、**检索不精确**让通用向量检索丢掉错误码这类精确符号。OpsShield 架在监控告警入口与推理后端之间，是一道**只读、高可用、具备确定性兜底的 SRE 反向代理与流量防火墙**——所有排障请求都经过四道确定性防御阶段，而不是把裸告警流直接交给通用大模型。
+
+> **核心立场（[ADR-0013](docs/adr/0013-trust-base-for-agents-not-an-agent.md)）**：OpsShield 是 agent 的**只读可信底座**，不是第 4 个 agent。权限是引擎层的数据过滤而非提示词约定；对目标系统零写操作、不设执行回路；"零幻觉"是**可静态判定的构造保证**，不是口头承诺。
+
+**与 Agent 的关系**（ADR-0013 要求写进 README 的一条）：
+
+- 它身上有三处 agent 形状——自举告警闭环（感知→上报→处置→停报）、三级降级状态机、置信度门控与显式拒答；但判据全是阈值与计数器，**没有一处是模型决策**；
+- 多步 agent 可以把它当只读下游依赖调用（OpenAI 兼容面，JWT 即 Key），而它自己**不引入 LLM 决策循环与 tool-calling**；
+- 更完整的自我定位——AIOps 五域三分类自证、与朴素 RAG 的五条机制级差异、给多步 agent 的调用契约——见 [docs/positioning-aiops.md](docs/positioning-aiops.md)。
+
+---
+
+## 📊 30 秒版本
 
 大模型进生产排障，撞的是四堵墙，本网关各给一道防线：
 
@@ -24,7 +64,7 @@ Java 21 虚拟线程 · ES 倒排 + Qdrant 向量双路召回（RRF 融合）· 
 | **模型依赖**：上游欠费/限流(429)/网络抖动，排障链路跟着雪崩 | 三级自适应降级状态机 + L1/L2 双层缓存 + 静态 Runbook 兜底，冷却后半开自愈 | **降级在真实负载下全链路行使过**（L0→L1→L2→L0 实录）；热点命中 TTFT **p99 16ms** |
 | **指令幻觉**：模型编造高危运维命令，值班的人照着执行 | 行动契约从**本次引用的文档原文**逐字抽取（零生成面），四层只读策略过滤 | **契约命令 100% 逐字可溯源**（41/41）；答案错误码接地率 **100%**（live） |
 
-> 三行数字均为 DashScope live 实测（embedding v3 + rerank v2 + qwen-plus），口径与复现命令见 [证据](#证据与工程治理)。无 key 时自动切本地 mock 后端——同代码路径复现机制正确性，但不承诺本表数字。权限底线：越权与 Prompt 越狱**零泄漏**（引擎层数据过滤，5 条越狱用例 live 实测）。
+> 三行数字均为 DashScope live 实测（embedding v3 + rerank v2 + qwen-plus），口径与复现命令见 [测试与验证](#-测试体系与变异验证)。无 key 时自动切本地 mock 后端——同代码路径复现机制正确性，但不承诺本表数字。权限底线：越权与 Prompt 越狱**零泄漏**（引擎层数据过滤，5 条越狱用例 live 实测）。
 
 <details>
 <summary><b>核心指标全表</b>（逐项口径与读表须知——引用任何数字前先读这段）</summary>
@@ -42,7 +82,35 @@ Java 21 虚拟线程 · ES 倒排 + Qdrant 向量双路召回（RRF 融合）· 
 
 </details>
 
-## 核心架构
+---
+
+## 🏗️ 系统架构与流量管道
+
+OpsShield 位于监控告警入口与推理后端之间，所有进入系统的排障请求均经过四道确定性防御阶段：
+
+```text
+ [ Prometheus / Alertmanager / 微服务告警风暴 ]
+        │
+        ▼
+ ① 流量整形与防击穿
+       指纹归一化 FingerprintService（掩时间戳/UUID，保留错误码）
+       滑动窗口聚合 SlidingWindowService · 进程内 SingleFlight 合并
+        │
+        ▼
+ ② 多级检索与语义缓存
+       L1 精确哈希（指纹级）· L2 Qdrant 向量语义
+       ES 倒排 + Qdrant 向量双路并行 · RRF 融合 · 精排
+        │
+        ▼
+ ③ 韧性状态机与安全门禁
+       L0 全链路 ──▶ L1 摘向量腿 ──▶ L2 静态 Runbook 直出（零 LLM）
+       句级防幻觉 VerbatimStreamFilter · 行动契约 ReadOnlyActionExtractor
+        │
+        ▼
+ ④ 双出口可观测性
+       SSE 流式问答 · OpenAI 兼容 /v1 面 · SRE 只读控制台
+       Micrometer 单一事实源 ──▶ /actuator/prometheus 抓取面
+```
 
 三个入口（SSE 流式 / OpenAI 兼容面 / 运维面板）共享同一条编排链路——这正是"两个协议面 + 一个面板"语义一致的原因：
 
@@ -72,15 +140,15 @@ flowchart TD
     LLM --> CT[只读行动契约<br/>从引用原文逐字抽取]
     DG[三级降级状态机 L0/L1/L2] -.->|过载摘向量腿 / 熔断直出 Runbook| HY
     DG -.-> LLM
-    RP --> OUT[SSE meta/delta/done 或 OpenAI chunk+[DONE]<br/>done 帧恒带 refs + 行动契约]
+    RP --> OUT["SSE meta/delta/done 或 OpenAI chunk+[DONE]<br/>done 帧恒带 refs + 行动契约"]
     NO --> OUT
     CT --> OUT
     OUT --> AUD[审计 logs/audit.jsonl<br/>谁/何租户/何密级/命中来源/分段耗时]
 ```
 
-三级状态机：**L0 全链路 → L1 高负载（摘向量腿+Rerank）→ L2 熔断（静态 Runbook 直出，零 LLM）**，冷却到期半开自探。降级的代价如实登记：L1 期语义 Top-1 由 88.2% 退到 70.6%、置信度门控退为"零召回级"（[ADR-0012](docs/adr/0012-degradation-cost-semantics.md)）；它在真实负载下被行使过（在途峰值 137，`L0→L1（cause=inflight）→L2（cause=llm_failure）→L0`，产物 [l1_trigger.md](offline/load/reports/l1_trigger.md)）。知识库重建走 blue/green 别名原子切流（[ADR-0006](docs/adr/0006-blue-green-alias-reingest.md)）：448 chunks 重灌 22.3s（live，服务端日志口径）、切流期间探针零中断，失败保留旧库在线。
+三级状态机：**L0 全链路 → L1 高负载（摘向量腿与 Rerank，退为纯 ES）→ L2 熔断（静态 Runbook 直出，零 LLM）**，冷却到期半开自探。降级的代价如实登记：L1 期语义 Top-1 由 88.2% 退到 70.6%、置信度门控退为"零召回级"（[ADR-0012](docs/adr/0012-degradation-cost-semantics.md)）；它在真实负载下被行使过——审计日志实录 `L0→L1（cause=inflight）→L2（cause=llm_failure）→L0（cause=cooldown_expired）`，对应压测档 u=48 在途峰值 151、期间最高档 L2（产物 [l1_trigger.md](offline/load/reports/l1_trigger.md)）。知识库重建走 blue/green 别名原子切流（[ADR-0006](docs/adr/0006-blue-green-alias-reingest.md)）：448 chunks 重灌 22.3s（live，服务端日志口径）、切流期间探针零中断，失败保留旧库在线。
 
-## 三道防线，展开一点
+### 三道防线，展开一点
 
 **① 流量削峰（Traffic Shaping）**——指纹把"同一故障的不同变体"归一（掩时间戳/UUID，保留错误码身份），SingleFlight 让同指纹并发只放行一个 leader、其余回放，权限三元组（tenant+fp+authLevel）保证回放永不跨租户。10 条告警变体并发 → LLM 仅 1 次（[ADR-0003](docs/adr/0003-single-instance-inprocess-single-flight.md)）。
 
@@ -90,22 +158,9 @@ flowchart TD
 
 **贯穿三道防线的两条底线**：权限是引擎层数据过滤不是提示词约定（越狱语料实测零泄漏，[ADR-0008](docs/adr/0008-permission-dimensions-on-every-shared-path.md)）；对目标系统零写操作、不设执行回路——它是 agent 的**只读可信底座**，不是第 4 个 agent（[ADR-0013](docs/adr/0013-trust-base-for-agents-not-an-agent.md)）。
 
-> 更完整的自我定位——"这算 AIOps 还是只是 RAG？"（Gartner 五域三分类自证）、与朴素 RAG 的五条机制级差异、给多步 agent 的调用契约——见 **[docs/positioning-aiops.md](docs/positioning-aiops.md)**。
+---
 
-## 技术栈
-
-| 分层 | 选型 |
-| --- | --- |
-| 网关 | Java 21 + Spring Boot 3.3（Virtual Threads + SseEmitter） |
-| 并发 | CompletableFuture + 虚拟线程执行器（双路并行、超时隔离） |
-| 缓存/防线 | Redisson + Redis 7（滑动窗口计数、L1 精确缓存、SOP 预热、配额） |
-| 风暴收敛 | 进程内 SingleFlight（JDK 并发原语，无外部依赖；ADR-0003） |
-| 检索 | Elasticsearch 8（keyword 倒排）+ Qdrant（gRPC 向量） |
-| 融合 | 自研 RRF（k=60）+ DashScope gte-rerank-v2 |
-| 推理 | DashScope qwen-plus（OpenAI 兼容 SSE） |
-| 离线 ETL | Python 3.11（AST/标题树切分） |
-
-## 快速开始（三条命令，零 key 零成本）
+## 🚀 快速开始
 
 ```bash
 git clone https://github.com/shing26/OpsShield && cd OpsShield
@@ -113,9 +168,7 @@ bash scripts/quickstart.sh   # 生成随机凭据 .env（key 留空=mock）→ D
 bash scripts/demo.sh         # 预检全 PASS = 机制全链路就绪
 ```
 
-- **SRE 统一控制台**（监控/审计/降级/契约一屏）：`http://localhost:8081/`
-- **交互排障问答页**（贴堆栈 → 流式答案 + 行动契约）：`http://localhost:8081/troubleshoot.html`
-- **Prometheus 指标**：`http://localhost:8081/actuator/prometheus`（`aiops.*` 计数器/比率/降级档位 gauge）
+起服务后的入口矩阵（控制台 / 排障页 / Prometheus / OpenAI 兼容面）见下一节 [端点与可观测性矩阵](#-端点与可观测性矩阵)。
 
 <details>
 <summary><b>发一次请求（OpenAI 兼容面，API Key = login 换来的 JWT）</b></summary>
@@ -158,13 +211,40 @@ bash scripts/seed_demo_users.sh
 
 </details>
 
-## 证据与工程治理
+---
 
-- **测试面 229 单测（Java）+ 238 用例（Python）**，CI 五 job（java / panel-contract / provenance / python / shell）零 key 零中间件可跑。防线不只靠单测：关键判据全部做**变异测试**（改坏必红、复原必绿），文档数字由**一致性治理**门闩每次现算比对产物（`doc_numbers`——数字与产物分叉即 CI 红），评测报告与语料的同代性用内容摘要钉死（`provenance`，不用 checkout 会刷平的 mtime）。
-- **实测产物**：[offline/eval/reports/](offline/eval/reports/)（评测、门控矩阵、真实输入探测）与 [offline/load/reports/](offline/load/reports/)（压测、延迟、缓存节省账）；报告自报 live/mock 后端与生成时刻（`PROVENANCE.json`）。核心指标的历次扩语料基线与漂移实录（`es_only` 腿敏感、hybrid 稳健）都在报告里。
-- **红队与缺陷台账**：五轮黑盒测评的完整缺陷-修复-回归锁记录在 [docs/qa/](docs/qa/)——两处 P0（组键缺租户的跨租户回放、admin 门禁把密级当信任域）都是红队真实触发后修复的，非纸面推演。
-- **告警源自举（dogfooding）**：把项目自己的运行史当告警源——容器状态翻转 → 告警走完整编排链 → 检索命中自己写的复盘（[ADR-0011](docs/adr/0011-self-bootstrapped-alert-source.md)），实测"造容器 → SIGKILL → 告警 → 命中 rb-102 止损段"闭环。
-- **证据一键打包**：`python scripts/pack_evidence.py` 产出逐项注明出处的快照（每个数字来自哪个文件、什么命令、当前模式能否复核）。
+## 🖥️ 端点与可观测性矩阵
+
+OpsShield 把"系统活着"做成了结构化的入口矩阵（默认端口 `8081`，容器模式同为 8081）：
+
+| 访问入口 | 协议 / 方式 | 功能描述 |
+| --- | --- | --- |
+| **SRE 统一控制台** | `GET /` | 网关运行态、风暴抑制率、三级降级档位、多租户配额一屏总览（只读，[ADR-0009](docs/adr/0009-readonly-observability-console.md)） |
+| **交互式排障问答页** | `GET /troubleshoot.html` | 贴堆栈 → SSE 打字机流式答案 + 知识切片逐字溯源 + 结构化只读命令一键复制 |
+| **Prometheus 抓取面** | `GET /actuator/prometheus` | 导出 `aiops_*` 监控度量矩阵（不带凭证，由抓取侧网络策略兜住） |
+| **OpenAI 兼容接口** | `POST /v1/chat/completions` | JWT 即 API Key；外部运维工具链、Dify、NextChat 或任意标准客户端填 Base URL 即可直连 |
+| **SSE 排障流** | `POST /api/v1/copilot/chat/stream` | `meta/delta/done` 三帧；`done` 帧恒带引用来源与只读行动契约 |
+| **管理快照 / 审计流** | `GET /api/v1/admin/state` · `/api/v1/admin/audit/recent` | 控制台面板的数据源；platform 角色门禁 |
+
+#### 核心指标定义（`aiops.*` 层级名，Prometheus 侧点号转下划线）
+
+* `aiops_storm_suppression_ratio`：告警风暴抑制率 = 被 SingleFlight 合并的请求数 / 总请求数；
+* `aiops_cache_hit_rate`：双层缓存总命中率 = L1 与 L2 两层命中数之和 / 总请求数（L1 为指纹级精确命中，L2 为向量相似命中；`_l1_` / `_l2_` 分项分别导出）；
+* `aiops_degradation_state`：降级档位序数 gauge，`0=NORMAL`、`1=CACHE_ONLY`、`2=SOP_FALLBACK`（实时读状态机，非 bind 时刻快照）；
+* `aiops_guard_verbatim_masked`：流式导出中被出口护栏掩码的句数（按句累计，非按请求）；
+* `aiops_guard_action_commands_rejected`：行动契约里被只读命令策略判拒的条数（判拒即丢弃，不静默）；
+* 计数器另有 `aiops_llm_calls`、`aiops_llm_rate_limited`、`aiops_dedup_aggregated`、`aiops_cache_l1_hits`、`aiops_sop_fallbacks`、`aiops_guard_refusals` 等——全部由 Micrometer 单一事实源同时供控制台快照与抓取面两个出口（[ADR-0016](docs/adr/0016-prometheus-metrics-exposure.md)）。
+
+---
+
+## 🧪 测试体系与变异验证
+
+防线不只靠单测——关键判据全部经"改坏必红、复原必绿"的变异验证，文档数字由门闩每次现算比对产物：
+
+* **Java 229 单测**（`mvn test` 实跑全绿）：并发单飞、状态机无损跃迁、AST 词法解析、双出口指标一致性；
+* **Python 238 用例**（`pytest offline/tests/`）：含 `action_contract_probe.py` 的 **AC-1..AC-9 九组形式化不变式**——帧形状 / 逐字性 / 契约⊆引用闭包 / 段名闸 / 红线绊线 / 回放一致性 / 租户围栏 / 指标单调 / 反假绿覆盖；
+* **变异测试**：契约探针 5 路（段名闸恒真、逐字恒真、红线恒空、闭包前置 None、AC-7 租户恒真——每条都有"改坏后 N failed / 复原后全绿"的实测记录）；文档门闩另有 A/B/C 三路（改文档数字、改产物、改写措辞，各须红）；
+* **CI 五 job**（java / panel-contract / provenance / python / shell）零 key 零中间件可跑；`doc_numbers` 门闩现算比对 **23 条文档数字 / 36 处引用**，数字与产物分叉即 CI 红；评测报告与语料的同代性用内容摘要钉死（`provenance`，不用 checkout 会刷平的 mtime）。
 
 <details>
 <summary><b>评测与压测：复现命令</b>（需活体栈 + 活体 key；数字底稿即各自产物）</summary>
@@ -183,11 +263,37 @@ SCENARIO=storm .venv/bin/locust -f load/locustfile.py --headless -u 500 -t 20s -
 $PY load/l1_latency.py       # L1 回放延迟（热点命中口径）→ load/reports/l1_hit_latency.md
 ```
 
-各脚本的口径与已知边界写在**各自的产物里**（例：`gate_matrix` 走 `/search` 故不含缓存、`cache_savings` 的未命中组必须真生成而非拒答）——引用前先读产物口径段，那是它们的单一事实源。
+各脚本的口径与已知边界写在**各自的产物里**（例：`gate_matrix` 走 `/search` 故不含缓存、`cache_savings` 的未命中组必须真生成而非拒答）——引用前先读产物口径段，那是它们的单一事实源。实测产物目录：[offline/eval/reports/](offline/eval/reports/) 与 [offline/load/reports/](offline/load/reports/)，报告自报 live/mock 后端与生成时刻（`PROVENANCE.json`，CI 强制同代）。核心指标的历次扩语料基线与漂移实录（`es_only` 腿敏感、hybrid 稳健）都在报告里。
 
 </details>
 
-## 仓库导航
+* **红队与缺陷台账**：五轮黑盒测评的完整缺陷-修复-回归锁记录在 [docs/qa/](docs/qa/)——两处 P0（组键缺租户的跨租户回放、admin 门禁把密级当信任域）都是红队真实触发后修复的，非纸面推演。
+* **告警源自举（dogfooding）**：把项目自己的运行史当告警源——容器状态翻转 → 告警走完整编排链 → 检索命中自己写的复盘（[ADR-0011](docs/adr/0011-self-bootstrapped-alert-source.md)），实测"造容器 → SIGKILL → 告警 → 命中 rb-102 止损段"闭环。
+* **证据一键打包**：`python scripts/pack_evidence.py` 产出逐项注明出处的快照（每个数字来自哪个文件、什么命令、当前模式能否复核）。
+
+---
+
+## 📐 架构决策记录
+
+系统的演进过程严格遵从 ADR 机制，每篇含否决项与后果。关键决策索引如下（完整 **17 篇**见 [docs/adr/](docs/adr/)）：
+
+| # | 决策 | 一句话理由 |
+| --- | --- | --- |
+| [0003](docs/adr/0003-single-instance-inprocess-single-flight.md) | 单机单实例部署，Single-Flight 用进程内 CompletableFuture | 7 天工期 + 本机压测场景下，多实例部署无收益 |
+| [0006](docs/adr/0006-blue-green-alias-reingest.md) | 知识库重建走 blue/green 别名原子切流 | 切流期间探针零中断，失败保留旧库在线 |
+| [0007](docs/adr/0007-openai-compatible-surface-jwt-as-key.md) | OpenAI 兼容协议面：JWT 即 API Key | 任意标准客户端零改造直连 |
+| [0008](docs/adr/0008-permission-dimensions-on-every-shared-path.md) | 权限维度挂在每条共享路径上 | 引擎层数据过滤，不是提示词约定 |
+| [0011](docs/adr/0011-self-bootstrapped-alert-source.md) | 告警源自举：把项目自己的运行史当告警源 | dogfooding 出真实闭环 |
+| [0012](docs/adr/0012-degradation-cost-semantics.md) | 降级代价语义：L1 同时降质量与降门控——接受而非修 | 如实登记代价，而不是假装没有 |
+| [0013](docs/adr/0013-trust-base-for-agents-not-an-agent.md) | 定位：agent 的可信底座，不是第 4 个 agent | 差异化恰恰建立在不引入 LLM 决策循环之上 |
+| [0014](docs/adr/0014-streaming-verbatim-guard-sliding-buffer.md) | 流式出口防幻觉：句级滑动缓冲窗口 | 用打字机观感换可拦截性 |
+| [0015](docs/adr/0015-distributed-primitives-interface-abstraction.md) | 单机极限与分布式一致性之间：三个风暴/降级原语的接口抽象 | 先留出演化接口，不提前背分布式成本 |
+| [0016](docs/adr/0016-prometheus-metrics-exposure.md) | 指标面：从"面板快照"到"可被抓取" | Micrometer 单一事实源，两个出口一份数 |
+| [0017](docs/adr/0017-read-only-action-contract.md) | 行动契约：只读、逐字抽取、fail-closed | 网关不执行任何命令；契约 ⊆ 引用是构造保证 |
+
+---
+
+## 🗺️ 仓库导航
 
 | 你想… | 去哪 |
 | --- | --- |
@@ -199,6 +305,13 @@ $PY load/l1_latency.py       # L1 回放延迟（热点命中口径）→ load/r
 | 目录地图 / 逐包职责 / 维护者向内容 | [docs/repo-map.md](docs/repo-map.md) |
 | 架构决策与否决理由 | [docs/adr/](docs/adr/)（17 篇，每篇含否决项与后果） |
 
-## 许可
+---
 
-[MIT](LICENSE)。
+## 🏷️ 命名空间与许可
+
+* **OpsShield**：项目的官方对外名称，代表为 SRE 智能运维构筑的"韧性防御护盾"；
+* **opspilot**：系统的内部工程代号与代码命名空间——Java 包名 `com.opspilot`、配置前缀 `opspilot.*`、`/v1` 协议的 model 名 `opspilot`。展示名与命名空间解耦是开源基础设施的常见形态，改名不触碰任何代码与配置。
+
+本项目基于 [MIT](LICENSE) 开源发布。
+
+<p align="center"><sub>MIT © 2026 shing26 · 为受够告警风暴与模型雪崩的 SRE 而建</sub></p>
