@@ -14,9 +14,11 @@
 | **门禁与契约检查** | `scripts/check_panel_contract.sh` | 面板↔后端字面量契约 + actuator 暴露面（CI 独立 job） |
 | | `scripts/check_coverage.py` | 覆盖率棘轮（CI-only：本机目录名含长破折号量不了） |
 | | `offline/doc_numbers.py` / `offline/provenance.py` | 文档数字现算比对 / 报告↔语料同代门闩 |
+| | `scripts/check_public_copy.py` | 对外面用词门闩（canonical 词不得漏到 README + 页面文案；词表从 CONTEXT.md 现取，见 §15） |
 | | `scripts/pack_evidence.py` | 证据一键打包（逐项注明出处） |
 | **故障注入与演示** | `scripts/demo.sh` / `scripts/demo_self_alert.sh` | 演示预检（全 PASS 才开演）/ 自举闭环一幕到底 |
 | | `scripts/watchdog_alerts.py` | 真实 Docker 告警源（容器翻转 → source=alert） |
+| | `scripts/alert_bridge.py` | Alertmanager webhook → 编排链路的宿主桥（外部监控 adapter 的第一版，见 §13） |
 | | `scripts/audit_timeline.py` / `scripts/check_upstream.py` | 审计时间线回放 / DashScope 三路探活（核色前置） |
 
 ## 1. 账号生命周期（不再手工签 token）
@@ -103,7 +105,7 @@ cron（Linux 部署版；本机手动跑同样有效）：
 | 外部 IdP | 公司强推统一 SSO / 禁用自建口令 | H2+bcrypt 结构下加 `/auth/login/oidc` 映射入口即可，不侵入校验链 |
 | 断言语态结构化门控 | 任何一次**被真人/QA 复现、且落在探针正则覆盖之外**的断言式事故编号回答（防断言语态现为软约束层：prompt 规则 6 + 正则探针，上限=探针选词，见 ADR-0010） | 立项输出结构化门控：模型按标注输出置信、渲染层依标注 gating，不再依赖句式正则；泛化症状探针在 `offline/qa_gen_quality_probes.py` 锁最恶劣形态 |
 | 处置闭环（对目标系统的自动执行/自愈） | 两组析取项：①产品方向从"建议"转"执行"；②接入真实告警流 **+** 可审计的 runbook 执行通道（审批链/HITL 门，见 ADR-0009 只读面扩展） | 只读立场为承诺非疏漏：拒答门控 + 全链路溯源保证人在回路。**2026-09-16 状态注**：②中的"告警流"一半已满足（自举源，ADR-0011），但"执行通道"未建、①也未发生 → **本项未触发**，仍按待还债记录。**注**：AIOps 谱系 ①遥测采集/②异常检测=**永久非目标**，不列本表（边界声明见 README/面板谱系块） |
-| 跨指纹 incident 关联（同一根因、多条不同指纹告警的归并） | 自举告警源上线后**前置已满足**（ADR-0011，真实告警流已存在）；触发线=真实告警流中出现"同一根因、多措辞/多服务"的告警且人工归并成本可测——证据面即 `logs/alert-producer.jsonl` 的 fp 分布（同事故不同措辞会给出不同 fp） | 同指纹域收敛已覆盖（500 并发 → LLM 1 次）；跨指纹目前仍靠人读告警文本，台账如实登记"未收敛项"，不冒充能力 |
+| 跨指纹 incident 关联（同一根因、多条不同指纹告警的**关联**——不是归并） | **触发线已兑现（2026-10-17）→ 同日定案并实施**。判据：真实告警流里"同一根因天然是多个指纹"已实证（[qa §3.1](docs/qa/2026-10-17-alertmanager-intake.md)），而外部告警源接入使"人工归并成本可测"成为可观测项。**证据面改名**：原写 `logs/alert-producer.jsonl`，实测该源 33 行同文本只给出 **1 个** fp（看不出"碎"）——真正的证据面是 `logs/alert-bridge.jsonl`（`incident_id` 分组 + `alert_id` 逐条） | 同指纹域收敛已覆盖（500 并发 → LLM 1 次）；跨指纹**关联**已落——同一事故的 N 条告警共享一个 `am-…` 分组身份、落在审计行 `trace_id`，可整段取出，见 [ADR-0019](docs/adr/0019-incident-boundary-owned-by-upstream.md) 与 qa §7。**归并（N→1）明确未做且未立项**：它要先回答"拿哪条告警的文案当 query"，本仓已否决过一次 |
 | L1 降级期的门控降级（摘除 Rerank 后无相关性分数可依，相关性门控失效、只剩零召回拒答） | 出现一次"L1 期**误拒或漏拒**造成真实事故"且被真人/QA 复现 → 立项标定 RRF 分数分布并给出 L1 专用阈值 | 取舍与理由见 [ADR-0012](docs/adr/0012-degradation-cost-semantics.md)：RRF 分数无量纲（只依赖排名），照搬 L0 在 Rerank 分布上标定的 `min-relevance: 0.2` 会变成拍脑袋拒答，而未标定阈值造成的**误拒是静默的**（用户只看到拒答，看不到本可作答）——比现状更糟。零召回仍拒答，故并非"完全不门控"；L1≡es_only 的同构关系已由单测锁定 |
 | L2 写入重复 embed（同一请求 embed 两次：检索腿一次、L2 写入一次） | 出现两组析取项任一：① **embedding 调用成本成为瓶颈**（日调用量翻倍触账单异常或上游限流）；② 单请求 `stage_ms.l2_store` 占比 **> 10%**（`/state` 与审计行可测）→ 立项把检索腿算出的向量回传给 L2 写入复用 | 成本已量化：实测一条 10.2s 请求里 `l2_store=232ms`（约 2.3%），延迟上不划算；真正的动机在**上游调用次数减半**。修法要向 `QdrantSearchService` 的返回面回传查询向量（并在 es_only/降级无向量时回退到 embed），接口面确有改动，故按触发线挂起不预防施工。**注**：原代码注释曾写"复用检索时已算好的向量"而实际未复用——那是**宣称失实**，已于 2026-09-25 改为如实描述（那个才是缺陷，已修） |
 | 行动契约的 top-3 产额（[ADR-0017](docs/adr/0017-read-only-action-contract.md)：契约只从**本次引用的 3 个 chunk** 抽，`final-top-k: 3`） | 出现下述任一：①troubleshoot 页的**空契约状态在真实使用或演示里被指认**为"不好用"（真人/QA 复现，能指到具体 query）；②产品侧给出**明确产额下限**（如"≥X% 查询要带命令清单"）→ 到点二选一动工：抬 `final-top-k`（连带重跑评测、重登现役口径那组数字：精确 Top-1 100% / 语义 Hit@3 100% / 语义 Top-1 88.2%），或同文档兄弟段扩张（须先做"给未引用原文开放行口"的显式权限复核，并重跑段名闸与四层策略的变异测试） | 实测 **6/11** 固定查询形状出非空契约（2026-10-10，live，`/admin/cache/flush` 清 L1+L2 后逐个跑，11 个读到 `cache_hit=none`，共 9 条动作）；11 个目标文档**全都有 2~3 个可抽的排查段叶 chunk**，故**语料不是瓶颈、top-3 才是**——命中的查询都引用了编号叶（`排查步骤 > 第二步：定位慢 SQL`），落空那 5 个的三槽被文档标题、段头（`排查步骤`）与症状摘要占满，命令所在的叶排在第 4 名之后。"契约 ⊆ 引用"是构造保证，**多给命令必然要动它**，故不预防施工。判据见 OPS §12 末条：看 `done` 帧 `refs` 面包屑里有没有"第N步"字样的叶，没有就是本条、与策略松紧无关 |
@@ -116,6 +118,8 @@ cron（Linux 部署版；本机手动跑同样有效）：
 
 | 门控拒答写入 L1（TTL 2h）导致语料更新后短窗回放旧拒答（2026-10-03 登记，live QA F-4） | reingest 补上新语料后，同 query（同指纹）在 2h 内仍收拒答回放**且造成漏检**——判据：能指出具体 query 与重灌时间点（审计行 `cache_hit:L1` + `refused:true` 晚于 reingest） | 与"SOP 直出不写 L1"（A2-6）同一取舍家族：拒答入缓存换"同 query 重发零成本"，代价窗上限 = TTL。运维 SOP：reingest 后用**改变措辞**的 query 验证新语料（不同指纹绕开旧条目）；若要根治可缩短拒答类条目 TTL，未到触发线不做 |
 
+| 静态 SOP 缺 `auth_level` 维度（ADR-0020 理由③ 登记：`IngestionRunner.warmSop` 只按 tenant 分区、`SopFallbackService.lookup` 不收 `authLevel`，L2 直出时 level-2 止损段对 level-1 主体可达） | 出现一次"低密级主体在 L2 静态 SOP 直出中读到高于自身 `auth_level` 的止损段"且被真人/QA 复现（判据：能指到具体 query 与 `auth_level` 组合的审计行）→ 立项给 `warmSop` 分区键与 `lookup` 签名加 `auth_level` 维度 | 只读立场不豁免：它是 ADR-0008 在 L2 静态 SOP 面上的缺口。**在它修掉之前，对外不得宣称"静态 SOP 也按密级隔离"**（ADR-0020 已写此口径）；L2 直出只在降级期发生，故暴露面受限 |
+
 ### 5.1 历史遗留项的触发线收敛（2026-09-17）
 
 > 下面这批此前只有"另排期 / 待酌情 / 记录在案"而**没有可到点执行的触发条件**——按本项目纪律，
@@ -125,7 +129,10 @@ cron（Linux 部署版；本机手动跑同样有效）：
 | 项（来源） | 触发线 | 当下缓解 |
 |---|---|---|
 | 别名回滚 admin 端点（ADR-0006 承诺"可秒级回退"，端点未实现） | 首次出现"重灌后需要回滚"的真实需求，或任何一次 reingest 质量事故 | 物理库名带时间戳 + 手工改别名指向即秒级回退（见上表 SOP 第 2 步）；**无端点 ≠ 无退路** |
-| 外部监控 adapter（评估 M3 剩余项） | 三组析取项任一成立即到期：① 拿到**可读且被授权**的外部告警/监控 API（Alertmanager / 云监控 webhook，有文档化契约与可用测试凭据）；② 产品方向转为含外部集成，且 ≥1 个外部消费者书面要求以 webhook 接入；③ 一次真实故障因缺外部告警接入而被漏掉（判据：该故障落在自举源盲区内，且复盘结论指向"没接外部源"）。**2026-09-21 改写**：原触发线"出现真实告源"不可判读——没有任何时刻会让它到期，等于没有到期日，违反本表自订纪律 | 自举源已满足"真实输入"诉求（ADR-0011）；外部集成明确为当前非目标 |
+| 外部监控 adapter（评估 M3 剩余项） | 三组析取项任一成立即到期：① 拿到**可读且被授权**的外部告警/监控 API（Alertmanager / 云监控 webhook，有文档化契约与可用测试凭据）；② 产品方向转为含外部集成，且 ≥1 个外部消费者书面要求以 webhook 接入；③ 一次真实故障因缺外部告警接入而被漏掉（判据：该故障落在自举源盲区内，且复盘结论指向"没接外部源"）。**2026-09-21 改写**：原触发线"出现真实告源"不可判读——没有任何时刻会让它到期，等于没有到期日，违反本表自订纪律。**【2026-10-17 触发线①已兑现·已落第一版】**：Alertmanager 的 webhook 契约是公开文档化、本机自建即被授权的告警源，①成立。已落地的形态是**宿主 bridge**（`scripts/alert_bridge.py`）而非网关端点——本轮目的是观测"指纹在真实告警标签下碎在哪"，不是上新能力，故产品面零改动、不开新的鉴权维度（理由见 §13）。**仍未做（如实登记）**：桥是单实例、无外部多实例共享态；「提升为网关原生端点」是另一个决策，触发线见下条 | 自举源 + Docker 告警源 + Alertmanager 指标告警源三源并存；形态与边界见 §13 |
+| 告警接入从 bridge 提升为网关原生端点（`/api/v1/alerts/webhook`） | 两组析取项任一成立即到期：① §13 台账里的指纹分布证明确有"真实标签导致的误收敛"需要服务端介入（判据：能指到具体 `fp` 与两条本该不同指纹的告警）；② 出现**桥形态跑不动**的真实部署需求（多实例部署 / 需要网关原生鉴权与配额归属，判据：桥的单实例锁成为实际瓶颈而非纸面限制） | 桥已覆盖单机全部需求；提升为端点要先发明"机器调用者的身份与配额归属"——JWT 是给人（和 agent）用的，Alertmanager 不是账号。这是真实的地基工作，不做在证据之前。**2026-10-17 补注**：方案 C 修的是"误分裂"（碎），**不是**本条触发线①的"误收敛"（本该不同的指纹撞在一起），故这次修复**没有**触碰本条触发线 |
+| 指纹契约与真实告警文案的错配（Alertmanager 模板把 `$value` 渲染进注解，同一条告警每次重发都是新指纹 ⇒ L1 与单飞双双失效） | **触发线已兑现（2026-10-17 首次实测即复现）→ 当日定案并实施"方案 C：服务端拆身份"**。实证见 [qa/2026-10-17-alertmanager-intake.md](docs/qa/2026-10-17-alertmanager-intake.md) §3。**判据不是"再做一次实验"**，而是先回答"治不治得了别人写的规则"——方案 A 只在自家规则里成立，故排除；选定 C，使服务端不再从人类可读文案里推断身份。**仍未做（如实登记）**：§3.5 的同身份降级/失败重复穿透是独立问题（见下一行）。跨指纹关联已于当日同轮落成（上一行 / qa §7） | 规则与桥都保持原职：规则照旧把 `$value` 渲染进文案，桥不替网关归一化，只多派生一个与 message 无关的 `alert_id`（四元组 alertname/job/error_code/status）。人工提问与既有自举源不传该字段，逐字回退到原文本指纹，行为不变。**产品面只多一个可选 body 字段**（`ChatRequest.alertId`），无新端点、无新鉴权维度；契约与验收见 §13 / qa §6，定案见 [ADR-0018](docs/adr/0018-alert-identity-split-from-query-fingerprint.md) |
+| 降级/失败路径的告警重复穿透（L1 只缓存"成功且非 SOP"的答案；来源：qa 2026-10-17 §3.5） | 出现一次**真实告警风暴窗**且重复穿透造成可测成本——判据：同一 `alert_id` 在 ≤15 分钟内被投递 ≥3 次、`cache_hit=none`，且该窗内 `degradation_level≠L0` 或 `sent_ok=false` 占多数，并能指到配额/上游调用/延迟任一读数 | 本轮**刻意不动**：这是"降级期答案要不要进 L1"的独立取舍（SOP 不入是 A2-6 的既有决策），与方案 C 的"身份碎"是两回事。当下单飞只能折**并发**同身份请求，折不了 Alertmanager 的**顺序重发**；观测面 = 台账 `alert_id` 分组 + `cache_hit` |
 | 复盘 → 知识回灌（真实排障结论沉淀为可检索语料） | 两组析取项任一成立即到期：① **同一根因的故障被人工复盘 ≥2 次**；② 外部监控 adapter 触发后同批处理。**【2026-10-06 触发线①兑现·已完成第一次真实回灌】**：2026-10-04 宿主 OOM 连杀容器**两次**（同一根因），2026-10-06 写成复盘 `rb-102` 入语料——第二次就该沉淀复用，本条正是这么做的。同批复盘共 5 篇（rb-101 本机辖区清单 / rb-102 容器 OOM / rb-103 端口占用 / rb-104 面板旧缓存 / rb-105 截断 jar），**全部是本机真实发生过的事故**（签名/命令/处置均当晚实测），走 `build_chunks → reingest → evaluate` 全链路入库（448 chunks，live 24.4s 零空窗），并接上**真实 Docker 告警源** `scripts/watchdog_alerts.py`（容器状态翻转 → `source=alert` 走完整编排链，实测 exit 137 告警 → 检索命中 rb-102）。**仍未做（如实登记）**：回灌仍是**人工离线**写 md → 重灌，运行期依旧**无"结论→语料"写路径**（`IngestionRunner` 只读 `chunks.jsonl`；全仓唯一写它的仍是 `build_chunks.py`）——要不要做运行期自动回灌是新决策，不在本触发线范围内；告警看门狗也未进 CI 常驻（与 liveness 同批，待部署环境接线） | 语料现含 68 篇复盘/Runbook（5 篇真实 + 63 篇 fixture），运行期**无"结论→语料"写路径**不变。**陷阱提醒修订**：rb-101~105 **是**做过的故障（当晚实录），其余 63 篇仍是喂检索的 fixture——两者在语料里并存，检索时不区分，但对外引用证据时必须分得清 |
 | 拒答路径 TTFT（persona-eval P2-6） | 拒答延迟进入对外 SLO，或被真人/QA 作为体验问题复现 | 拒答在 LLM 前 return（不烧 token）；慢在检索自身耗时，属检索优化非生成链 |
 | metrics 观测缺口：5xx 计数 / 延迟分位 / 别名指向 / H2 健康 / 最近成功备份时间 | 任一项成为排障瓶颈——判据：再次出现"**只能靠翻日志才能判断**"的事故（2026-09-17 的登录 500 正是此类） | 面板已吸收依赖灯 / 降级档位 / 配额水位 / 在途组；`daily_usage` 有磁盘哨兵 |
@@ -321,7 +328,7 @@ docker compose start gateway
 
 ## 9. Ops Console 运维面板（只读可观测面，ADR-0009）
 
-**它是什么**：浏览器开 `http://localhost:8081/` 即得（Boot 默认资源处理器同源 serve，**零构建、零 CDN、无外部依赖**）。把已有的 `/admin/state` 快照与 `/admin/audit/recent` 事件流渲染成**六块 + 一条 KPI 头条**，其中**「请求处理轨迹」是主角**——计数器回答不了"这台机器刚才替我做了什么、花在哪儿"，而审计行里本来就带着全部事实（`q` / `mode` / `cache_hit` / `degrade_level` / `refused` / `max_level` / `took_ms` / `stage_ms`）。KPI 条（请求总数 / LLM 调用 / 风暴收敛请求 / 缓存命中 / 每请求 LLM 调用）、「运行状态」（build 指纹 + 三依赖灯 + live/mock + reingest）、「降级状态机」（L0/L1/L2 分段档位 + 熔断计数与冷却倒计时 + MANUAL LOCK 徽标 + 在途/阈值 + 配额条）、「请求处理轨迹」（每笔请求一张卡，**全部字段取自审计行、无推断无补算**：查询原文、检索模式、缓存档、降级档、实际生效的权限上限、主体、指纹，附 `stage_ms` 分段耗时条——ES 词法 / Qdrant 向量 / RRF 融合 / 精排 / L2 写入 / LLM 生成，段宽=该段真实耗时、零值段不占宽度；拒答笔左边框标红并显式写"置信度门控拒答"、缓存命中笔标绿）、「请求到达率」（**采样持久化在浏览器 localStorage，刷新/关页/重启都不丢**；时间窗 5 分钟 / 1 小时可切，切换只改聚合粒度不改采样；每格 = 该时间桶内 `total_requests` 的真实增量之和，**不做补间**；图例标注每格秒数、窗口合计与峰值）、「数据流」（13 个真计数 + Single-Flight 在途指纹）、「事件流」（ev 七类全量流水，含鉴权/非法/降级切换/跨租户回放告警）。**分区数以 `index.html` 的 `<h2>` 为准，README「Ops Console」节同源描述**。
+**它是什么**：浏览器开 `http://localhost:8081/`，点顶栏「运行面板」视图即得（Boot 默认资源处理器同源 serve，**零构建、零 CDN、无外部依赖**）。**2026-10-19 起 `/` 是统一工作台**（ADR-0021）：一份 HTML、两个视图，默认视图是排障台（§12），本节说的是第二个视图。把已有的 `/admin/state` 快照与 `/admin/audit/recent` 事件流渲染成**六块 + 一条 KPI 头条**，其中**「请求处理轨迹」是主角**——计数器回答不了"这台机器刚才替我做了什么、花在哪儿"，而审计行里本来就带着全部事实（`q` / `mode` / `cache_hit` / `degrade_level` / `refused` / `max_level` / `took_ms` / `stage_ms`）。KPI 条（请求总数 / LLM 调用 / 风暴收敛请求 / 缓存命中 / 每请求 LLM 调用）、「运行状态」（build 指纹 + 三依赖灯 + live/mock + reingest）、「降级状态机」（L0/L1/L2 分段档位 + 熔断计数与冷却倒计时 + MANUAL LOCK 徽标 + 在途/阈值 + 配额条）、「请求处理轨迹」（每笔请求一张卡，**全部字段取自审计行、无推断无补算**：查询原文、检索模式、缓存档、降级档、实际生效的权限上限、主体、指纹，附 `stage_ms` 分段耗时条——ES 词法 / Qdrant 向量 / RRF 融合 / 精排 / L2 写入 / LLM 生成，段宽=该段真实耗时、零值段不占宽度；拒答笔左边框标红并显式写"置信度门控拒答"、缓存命中笔标绿）、「请求到达率」（**采样持久化在浏览器 localStorage，刷新/关页/重启都不丢**；时间窗 5 分钟 / 1 小时可切，切换只改聚合粒度不改采样；每格 = 该时间桶内 `total_requests` 的真实增量之和，**不做补间**；图例标注每格秒数、窗口合计与峰值）、「数据流」（13 个真计数 + Single-Flight 在途指纹）、「事件流」（ev 七类全量流水，含鉴权/非法/降级切换/跨租户回放告警）。**分区数以 `index.html` 的 `<h2>` 为准，README「Ops Console」节同源描述**。
 
 **已撤除的两块（2026-10-06，用户判断"没什么作用"）**：原面板上的「能力边界」与「AIOps 谱系定位」两块**静态**声明已从面板移除，连同承载它们的 `<details>` 折叠区与 `BOUNDS`/`SPECTRUM` 两个常量数组。理由：一字不变地挂在监控屏上不产生任何信息，还和活数据抢注意力。**内容没有丢**——仍在 README「AIOps 谱系定位」五域表与本文档 §5 债务闹钟表里。**该自证的地方是文档，不是值班屏幕。**
 
@@ -344,21 +351,29 @@ docker compose start gateway
 
 **缓存纪律（2026-10-05 补）**：`index.html` 走 `spring.web.resources.cachecontrol.no-cache`——面板是**部署形态的一部分**，不是可缓存的静态库；改完版重新部署后拿到旧 HTML 会让运维以为改动没生效（本轮连续两次撞到）。无此配置时浏览器靠 `Last-Modified` 启发式缓存。代价≈0：单文件 HTML、零外部依赖，没有第二份可缓存产物。
 
-**接入**：面板需 **role=platform** 的 JWT（数据端点全部受守卫；HTML 壳本身匿名可开、零信息）。取 token：
+**接入**：运行面板视图与右上角健康抽屉需 **role=platform ∧ auth_level≥3** 的 JWT（数据端点全部受守卫；
+HTML 壳本身匿名可开、零信息）。**页面侧的凭据入口只有一个**——右上角账号胶囊里填用户名 + 口令 →
+`POST /api/v1/auth/login`（ADR-0021 决策 4）。token 存 **`sessionStorage`**：刷新不掉线、关标签页即失效。
+**必须诚实标注**：它不是安全升级（同源脚本照样读得到），只是**生命周期从 24h 收窄到"这一次标签页"**。
+页面启动时会主动清掉旧的 `opspilot.jwt`——页面侧的"粘贴 token"入口已退役。
+
+非平台身份（如 `sre-acme`：level 3 但 role=sre）在抽屉与运行面板视图里看到的是**锁定态**，不是空数据；
+**门禁一字不动**，也没有为这个页面新开非 admin 的状态端点。排障台视图不受影响：任意有效 JWT 都能发起查询。
+
+`scripts/console_token.sh` 仍然在，但它服务的是 **curl / 探针 / 自动化**，不是页面：
 
 ```bash
-bash scripts/console_token.sh            # 打印 role=platform（sre-full）的 JWT
-bash scripts/console_token.sh --copy     # 顺带放进 Windows 剪贴板，直接粘进凭证框
+bash scripts/console_token.sh            # 打印 role=platform（sre-full）的 JWT，给脚本用
+bash scripts/console_token.sh --copy     # 顺带放进 Windows 剪贴板
 ```
 
 脚本内部即"source .env → `localapi.login('sre-full')`"（`DEMO_PASSWORD`/`JWT_SECRET` 只从 `.env` 来，不落盘）。
-token 只在**本机终端**打印，粘进面板后存该浏览器 localStorage（不入库；清理=面板右上退出或
-`localStorage.removeItem('opspilot.jwt')`）。**别把输出转发到聊天或工单**——它是可用的运维凭据。
+token 只在**本机终端**打印。**别把输出转发到聊天或工单**——它是可用的运维凭据。
 
 **三态排障**（文案各不同，别互窜）：
-- 401 → token 过期/无效，重新 login（面板降饱和 + 提示"OPS §9"）。
-- 403 → 该 token 账号**不是 platform 角色**（密级高≠可信，见 ADR-0008）；sre-acme 是 level 3 但 role=sre，正属此态，不是 bug。换 sre-full。
-- 网关不可达 → 面板降频轮询并显"网关不可达"，先 `docker compose ps gateway`。
+- 401 → token 过期/无效：页面弹「凭证已失效」遮罩并**停止轮询**，点它回到右上角账号胶囊重新接入。
+- 403 → 该 token 账号**不是 platform 角色**（密级高≠可信，见 ADR-0008）；sre-acme 是 level 3 但 role=sre，正属此态，不是 bug。抽屉与运行面板视图渲染锁定态并**停轮询**（不拿 403 反复打端点），排障台照常可用；换 sre-full 即可。
+- 网关不可达 → 降频轮询并显"网关不可达"，先 `docker compose ps gateway`。
 
 **读它的关键位（演示底幕）**：
 - 顶栏 build 指纹（version·jvm·uptime·pid）——`build-info` goal 注入，传达"这是被部署过的服务"。
@@ -428,7 +443,13 @@ python scripts/check_upstream.py  # 三路（LLM / embedding / rerank）全通�
 
 ## 12. 排障查询页与只读行动契约（ADR-0017）
 
-**入口**：浏览器开 `http://localhost:8081/troubleshoot.html`（匿名可开壳，发查询要 JWT，与面板同一枚）。答案流式吐字，正文下方是**只读行动契约**：编号步骤 + 等宽命令 + 来源面包屑 + 复制按钮，卡片头固定「只读 · 网关不执行」。
+**入口**：浏览器开 `http://localhost:8081/`——**默认视图就是排障台**（旧地址 `/troubleshoot.html` 是薄壳，会跳过来，书签与文档里的老链接不失效；ADR-0021 决策 1）。**凭据在右上角账号胶囊里换**：用户名 + 口令 → `POST /api/v1/auth/login`（口令只走请求体、用完即弃，不落盘；localStorage 只记**用户名**，token 存 `sessionStorage`）。**门禁是任意有效 JWT**，不是 platform-only：login 成功即身份确认（ADR-0020 第 1 条），所以这个视图谁都能用，不与运行面板共用同一道门。接入后胶囊折叠成「● <用户名>」，点开可「切换」。
+
+**报告卡是四层黄金流**（自上而下，改动前先读 ADR-0020）：① 运行态指标顶栏（`cache L1/L2` · 降级档位 · 快路径 · 检索 · TTFT · 总耗时）→ ② **只读行动契约置顶**（编号步骤 + 等宽命令 + 来源面包屑 + 复制按钮，卡片头固定「只读 · 网关不执行」）→ ③ Markdown 诊断正文（`[参考N]` 角标）→ ④ **带序号的参考来源条**（`[1]`/`[2]`/`[3]`，与正文角标一一对应，悬停角标高亮对应来源）。左栏另有 4 个**生产场景预设** chips（`MySQL 连接池耗尽` / `支付网关 502` / `订单创建超时 · 慢 SQL` / `模糊追问`）——**都是单身份场景，一律不改模式**（ADR-0021 决策 5）。未接入时点预设会把输入挂起并打开账号胶囊，接入成功后自动发起，不必再点一遍。
+
+**对照模式（已降为高级入口）**：右上角「**高级 · 权限隔离演练**」→ 勾选「用两个身份各问一次」并接入身份 B → 画布由单栏切为 `1fr 1fr` 双栏并排，底部挂**差集对照表**——`引用集差集`/`命令条数`/`拒答` 这类差异行加琥珀左边框，`cache_hit`/降级档位/快路径/检索耗时 一致行保持灰字。判据是**引用集差集**（低密级侧不该出现高密级 chunk），不是"两边措辞不同"；时间行按抖动容差判同，3ms 的 TTFT 差不当作分叉。跨身份/跨租户的对照用例只挂在这个入口下，**不进左栏预设**。实测分叉用例：`支付网关 502 50041_PAY_GATEWAY_502 排查` → `sre-full` 引 `rb-005 / pm-007`，`sre-limited` 引 `order-center-api / rb-004 / rb-006`，两侧 `cache_hit`/档位/快路径/检索耗时全一致 ⇒ 分叉发生在检索引擎层，不是模型发挥。
+
+**覆盖范围与拒答导航（ADR-0023 决策 5，2026-10-19 加）**：左栏预设下方常驻一张**覆盖范围**卡片——按调用者身份**现算**的服务数 / 错误码数 / 语义块数 + 最近重建时间（`GET /api/v1/copilot/coverage`），点「展开」列出全部服务名与错误码，**点一个就填进输入框**（省掉手敲服务名/错误码；**只填不发**——替用户把查询发出去是越权）。它不占配额、不落审计（只读元数据，与 `/admin/state` 同款口径），且**清单本身就是越权面**：给 `sre-acme` 列出 tenant-internal 的服务名等于把语料边界泄出去，故过滤与检索走同一份身份条件（`EsSearchService.identityFilters` 单一事实源）。拒答时同一份清单里**最接近的标识符**会出现在报告卡里（`done.near_miss` 只带 `service` + `errorCodes`，**不带正文**——把低置信度的 chunk 正文摆出来，用户就会拿它当答案用，而那几段可能是**别的故障**的手册，等于作废「拒答」这个信号）；零召回时如实写「没有接近的标识符可导航」，并给一个「上报覆盖缺口」按钮走**既有** `POST /api/v1/copilot/feedback`（`verdict=down`，按 fingerprint 归档，落审计 `ev="feedback"`，不占配额）。点标识符**不自动重发**：重发会再吃一次配额与审计，且「接近」不等于「命中」，值不值得再问由人定。澄清态（`gate=clarify`）**不渲染**这个块——那是"你问得不清楚"，不是"知识库没有"。
 
 **它不是"建议执行"**：网关只描述该跑什么，自己不执行、不推导写操作、没有任何执行回路（ADR-0013）。命令文本全部从本次引用的 chunk 原文逐字抽出，判据是四层只读策略（工具白名单 / 子动词闭集 / 外壳负载递归 / 旗标与重定向），认不出的形态一律判拒并计数。**复制出去由运维自己动手**，与本网关无关。
 
@@ -438,8 +459,246 @@ python scripts/check_upstream.py  # 三路（LLM / embedding / rerank）全通�
 
 **契约为空是正常的**：段名闸只认标题含「排查」的段，`rb-101~105` 本机辖区手册把命令写在「处置」段（那些段整体含写操作），按设计整段不进契约——空表照样下发（`actions: []`），不是链路断了。要覆盖某个手册，去语料里把该段标题改成含「排查」。
 
+**活体复核（左栏预设与覆盖范围）**：`cd offline && python preset_probe.py`（同样前置：栈已起、`.env` 已 source）。三组判据：**P-1** 预设 query **从 `index.html` 现读**并与期望表对齐——改了页面不改探针就红（防止"页面改了、承诺没人核"）；**P-2** 每个预设的 `gate` 精确断言，命令条数**只锁有无不锁产额**（沿用上面 action_contract_probe 的同一条取舍，锁死会随 top-3 扰动假红），并额外断言**澄清态不得带 `near_miss`**；**P-3** `GET /api/v1/copilot/coverage` 的三个计数与两份清单必须与 `offline/corpus/chunks.jsonl` 按 (tenant, `auth_level ≤ level`) **现算的结果逐项相等**，外加「低密级 ⊆ 高密级」与「外部租户清单里不出现语料中内部独有的服务」——后者的「内部独有」**取自语料而非取自回包**，从回包取差集会让断言恒真（自证式空转门闩）。**自己也只读**：login + chat/stream + coverage，`/admin` 一条不打。判据极性由 `offline/tests/test_preset_probe.py` 钉着（五路变异实测全红、复原全绿）。
+
 **报"某条我明明在原文里看到却没出现在清单里"时**：先看它是不是在非「排查」段里，再看是不是撞了已知的保守偏差（SQL 字符串字面量含写关键字、PromQL 无命令形态、awk 的 `$(NF)` 撞命令替换判据、进程替换的合法读用法如 `diff <(sort a) <(sort b)`、ssh 旗标闭集外的 `-v`/`-o`/`-L` 等形态）——全部在 ADR-0017 的软上限表里登记着，是取舍不是缺陷。
 
 **2026-10-11 安全评审批的口径变化**：纯读工具的旗标级写面收紧——`env` 移出白名单（它是执行器，`env rm` 首词会过任何白名单）、`sort -o`/`openssl x509 -out` 落盘、`date -s`/`dmesg -C`/`journalctl --vacuum-*`/`hostname <名>`/`ifconfig` 判拒；进程替换 `<(…)`/`>(…)`/`=(…)` 与 `$(…)` 同罪判拒；`ssh` 只认闭集内取值旗标，host 之后的负载全量递归校验；占位符掩码只认纯 `<名>` 段（`<in>out` 的 `>` 是真重定向）。语料零翻转（现役 41 条契约原样成立），判拒计数从此会把这些新形态也算进去——判拒上涨 ≠ 故障，对照本条与 ADR-0017 的评审批段读。
 
-**报"这次怎么一条命令都没有"时**（不是链路问题，是 top-3 引用集的问题）：契约只从**本次引用的三个 chunk** 里抽（`final-top-k: 3`，契约 ⊆ 引用是构造保证）。实测 11 个固定查询形状里 6 个非空，落空那 5 个引用的全是文档标题、段头（`排查步骤`）和症状摘要这类 chunk——命令确实在语料里，住在 `排查步骤 > 第N步` 的**编号叶**里，只是排在第 4 名之后没被引用。看 `done` 帧的 `refs` 面包屑就能当场判：引用的三段里有没有"第N步"字样的叶，没有就是本条，与策略松紧无关。这是登记在案的软上限（ADR-0017 软上限表 + §5 闹钟表「行动契约的 top-3 产额」一行），两个候选修法各有代价，未到触发线不动。
+**报"这次怎么一条命令都没有"时**（不是链路问题，是 top-3 引用集的问题）：契约只从**本次引用的三个 chunk** 里抽（`final-top-k: 3`，契约 ⊆ 引用是构造保证）。实测 11 个固定查询形状里 6 个非空，落空那 5 个引用的全是文档标题、段头（`排查步骤`）和症状摘要这类 chunk——命令确实在语料里，住在 `排查步骤 > 第N步` 的**编号叶**里，只是排在第 4 名之后没被引用。看 `done` 帧的 `refs` 面包屑就能当场判：引用的三段里有没有"第N步"字样的叶，没有就是本条，与策略松紧无关。页面对这种情形渲染的是**单行紧凑 Callout**（固定 34px：`本次引用切片不含可执行代码围栏——属引用集物理性质，非链路故障`，详细解释挂 hover title），**刻意不区分成因**、也不占正文高度——把它渲染成"链路故障"或一个大空盒子都是误导（ADR-0020 第 7、8 条）。这是登记在案的软上限（ADR-0017 软上限表 + §5 闹钟表「行动契约的 top-3 产额」一行），两个候选修法各有代价，未到触发线不动。
+
+## 13. 告警侧（Prometheus / Alertmanager / bridge）
+
+**它是什么**：外部监控 adapter 的第一个真实输入端。此前所有"真实告警"的**来源**都是本机自己的运行态
+（§5.1 的自举生产者、`watchdog_alerts.py` 的 Docker 状态翻转）；这一段补的是"由本系统管不着的组件
+产生、经标准协议投递进来"的告警。**定调：探测性研究产物，不是产品接入面**——网关不加端点、
+不开新的鉴权维度（见 §5.1 那一行的状态注）。
+
+**三件东西与它们的分工**：
+
+| 组件 | 在哪 | 干什么 |
+| --- | --- | --- |
+| Prometheus | 容器（`alerting` profile） | 抓宿主 8081 的 `aiops_*`，按 `ops/alerting/rules/opspilot.yml` 判三条规则 |
+| Alertmanager | 容器（`alerting` profile） | 按 `group_by` 收敛后投递 webhook 到宿主 8089 |
+| `alert_bridge.py` | **宿主**（与网关同形态） | 收 `/api/v2/alerts` → 逐条摊平 → 打 `/api/v1/copilot/chat/stream` |
+
+**为什么 bridge 在宿主**：它复用 `offline/localapi.py` 的 `assert_local`——出口白名单只允许 http + 环回，
+且校验解析后的 IP。容器里的 localhost 指向容器自己，够不到宿主网关；为部署整齐去松那条 SSRF 防线
+不划算。所以是**容器回连宿主**，两容器都必须有 `extra_hosts: host.docker.internal:host-gateway`
+（Linux 的 Docker 不默认提供这个名字，缺了不报错、只静默投递失败）。
+
+**起法（顺序有讲究：先网关，再桥，最后监控容器——否则规则 fire 时没人接）**：
+
+```bash
+bash scripts/start_gateway.sh                                  # ① 宿主网关（8081）
+python scripts/alert_bridge.py                                 # ② 宿主桥（8089）
+docker compose --profile alerting up -d                        # ③ 监控容器（9090 / 9093）
+```
+
+桥自己读仓库根的 `.env`（`load_env_file`，**不覆盖显式 env**）取 `DEMO_PASSWORD`，故不再依赖
+`set -a && . ./.env` 这段 bash 语法——本机没有可用 bash 也能起（2026-10-17 补）。
+
+`alerting` profile 是**独立**的：基础栈（redis/qdrant/es）没起也能单独把这两个容器拉起来，
+它们只会看到 target down。反过来说，只跑基础栈时这两个容器不会被启动（不占那约 400MB）。
+
+**四条核色命令**（"跑通了没有"就靠这四条，别靠感觉）：
+
+```bash
+curl -s localhost:9090/api/v1/targets | python -c "import json,sys; t=json.load(sys.stdin)['data']['activeTargets']; print([(x['labels']['job'], x['health']) for x in t])"
+curl -s localhost:9090/api/v1/rules   | python -c "import json,sys; g=json.load(sys.stdin)['data']['groups']; print([(r['name'], r['state']) for grp in g for r in grp['rules']])"
+curl -s localhost:9093/api/v2/alerts  # Alertmanager 手里的活告警
+curl -s localhost:8089/healthz        # 桥在不在听
+```
+
+**台账在哪、读什么**：`logs/alert-bridge.jsonl` 每行一条处置记录，字段
+`group_key / status / alertname / job / error_code / query / alert_id / alert_id_basis / fp / cache_hit / deduplicated / ref_docs / http / sent_ok`。
+**`fp` 的分布就是这段接线的研究产出**——真实告警标签经指纹归一化后，哪些该收敛的收敛了、
+哪些被 `<N>`/`<HEX>` 掩码意外抹平了，都在这一列里。`skip` 字段回答"为什么这条没发"：
+`empty_query`（注解空）/ `hour_budget` / `quota_reserve` / `group_cap`（单组超限，带 `dropped` 计数）。
+**`alert_id` 与 `alert_id_basis` 成对出现**：前者是网关消费的哈希身份，后者是哈希前的
+`alertname|job|error_code|status` 四元组——对账"这条 `fp` 是哪条规则来的"靠它，不必反推哈希。
+
+**2026-10-17 首次实机验收的结论与它引出的债务**：三条规则全部走通（触发手段全走真实故障），
+台账与 [qa/2026-10-17-alertmanager-intake.md](docs/qa/2026-10-17-alertmanager-intake.md) 在案。
+**同时实证了一处契约错配**：Alertmanager 的规则模板把 `{{ $value }}` 渲染进注解，
+于是同一条告警每次重发的文案都带一个新数字——而指纹直接吃 query 全文，
+`<N>` 归一化那条防线**只保护自产告警文案、保护不到外部模板渲染的文案**。后果是
+同一条告警的 L1 缓存永远 miss、SingleFlight 永不合并。**这不是桥的实现缺陷**（桥只拼接
+`summary` + `error_code`，数值来自规则自己的模板），是"指纹契约 vs 真实告警文案"的错配。
+
+**处置（2026-10-17 当日定案并实施，方案 C = 服务端拆身份）**：不动规则、不让桥替网关做归一化，
+而是把"这条告警是什么"改成由调用方显式给出——桥从 `alertname/job/error_code/status` 四元组
+定长派生 `alert_id`（**与 message 无关**），网关把它当**不透明身份**算指纹；L1 键与 SingleFlight
+组键改吃这个指纹，不再自己哈希 query。人工提问与既有自举源不传该字段，逐字回退到原文本
+指纹，行为不变。契约由 body 第五个字段承载：**线路名是 `alertId`（camelCase，Jackson 默认
+命名策略）**，可选、空白按未提供、形状非法即 400。**注意别写成 `alert_id`**——snake_case 不会
+报错，而是被静默忽略、身份退回文本指纹（2026-10-17 live 验收实测抓到，qa §6）。**产品面只多
+一个可选 body 字段，无新端点、无新鉴权维度**。台账字段随之新增 `alert_id`（哈希后的身份）与
+`alert_id_basis`（哈希前四元组，供对账）——台账键是桥自己的落盘约定，与 HTTP 线路名无关。
+
+**仍未解决（独立决策，别混进方案 C）**：台账 §3.5 实证了"**同身份在降级/失败路径也会重复穿透**"——
+`runPipeline` 的 L2 分支与 LLM 失败 catch 都在写 L1 之前 return/抛出，L1 只缓存"成功且非 SOP"
+的答案。拆身份解决的是"身份碎"，**不解决"路径不写缓存"**；那是"降级期答案要不要入缓存"的另一场
+取舍（A2-6 已定 SOP 不入），触发线见 §5.1 新增行。**动规则或动指纹前先读 §5.1**。
+
+**跨指纹 incident 关联（2026-10-17 同轮落成，[ADR-0019](docs/adr/0019-incident-boundary-owned-by-upstream.md)）**：
+**关联，不是归并**——N 条告警仍各自成答，被串起来的只是"读的时候能不能一次读出来"。事故的边界**由上游定义**
+（Alertmanager 按 `group_by` 划出的一个分组的一次生命周期），本系统不重新发明这层判断。桥把它派生成
+`am-` + `SHA256(groupKey + "|" + 组内最早 startsAt)` 取前 128 位，随 `X-Trace-Id` 头发给网关
+（**产品面零改动**：该头是过滤器层的，覆盖四个面、不碰任何 DTO），落在审计行 `trace_id`；台账另增
+`incident_id` / `incident_basis` 两列。配套两行配置：`group_by: ["job"]`（去掉 `alertname`——带着它时分组与
+单条告警**同粒度**，等于没关联）与 `group_interval: 1m`（缺省 5m 对"多久拿到答案"太贵）。
+
+读一次事故（三条命令）：
+
+```bash
+grep '"trace_id":"am-3a91aa12483574aea5c7ed029b6d7e66"' logs/audit.jsonl   # 这次事故的每一行
+grep -c 'am-3a91aa12483574aea5c7ed029b6d7e66' logs/alert-bridge.jsonl      # 桥处理了几条（含 skip 行）
+curl -s localhost:9093/api/v2/alerts                                       # 上游此刻认的活告警
+```
+
+**代价（实测读数见 qa §7）**：告警要等一个 `group_interval`（实测投递延迟 57–59s）；组更新会把**全体成员**
+重发一遍（Alertmanager 的载荷不是增量），而桥不判重——重复真的打到网关才看得见 L1 与单飞，实测那次重复
+命中 **L1**；`resolved` 与 `firing` 是两种告警身份，故 resolved 通知各跑一次完整管线。**抑制规则（inhibit）
+决定"哪些告警根本不投递"**，被抑制的告警不会出现在事故里——那是上游的判断，不是丢数据。
+
+**改规则不用重启容器**：`ops/alerting/rules/*.yml` 是只读挂载，改完
+`curl -X POST localhost:9090/-/reload` 即生效（`--web.enable-lifecycle` 已开，见 compose）。
+改 `prometheus.yml` 本身同理；改 `alertmanager.yml` 要 `docker compose restart alertmanager`。
+
+**规则作者契约（改规则前必读）**：`annotations.summary` 是给桥的**自然语言正文**，
+`labels.error_code` 是给桥的**精确符号**。桥只拼接、不发明——标签缺失就转发不含错误码的文本，
+让系统走语义路。**不要**指望桥去猜错误码：它拿 `alertname`/指标名去凑的形状会被
+`EsSearchService.ERROR_CODE` 判据当成强标识符，等于伪造一个锚点。`rules/opspilot.yml` 里
+第三条（SOP 兜底）**故意不带** `error_code`，那条是"无标识符告警"的对照样本，别顺手补上。
+
+**与 `watchdog_alerts.py` 的分工**：两者都发 `source=alert`，但输入面不同——看门狗看的是
+**容器状态**（进程死没死），桥看的是**指标**（服务活着但行为劣化了）。同一次故障里两者可能
+各发一条，指纹不同、不会被 SingleFlight 合并；这是预期，不是重复告警。
+
+**已知边界（如实登记，不假装覆盖）**：
+- 桥是**单实例**的（小时上限与配额读数是进程内状态，跑两个 = 双倍速率）。多实例要换共享态，不是加一行配置。
+- 单组超过 `--group-cap`（默认 20）条时**尾部丢弃并留痕**。这是桥唯一会"少发告警"的路径，`skip=group_cap` 行是它的证据。
+- `resolved` 同样转发、同样计配额。它不豁免——"故障消失了"也是一条值得进审计的真实输入。
+- 桥自己挂了没人知道（与自举生产者的固有盲区同族）：`liveness.py` 只探网关，不探桥。
+
+## 14. 零依赖存储模式（`opspilot.storage.mode=memory`，ADR-0022）
+
+**它是什么**：一条**显式开关**触发的替代链路——把 ES / Qdrant / Redis **三者全部**换成进程内实现，
+语料从 `offline/corpus/chunks.jsonl` 直接读进内存（本机实测 448 块 **约 0.2s**，170–204ms）。用途是"电脑上
+什么都没装也能先看一眼它是干什么的"：新同事、评审者、面试官不必先过 Docker + 全栈 compose 这道门
+（`scripts/quickstart.sh` 首建 2–5 分钟）。**它不是降级档 Level 3**——降级档的语义是"同样的链路在
+压力/故障下的取舍"，而内存实现是**换了一条链路**，记成 L3 会污染 `degrade_transition` 审计与可用性
+叙事（[ADR-0022](docs/adr/0022-standalone-storage-mode.md) 否决项）。
+
+**起法（一行）**：
+
+```bash
+STORAGE_MODE=memory DASHSCOPE_MODE=mock bash scripts/start_gateway.sh
+# → 打开 http://localhost:8081/ ，右上角账号胶囊填 sre-full + 口令，默认视图=排障台
+```
+
+`STORAGE_MODE` 经 `application.yml` 映到 `opspilot.storage.mode`；`DASHSCOPE_MODE=mock` 让模型层
+用词法后端（无需 API Key）。想要**完整**演示（含拒答导航），把 `DASHSCOPE_MODE` 换成 `live`——
+两种都是"零外部中间件"，差别只在**模型轴**。
+
+**不自动回退**：启动探测到中间件缺失时**不静默切换**，只打印一条可执行的提示
+（"如需零依赖体验，加 `--opspilot.storage.mode=memory`"），然后照常失败。理由：key 的有无是
+**配置期事实**（一次定死），中间件可达性是**运行期事实**（会抖）——把 `auto` 套到会抖的信号上，
+会出现"同一台机器、同一份代码、两次启动跑在不同后端"而页面与审计数字长得一模一样，正是本仓反复
+在防的那类**假绿**。
+
+**它为什么可信（不是又一份演示实现）**：内存实现**复用同一份** `tenant × auth_level` 过滤判据
+（`retrieval/IdentityFilter`，与 `EsSearchService` 共用）与只读命令策略，**不另写一套**——否则它就成了
+绕开权限引擎的旁路。检索仍是**两条腿 + RRF 融合**（词法腿与向量腿打分方式不同，融合是真事）。
+"两套实现行为一致"由 `IdentityFilterContrastTest` / `InMemoryIndexTest` 等对照测试锁着。
+
+**怎么看"这次跑的是哪条链路"（不靠人回忆启动命令）**：启动摘要打印
+`storage=memory backend=in-memory（…不承诺检索质量）`，日志里另有
+`[startup-memory] 内存索引装载完成: 448 chunks, 耗时 Nms`；`GET /api/v1/admin/health`（需 platform 门禁）
+自报：
+
+```json
+{"redis":{"detail":"in-memory kv…"},"qdrant":{"detail":"448 pts (in-memory)"},
+ "es":{"detail":"448 docs (in-memory)"},"storage":"memory","status":"UP"}
+```
+
+**诚实边界（必须知道，别把内存后端的读数当 live 读数）**：
+
+- **不承诺任何检索质量数字**。向量是**词法哈希**不是神经语义，精排是**词面覆盖度**不是交叉编码器；
+  ADR-0022 的口径是 memory 环境**不得进入任何"核心指标"表**，`doc_numbers.py` 登记的产物数字仍以
+  live / 随附产物为准。
+- **拒答门控的行为会随模型轴变**，与存储轴无关。实测对照：`DASHSCOPE_MODE=mock` 下域外提问
+  （"今天天气怎么样"）**不会被拒答**——词法后端给任何文本都打出正分；同一份内存语料换成真 key
+  （`DASHSCOPE_MODE=live`）后，域外提问立刻恢复拒答（3 个 `near_miss` 候选）。这是**模型轴**差异
+  （mock 后端 IDF 覆盖分的假象，见 §5 债务表"域外/无信息量 query 的第二道门"一行），不是内存实现的缺陷。
+
+**启动期的代价（如实登记）**：内存索引装载被放在 `IngestionRunner.afterPropertiesSet`，即**在 Tomcat
+开始服务之前**同步完成——代价是启动多花约 0.2s（448 块，170–204ms），换来的是"服务一旦可访问，检索就是满的"。
+这不是洁癖：装载一度挂在 `ApplicationRunner`（**Tomcat 起来之后**），于是有一个窗口检索为空、排障台对
+任何 query 都回"无相关参考"——那看起来像**拒答**，实际是索引还没进内存。装载挪到 `afterPropertiesSet`
+后这个窗口消失。
+
+**落地实测咬到的三个坑（都已在代码/`application.yml` 注释里留档，改这块前先读）**：
+
+1. **`RedisAutoConfiguration`（Lettuce）会无条件注册 `RedisHealthIndicator`**——即使本项目从不使用
+   `RedisConnectionFactory`（唯一消费者是 RedissonClient），memory 模式下它照样 ping Redis，把
+   `/actuator/health` 拖成 **DOWN**，而 `demo.sh` / `liveness.py` / compose healthcheck 都以这个端点
+   当存活判据，整条零依赖路径会被判"没起来"。**处置**：`spring.autoconfigure.exclude` 里连它一起排除
+   （同批排除 `RedissonAutoConfigurationV2`——它会在 memory 模式下照样急连 Redis）。
+2. **`ElasticsearchRestClientHealthIndicator` 是"按 classpath"注册的**（不是按 `RestClient` bean），
+   所以"memory 模式不建 ES 客户端"挡不住它，它照样 ping `localhost:9200` 拖垮 `/actuator/health`。
+   **处置**：`management.health.elasticsearch.enabled: false`——本项目自己的 `elasticsearchClusterHealth`
+   做的是同一件事且更准（走别名、带 socket 超时、能报 docs 计数）。
+3. **装载时机**（见上"启动期的代价"）：`ApplicationRunner` → `InitializingBean.afterPropertiesSet`。
+
+**零依赖模式下怎么自检**：`demo.sh` 第 1 检硬要求三个中间件容器在跑，**它是 live 形态的预检**——memory
+模式跑它会红，属预期。memory 形态用这两条零依赖/只读门禁：
+
+```bash
+bash scripts/check_panel_contract.sh     # 零依赖：面板↔后端字面量契约，CI 同源
+cd offline && python preset_probe.py      # 只读活体：预设 + 覆盖范围与语料逐项相等（27/27）
+```
+
+**它不是什么**：不是"离线模式"——`memory` 只换掉存储，`DASHSCOPE_MODE=live` 下模型层仍要联网；
+只有 `memory + mock` 组合才是完全离线。它也不改产品面：网关不加端点、不开新的鉴权维度，页面与协议
+一字未动。
+
+## 15. 对外面用词门闩（ADR-0023 决策 1–4）
+
+**它管什么**：本仓的术语是为**精确**而生的（`CONTEXT.md` 逐条论证近义词为什么被否），代价是它们会
+漏到不该出现的地方——README 首屏、页面标签。ADR-0023 把这件事拆成**双轨**：
+
+- **内部面**（canonical 照旧）：`docs/CONTEXT.md`、`docs/adr/`、**本文档 `OPS.md`**、代码注释、审计
+  列名与 SSE 帧键（`actions`/`gate`/`near_miss`…）。改协议键**不跟**对外别名走。
+- **对外面**（用朴素词）：`README.md` 全文 + 页面文案（`index.html` / `troubleshoot.html`）。**只有
+  这两个面是"外人会读的面"**——所以本文档与 ADR 里的 canonical 词**是合规的**，别顺手去改它们。
+
+**别名表在 `CONTEXT.md`**（每条的 `_对外_: …` 行），它是**单一事实源**：新增机制时忘登记，反向断言
+会提醒。当前这批：行动契约→只读命令清单、变异验证→安全回归测试、单飞→并发合并、指纹→去重键、
+对照模式→权限隔离演练、存储模式→零依赖试跑。
+
+**门闩怎么跑**（CI 的 `provenance` job 里，与 `provenance.py` / `doc_numbers.py` 同处）：
+
+```bash
+python scripts/check_public_copy.py --check   # 退出码 0=一致 / 1=有 canonical 词漏进对外面
+```
+
+**词表不手写**——从 `CONTEXT.md` 的 `_对外_` 行**现取**（登记一个术语 = 同时登记它的禁用面）。
+解析不到任何别名时**报错而不是放行**：悄悄失效的门闩比没有门闩更危险（同款纪律见 `doc_numbers.py`）。
+**每条 canonical term 都要有一行 `_对外_: …`**——没有对外别名就写 `_对外_: 无对外别名。`，缺行即红
+（决策 1 的完备性：没有它，就分不清"有意不设别名"与"忘了登记"）。
+
+**跑红了怎么改**：看 `FAIL` 行点名的 `文件:行` 与 canonical 词，把它换成该词在 `CONTEXT.md` 里的
+`_对外_` 别名（例：README 里的「行动契约」→「只读命令清单」）。**若你是在写一个新机制**：先在
+`CONTEXT.md` 立条目——能用朴素词见外就登记 `_对外_: <别名>`，确实该用同一个词见外就写
+`_对外_: 无对外别名`（后者不进禁用面）。
+
+**反向只报不闸（有意如此）**：README 里**未登记**的加粗机制名候选会以 `INFO` 列出、**不改退出码**。
+ADR-0023 决策 4 写的是"宁可漏报不误报"——实测严格过滤仍有若干**领域常用词**噪声（"告警风暴/排障台/
+运行面板"），做成硬闸就会逼出"为过闸而改写的奇怪句子"，正是该 ADR 后果段点名要避免的失效方式。
+
+**已知边界（如实登记）**：门闩剥掉 `<style>` 但**保留 `<script>`**——面板的用户可见标签由 JS 字符串
+字面量渲染（如"在途合并组"），整段剥 `<script>` 会把页面黑话放行。canonical 词全是中文、代码标识符
+全是 ASCII，故保留 script 不引入误报；代价是脚本里的中文**注释**若含 canonical 词也会被算作违规。
+HTML 注释同理（非可见文本但会被扫到）——**fail-closed 是刻意的**，改写一句注释比放行一条黑话便宜。

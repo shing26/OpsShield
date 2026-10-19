@@ -9,7 +9,7 @@
 > **本文件不手写易漂的数字**（用例数、语料数、指标值）：那些由 `offline/doc_numbers.py` 在 CI 守着，
 > 以 README/产物为准——手写的数字必然过期，这正是 2026-09-21 那一轮的教训。
 
-## 现行状态（最后更新 2026-09-27）
+## 现行状态（最后更新 2026-10-19）
 
 | 能力面 | 现行状态 | 依据 / 证据落点 |
 |---|---|---|
@@ -18,7 +18,7 @@
 | H3 LLM 退避重试 | **已修**（并按 2026-09-19 P1 **类型化**：5xx 分类读 status 字段而非文案） | `LlmClient`；`LlmHttpException` |
 | M1 启动脱敏配置摘要 | **已修** | `StartupConfigSummary`（凭据只出 `set(len=N)/absent`） |
 | M2 磁盘哨兵 | **已修** | `daily_usage.py` 输出 `logs_disk_mb`，>500MB 告警 |
-| M3 告警接入 | **自举源已上线**（ADR-0011）；**外部监控 adapter 挂起**（无真实告源，硬约束） | 触发线见 `OPS.md` §5.1（2026-09-21 改写为三组**可判读**析取项）；`offline/alert_producer.py` |
+| M3 告警接入 | **自举源已上线**（ADR-0011）；**外部监控 adapter 第一版已落地**（2026-10-17，触发线①兑现） | 宿主桥 `scripts/alert_bridge.py` + `ops/alerting/`（Prometheus 规则 → Alertmanager → 桥）+ compose `alerting` profile；实证见 `docs/qa/2026-10-17-alertmanager-intake.md`。**「提升为网关原生端点」是另一个决策**，触发线见 `OPS.md` §5.1 |
 | M4 错误码枚举 | **不立项**（实测全仓恰好 1 处且属拒答话术文案，"<10 处"原判不实） | `docs/qa/2026-09-13-module-verification.md` §8 |
 | L1–L5 企业级项 | **挂起**（Prometheus 导出 / 多实例 / OIDC / TLS / 增量 ingest） | 触发线见 `OPS.md` §5；勿提前做 |
 | B3 出站超时 | **已修**（2026-09-22） | 精排/embedding/ES 三路此前**完全无超时**；改为两个配置点覆盖四个调用位 + 4 个 env 键 |
@@ -34,11 +34,18 @@
 | 分段耗时（审计行 `stage_ms`） | **已建**（2026-09-24） | `retrieval/LegTimings` + `metrics/StageTimings`（八段）；非 chat 路径传 null → 不落字段（"没测"≠"测得为 0"） |
 | 代价量化脚本（门控混淆矩阵 / 并发曲线 / 缓存节省账 / 真实输入探测） | **四项全部出数**（两项 2026-09-24、两项 2026-09-25 欠费解除后完成） | `offline/eval/reports/gate_matrix.{json,md}`、`offline/eval/reports/observed_probe.{json,md}`、`offline/load/reports/concurrency_sweep.{json,md}`、`offline/load/reports/cache_savings.{json,md}`（数值以产物为准，不在本表复述）。**探针 V9 的 live 断言已通过**。**核色前置**：`python scripts/check_upstream.py`（三路探活，全通过才 exit 0）——降级会静默掩盖上游故障，故已写成每次核色的第一步（见 `OPS.md` §11） |
 | 答案反馈入口（人机协同） | **已建，且 live 已验**（2026-09-27） | `POST /api/v1/copilot/feedback` → 审计 `ev="feedback"`（按 fingerprint 归档、不占配额）；是"复盘→知识回灌"的前置入口。**live 四态实测**：未认证 401 ｜ 合法 200 且审计行落（含身份三元组+fp+verdict）｜ 未知 fingerprint 200（接受而非拒绝）｜ 非法 verdict 400（DTO @Pattern） |
+| 告警身份拆分（ADR-0018） | **已落**（2026-10-17） | 指纹不再从人类可读文案推断身份：调用方（桥）从 `alertname\|job\|error_code\|status` 定长派生 `alertId`，服务端只做**不透明**哈希；L1 键、单飞组键、审计列与 `meta` 共用同一 `fp`。缺省逐字回退文本指纹。踩坑与实证见 qa 台账 §3.1/§6 |
+| 跨指纹事故关联（ADR-0019） | **已落**（2026-10-17） | 事故边界由上游 `group_by` 定义，`am-…` 经 `X-Trace-Id` 落审计 `trace_id`；**只关联不归并**（N 条告警仍是 N 个独立答案）。未实测边界（anchor 随成员进出漂移）见 ADR-0019 注记；操作面见 `OPS.md` §13 |
+| 排障台 → 统一工作台（ADR-0020/0021） | **已落**（2026-10-18 / 19） | `/` 一个壳两个视图、默认排障台；健康抽屉按身份分级（**门禁一字未动**）；页内用户名+口令登录，token 存 `sessionStorage`；对照模式降为高级入口。单文件阈值告警（1363 行）见 ADR-0021 注记 |
+| 零依赖存储模式（ADR-0022） | **已落**（2026-10-19） | `opspilot.storage.mode=live\|memory`：显式开关、默认 `live`、**不自动回退**；三个中间件全停时可启动并跑通，启动摘要与 `/admin/health` 标 `backend=in-memory`。**memory 环境不进任何核心指标表**。两条边界（L2 缓存过滤未共享、审计无 `backend` 列）见 ADR-0022 注记 |
+| 覆盖范围声明 + 对外面术语门闩（ADR-0023） | **已落**（2026-10-19） | `GET /api/v1/copilot/coverage`（按身份过滤、从语料现算，与检索共用 `identityFilters`）；`done.near_miss` 只给标识符导航；术语双轨 + `scripts/check_public_copy.py`（词表从 `CONTEXT.md` 现取）进 CI。反向启发式只报不闸 |
 
 **逐轮修复流水**（细节见横线以下各节）：2026-09-12 五维评估 + H1/H2/H3/M1/M2 → 09-18 证据链 O1/O2 →
 09-19 外部评审核实（2 采纳 2 不采纳）+ P1 类型化 5xx + P2 配置 fail-fast → 09-21 O2 面二 + 打包自检互锁 +
 MIT LICENSE → 09-22 B3 出站超时 + B9 覆盖率棘轮 → 09-23 账外边界「复盘→知识回灌」入账 + 门闩自身两处缺陷修复 →
-**09-24 承诺线 SLI/SLO + 降级代价语义（ADR-0012）+ 分段耗时 + 代价量化四脚本 + 答案反馈入口**。
+**09-24 承诺线 SLI/SLO + 降级代价语义（ADR-0012）+ 分段耗时 + 代价量化四脚本 + 答案反馈入口** →
+09-25/27 防幻觉事后环 V9 + 答案反馈入口 live 四态 → **10-17 告警接入第一版（ADR-0018/0019：告警身份拆分 + 跨指纹事故关联，触发线①兑现）→ 10-18/19 统一工作台（ADR-0020/0021）+ 零依赖存储模式（ADR-0022）+ 覆盖范围声明与对外面术语门闩（ADR-0023）**。
+（10-19 一轮 code-review 后补：`OPS.md` §5 补"静态 SOP 缺 auth_level 维度"债务行；ADR-0019/0022 补未实测边界与未落地项的如实登记。）
 
 ---
 
