@@ -37,6 +37,10 @@
         {
           "file": "docs/repo-map.md",
           "pattern": "(\\d+) 项架构决策"
+        },
+        {
+          "file": "README.md",
+          "pattern": "完整 \\*\\*(\\d+) 篇\\*\\*"
         }
       ]
     },

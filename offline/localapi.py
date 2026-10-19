@@ -145,7 +145,8 @@ def search_docs(query: str, mode: str, token: str) -> list[dict]:
     return post_json("/api/v1/copilot/search", {"query": query, "mode": mode}, token, timeout=30)["results"]
 
 
-def stream_chat(body: dict, token: str, timeout: int = 120, collect_deltas: bool = True) -> dict:
+def stream_chat(body: dict, token: str, timeout: int = 120, collect_deltas: bool = True,
+                trace_id: str | None = None) -> dict:
     """SSE 原语（自举告警生产者与后续验收共用，见 ADR-0011）。
 
     为什么不能复用 post_json：/chat/stream 的响应是事件流——post_json 用 json.load(r) 会
@@ -154,18 +155,28 @@ def stream_chat(body: dict, token: str, timeout: int = 120, collect_deltas: bool
     返回结构固定，**非 2xx 不抛异常**（把 429/401 当成可决策的返回值而非异常，
     因为告警链路绝不能因一次限流就崩掉或转入重试风暴）：
       {status, code, meta, deltas, done, error, ttft_s, total_s}
-      meta   = 服务端权威事实（fingerprint / cache_hit / degradation_level / fast_path / deduplicated）
-      done   = {ttft_ms, refs}，refs 是溯源引用（含 docId 派生的 chunkId），收敛与命中判据都取自这里
+      meta   = 服务端权威事实（fingerprint / cache_hit / degradation_level / fast_path / deduplicated /
+               retrieval_ms / refused / gate——gate 是 none|clarify|refuse，说清"被哪道闸拦下"）
+      done   = {ttft_ms, refs, actions, near_miss}，refs 是溯源引用（含 docId 派生的 chunkId），
+               收敛与命中判据都取自这里；near_miss 只在拒答时非空（候选标识符，不带正文）
       error  = 服务端 error 帧内容（链路异常时的固定话术 + code）
 
     两条边界：`collect_deltas=False` 时不收集答案增量（只用 meta/done 的调用方省内存）；
     `timeout` 同时是**整体截止**——逐次读的 socket 超时挡不住"慢速滴流"永久占住连接。
+
+    **`trace_id`（2026-10-17 加）**：调用方关联键，走请求头 `X-Trace-Id`（8–64 位
+    `[A-Za-z0-9_-]`，服务端非法即 400 并留痕）。告警桥用它在审计面上把同一 incident 的
+    多条告警串成一段；人工/评测脚本不传。**空值与不传同义**——服务端对空白头按"未提供"
+    处理，故这里不替调用方送一个空头（空头不报错，但污染请求面且更难排查）。
     """
+    headers = {"Authorization": "Bearer " + token, "Content-Type": "application/json",
+               "Accept": "text/event-stream"}
+    if trace_id:
+        headers["X-Trace-Id"] = trace_id
     req = urllib.request.Request(
         assert_local(BASE + "/api/v1/copilot/chat/stream"),
         data=json.dumps(body).encode("utf-8"), method="POST",
-        headers={"Authorization": "Bearer " + token, "Content-Type": "application/json",
-                 "Accept": "text/event-stream"})
+        headers=headers)
     t0 = time.time()
     deadline = t0 + timeout
     out = {"status": 0, "code": None, "meta": {}, "deltas": [], "done": {}, "error": None,

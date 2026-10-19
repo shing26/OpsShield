@@ -52,6 +52,10 @@ jobs:
       - name: Doc numbers ⟷ artifacts gate
         working-directory: offline
         run: python doc_numbers.py --check
+      # 对外面用词门闩（ADR-0023 决策 1–4）：canonical 词不得漏到 README + 页面文案。
+      # 词表从 CONTEXT.md 的 `_对外_` 行**现取**（不手写），登记表空了即红；反向启发式只报不闸。
+      - name: Public-surface wording gate (ADR-0023)
+        run: python scripts/check_public_copy.py --check
       # 答案接地的机器侧（OP-R1，2026-09-28）：判据只断言「同代 + 零无据」——
       # 报告由 live 探针产出后入库，CI 只读入库产物；**不**断言接地率数值（live 读数含波动，
       # 纳入 doc_numbers 会让门闩假红）。这一项为什么值得进 CI：接地是防幻觉链路唯一的事后环，

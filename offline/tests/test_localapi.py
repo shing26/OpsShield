@@ -56,6 +56,54 @@ def test_override_does_not_weaken_the_ssrf_guard():
             api.assert_local(bad)
 
 
+# ---------------------------------------------------------------- trace 入参
+
+def _captured_stream_request(monkeypatch, **kw):
+    """跑一次 stream_chat，把真正发出去的 Request 钓出来（不触网：`_open` 被替换）。"""
+    seen = {}
+
+    class _Resp:
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def __iter__(self):
+            return iter(())
+
+    def _fake(req, timeout):
+        seen["req"] = req
+        return _Resp()
+
+    monkeypatch.setattr(api, "_open", _fake)
+    api.stream_chat({"query": "q"}, "tok", **kw)
+    return seen["req"]
+
+
+def _header(req, name: str) -> str | None:
+    """大小写无关地取请求头。
+
+    `urllib.request.Request.add_header` 会把键 `capitalize()` 成 `X-trace-id`，
+    故直接 `get_header("X-Trace-Id")` 会取不到——用键名大小写定义断言是在测 urllib 的实现细节。
+    """
+    return {k.lower(): v for k, v in req.headers.items()}.get(name.lower())
+
+
+def test_stream_chat_sends_trace_header_only_when_given(monkeypatch):
+    r"""`X-Trace-Id` 入参的三态：给了就带、不给不带、空串等同不给。
+
+    第三态是重点：服务端对**空白头**按"未提供"处理，所以多带一个空头不会 400——
+    但它会污染请求面，且"头在但值空"这类形态在抓包/日志里最难判读。宁可不送。
+    """
+    iid = "am-" + "0" * 32
+    assert _header(_captured_stream_request(monkeypatch, trace_id=iid), "X-Trace-Id") == iid
+    assert _header(_captured_stream_request(monkeypatch), "X-Trace-Id") is None
+    assert _header(_captured_stream_request(monkeypatch, trace_id=""), "X-Trace-Id") is None
+
+
 # ---------------------------------------------------------------- 默认主体常量
 
 def test_default_eval_user_is_a_real_username_not_an_account_key():
