@@ -54,14 +54,15 @@ public record AnswerPayload(
     }
 
     /**
-     * 协议面的**闸门**标记（ADR-0020 注记 / ADR-0023）：{@code clarify | refuse | none}。
+     * 本次请求的**闸门**状态（ADR-0020 注记 / ADR-0023）。
+     * SSE 边界将本枚举投影为 {@code clarify | refuse | none}。
      *
      * <p>派生自本载荷自己的两个状态字段，**刻意不新增存储字段**——多存一个就有第三处能与之打架，
      * 而"帧上的状态与话术不一致"正是 2026-09-28 live QA F-1 那类失真的形态。派生规则：
      * 回指澄清（{@code mode="clarify"}）优先，其次 {@code refused}。
      */
-    public String gate() {
-        if ("clarify".equals(mode)) return "clarify";
-        return refused ? "refuse" : "none";
+    public Gate gate() {
+        if ("clarify".equals(mode)) return Gate.CLARIFY;
+        return refused ? Gate.REFUSE : Gate.NONE;
     }
 }

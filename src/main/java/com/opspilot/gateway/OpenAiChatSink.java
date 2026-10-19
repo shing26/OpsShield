@@ -4,7 +4,6 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.opspilot.gateway.dto.AnswerPayload;
-import com.opspilot.resilience.DegradationState.Level;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.List;
@@ -58,8 +57,7 @@ public class OpenAiChatSink implements ChatSink {
     }
 
     @Override
-    public void meta(String fp, String cacheHit, Level level, boolean fastPath,
-                     boolean deduplicated, long retrievalMs, boolean refused, String gate) {
+    public void meta(Meta meta) {
         // OpenAI 帧无元信息位：有意丢弃（客户端不识别自定义事件；溯源经 refs 注入正文保展示）
     }
 
@@ -70,19 +68,24 @@ public class OpenAiChatSink implements ChatSink {
     }
 
     @Override
-    public void streamInChunks(String answer) {
-        delta(answer);
-    }
-
-    @Override
-    public void done(long t0, long firstTokenNano, List<AnswerPayload.Ref> refs,
-                     List<com.opspilot.action.Action> actions,
-                     List<AnswerPayload.NearMiss> nearMiss) {
+    public void deliver(DeliveryOutcome outcome) {
+        if (outcome instanceof DeliveryOutcome.Failed failed) {
+            deliverFailure(failed.refs(), failed.actions());
+            return;
+        }
+        if (!(outcome instanceof DeliveryOutcome.Completed completed)) {
+            return;
+        }
+        AnswerPayload payload = completed.payload();
+        if (completed.answerDelivery() == AnswerDelivery.BUFFERED) {
+            delta(payload.answer());
+        }
         // 空契约不发帧：OpenAI 客户端把空 content 帧也当一次增量渲染，平白多一跳
-        String act = actionMarkdown(actions);
+        String act = actionMarkdown(payload.actionsOrEmpty());
         if (!act.isEmpty()) {
             send(Chunk.delta(requestId, model, null, act));
         }
+        List<AnswerPayload.Ref> refs = payload.refs();
         if (refs != null && !refs.isEmpty()) {
             StringBuilder sb = new StringBuilder("\n\n## 参考来源\n");
             for (AnswerPayload.Ref r : refs) {
@@ -94,9 +97,8 @@ public class OpenAiChatSink implements ChatSink {
         sendDone();
     }
 
-    @Override
-    public void error(Throwable t, List<AnswerPayload.Ref> refs,
-                      List<com.opspilot.action.Action> actions) {
+    private void deliverFailure(List<AnswerPayload.Ref> refs,
+                                List<com.opspilot.action.Action> actions) {
         StringBuilder sb = new StringBuilder();
         // ADRs 0017：异常帧同样带契约（生成侧失败不该连坐吞掉已到手的只读建议）
         sb.append(actionMarkdown(actions));

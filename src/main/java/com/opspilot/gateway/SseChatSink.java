@@ -1,8 +1,7 @@
 package com.opspilot.gateway;
 
 import com.opspilot.gateway.dto.AnswerPayload;
-import com.opspilot.resilience.DegradationState.Level;
-import java.util.List;
+import com.opspilot.gateway.dto.Gate;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /** ChatSink 的 SSE 实现：全部帧格式委托 SseEvents（原 /chat/stream 协议零变化）。 */
@@ -17,9 +16,9 @@ public class SseChatSink implements ChatSink {
     }
 
     @Override
-    public void meta(String fp, String cacheHit, Level level, boolean fastPath,
-                     boolean deduplicated, long retrievalMs, boolean refused, String gate) {
-        events.emitMeta(emitter, fp, cacheHit, level, fastPath, deduplicated, retrievalMs, refused, gate);
+    public void meta(Meta meta) {
+        events.emitMeta(emitter, meta.fingerprint(), meta.cacheHit(), meta.level(), meta.fastPath(),
+                meta.deduplicated(), meta.retrievalMs(), meta.refused(), gateWire(meta.gate()));
     }
 
     @Override
@@ -28,20 +27,25 @@ public class SseChatSink implements ChatSink {
     }
 
     @Override
-    public void streamInChunks(String answer) {
-        events.streamInChunks(emitter, answer);
+    public void deliver(DeliveryOutcome outcome) {
+        if (outcome instanceof DeliveryOutcome.Completed completed) {
+            AnswerPayload payload = completed.payload();
+            if (completed.answerDelivery() == AnswerDelivery.BUFFERED) {
+                events.streamInChunks(emitter, payload.answer());
+            }
+            TtftTiming timing = completed.timing();
+            events.emitDone(emitter, timing.t0(), timing.firstTokenNano(), payload.refs(),
+                    payload.actionsOrEmpty(), payload.nearMissOrEmpty());
+        } else if (outcome instanceof DeliveryOutcome.Failed failed) {
+            events.emitError(emitter, failed.refs(), failed.actions());
+        }
     }
 
-    @Override
-    public void done(long t0, long firstTokenNano, List<AnswerPayload.Ref> refs,
-                     List<com.opspilot.action.Action> actions,
-                     List<AnswerPayload.NearMiss> nearMiss) {
-        events.emitDone(emitter, t0, firstTokenNano, refs, actions, nearMiss);
-    }
-
-    @Override
-    public void error(Throwable t, List<AnswerPayload.Ref> refs,
-                      List<com.opspilot.action.Action> actions) {
-        events.emitError(emitter, refs, actions);
+    private static String gateWire(Gate gate) {
+        return switch (gate) {
+            case NONE -> "none";
+            case CLARIFY -> "clarify";
+            case REFUSE -> "refuse";
+        };
     }
 }

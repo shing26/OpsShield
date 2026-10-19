@@ -1,6 +1,7 @@
 package com.opspilot.gateway;
 
 import com.opspilot.gateway.dto.AnswerPayload;
+import com.opspilot.gateway.dto.Gate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -40,8 +41,9 @@ class OpenAiChatSinkTest {
         sink.delta("你好");
         sink.delta("，同学");
         // actions 传空表：本用例只锁 refs 注入与帧序，行动契约另有专项用例
-        sink.done(0L, 1L, List.of(new AnswerPayload.Ref("rb-001::x", "订单超时手册", "order-service")),
-                List.of(), List.of());
+        sink.deliver(completed("你好，同学",
+                List.of(new AnswerPayload.Ref("rb-001::x", "订单超时手册", "order-service")),
+                List.of()));
 
         // 空契约不发帧（无 actions 的 done 仍是 5 帧）：平白一个空 content 帧会让客户端多渲染一跳
         assertEquals(5, em.frames.size(), "role+content / content / refs / stop / [DONE]");
@@ -64,7 +66,8 @@ class OpenAiChatSinkTest {
         Capturing em = new Capturing();
         OpenAiChatSink sink = new OpenAiChatSink(em, "opspilot");
         sink.delta("半句");
-        sink.error(new RuntimeException("upstream boom"), List.of(), List.of());
+        sink.deliver(new DeliveryOutcome.Failed(
+                new RuntimeException("upstream boom"), List.of(), List.of()));
 
         String joined = String.join("|", em.frames);
         assertTrue(joined.contains("【系统提示】"), "异常必须以文本帧呈现而非裸断流");
@@ -83,9 +86,10 @@ class OpenAiChatSinkTest {
         OpenAiChatSink sink = new OpenAiChatSink(em, "opspilot");
         sink.delta("半句");
         // ADRs 0017：模型侧失败（欠费/5xx）时，检索与契约已经跑完——不该连坐吞掉
-        sink.error(new RuntimeException("model arrears"), List.of(), List.of(
-                new com.opspilot.action.Action(1, "第一步：查进程", "jstack <pid> | grep -A 15 pool",
-                        "bash", "rb-012::s1", "线程池耗尽排查手册 > 排查步骤", "order-service")));
+        sink.deliver(new DeliveryOutcome.Failed(
+                new RuntimeException("model arrears"), List.of(), List.of(
+                        new com.opspilot.action.Action(1, "第一步：查进程", "jstack <pid> | grep -A 15 pool",
+                                "bash", "rb-012::s1", "线程池耗尽排查手册 > 排查步骤", "order-service"))));
 
         String joined = String.join("|", em.frames);
         assertTrue(joined.contains("## 只读行动契约"), "异常帧仍要带行动契约: " + joined);
@@ -98,18 +102,47 @@ class OpenAiChatSinkTest {
         Capturing em = new Capturing();
         OpenAiChatSink sink = new OpenAiChatSink(em, "opspilot");
         sink.delta("答案");
-        sink.done(0L, 1L, List.of(), List.of(), List.of());
+        sink.deliver(completed("答案", List.of(), List.of()));
 
         assertEquals(3, em.frames.size(), "无 refs、无契约：role+content / stop / [DONE]，不得凭空多一跳空帧");
         assertFalse(String.join("|", em.frames).contains("只读行动契约"), "空契约不得渲染标题");
     }
 
     @Test
+    void bufferedCompletionWritesAnswerOnceBeforeTerminalFrames() {
+        Capturing em = new Capturing();
+        OpenAiChatSink sink = new OpenAiChatSink(em, "opspilot");
+
+        sink.deliver(completed("完整答案", List.of(), List.of(), AnswerDelivery.BUFFERED));
+
+        assertEquals(3, em.frames.size(), "answer / stop / [DONE]");
+        assertTrue(em.frames.get(0).contains("\"role\":\"assistant\""), "首个正文帧仍携带 role");
+        assertTrue(em.frames.get(0).contains("完整答案"), "BUFFERED 必须由 sink 写入一次正文");
+        assertTrue(em.frames.get(1).contains("\"finish_reason\":\"stop\""));
+        assertEquals("[DONE]", em.frames.get(2));
+        assertEquals(1, String.join("|", em.frames).split("完整答案", -1).length - 1,
+                "完成载荷不得被重复写入");
+    }
+
+    @Test
     void metaIsDroppedWithoutSideEffects() {
         Capturing em = new Capturing();
         new OpenAiChatSink(em, "opspilot")
-                .meta("fp", "none", com.opspilot.resilience.DegradationState.Level.L0, false, false, 0, false,
-                        "none");
+                .meta(new Meta("fp", "none", com.opspilot.resilience.DegradationState.Level.L0,
+                        false, false, 0, false, Gate.NONE));
         assertTrue(em.frames.isEmpty(), "meta 在 OpenAI 帧无位置：丢弃且不产生输出");
+    }
+
+    private static DeliveryOutcome.Completed completed(
+            String answer, List<AnswerPayload.Ref> refs, List<com.opspilot.action.Action> actions) {
+        return completed(answer, refs, actions, AnswerDelivery.STREAMED);
+    }
+
+    private static DeliveryOutcome.Completed completed(
+            String answer, List<AnswerPayload.Ref> refs, List<com.opspilot.action.Action> actions,
+            AnswerDelivery answerDelivery) {
+        AnswerPayload payload = new AnswerPayload(answer, refs, actions, "hybrid", false, 3,
+                "tenant-internal", false, List.of());
+        return new DeliveryOutcome.Completed(new TtftTiming(0L, 1L), payload, answerDelivery);
     }
 }

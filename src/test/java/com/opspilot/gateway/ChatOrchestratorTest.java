@@ -6,6 +6,7 @@ import com.opspilot.cache.L2SemanticCacheService;
 import com.opspilot.config.OpsPilotProperties;
 import com.opspilot.gateway.dto.AnswerPayload;
 import com.opspilot.gateway.dto.ChatRequest;
+import com.opspilot.gateway.dto.Gate;
 import com.opspilot.llm.EmbeddingClient;
 import com.opspilot.llm.LlmClient;
 import com.opspilot.llm.PromptAssembler;
@@ -66,13 +67,13 @@ class ChatOrchestratorTest {
     /**
      * 审计断言的**超时轮询**（不是普通 verify）。
      *
-     * 为什么必须带超时：编排里 `sink.done()` **先于** `audit.log()`（见 `ChatOrchestrator` 三条出口路径），
-     * 而 `awaitSuccess` 只等到 sink 的 latch（由 `done()` 落下）。于是"等 sink 收尾 → verify 审计"
+     * 为什么必须带超时：编排里 `sink.deliver(Completed)` **先于** `audit.log()`（见 `ChatOrchestrator`
+     * 三条出口路径），而 `awaitSuccess` 只等到 sink 的 latch（由终态落下）。于是"等 sink 收尾 → verify 审计"
      * 天然是一场竞态：本机线程够快会赢，CI 两核调度下会输——症状是 Mockito 报
      * "Actually, there were zero interactions with this mock"，看着像"审计没写"，
      * 实为"还没写到"。2026-09-27 CI 实测踩到（`verbatimDumpFromLlmIsMaskedAtExitAndCacheStaysClean`）。
      * 这也正是台账 §5.1 那条"单测偶发红：audit … zero interactions"的真实根因——
-     * 当初只给 `awaitSuccess` 加了"sink.error 须为空"来修**误导性报错**，没修**竞态本身**。
+     * 当初只给 `awaitSuccess` 加了"失败终态须为空"来修**误导性报错**，没修**竞态本身**。
      */
     private static final VerificationMode AUDIT_WAIT = org.mockito.Mockito.timeout(2_000);
 
@@ -85,6 +86,7 @@ class ChatOrchestratorTest {
     private AuditService audit;
     private PromptAssembler pa;
     private DegradationState degrade;
+    private SopFallbackService sopFallback;
     private com.opspilot.metrics.OpsMetrics metrics;   // 生成质量包：真计数对象，verbatim_masked 可断言
     private ChatOrchestrator orchestrator;
     private ExecutorService vt;
@@ -132,11 +134,12 @@ class ChatOrchestratorTest {
         });
         degrade = mock(DegradationState.class);
         when(degrade.current()).thenReturn(Level.L0);
+        sopFallback = mock(SopFallbackService.class);
         audit = mock(AuditService.class);
         metrics = new OpsMetrics(new SimpleMeterRegistry());
         vt = Executors.newVirtualThreadPerTaskExecutor();
         orchestrator = new ChatOrchestrator(l1, l2, fps, sw, new SingleFlightRegistry(),
-                searchService, embedding, llm, pa, degrade, mock(SopFallbackService.class),
+                searchService, embedding, llm, pa, degrade, sopFallback,
                 metrics, vt, props, audit, mock(QuotaService.class), new ReadOnlyActionExtractor(metrics));
     }
 
@@ -160,17 +163,34 @@ class ChatOrchestratorTest {
      * **同一个** latch，于是 `assertTrue(sink.finished.await(...))` 在管线出错时同样通过——
      * 后续只 verify 审计行的用例就会报成 "audit ... zero interactions"，把"管线抛了异常"
      * 伪装成"审计没写"，误导排查方向（该次 CI 同一份代码重跑即绿，无法据此定位）。
-     * 先断言 sink.error 为空，失败信息就变成真实异常本身。
+     * 先断言失败终态为空，失败信息就变成真实异常本身。
      */
     private static void awaitSuccess(RecordingSink sink) throws InterruptedException {
         assertTrue(sink.finished.await(30, TimeUnit.SECONDS), "编排 30s 未收尾");
-        assertNull(sink.error, () -> "编排以错误收尾（latch 也会因 error() 落下）：" + sink.error
+        assertNull(sink.error, () -> "编排以错误收尾（latch 也会因 Failed 落下）：" + sink.error
                 + "；当前 answer=" + sink.answer);
+        assertInstanceOf(DeliveryOutcome.Completed.class, sink.outcome,
+                "成功路径必须以 Completed 结果收尾");
+        assertEquals("completed", sink.lifecycle.get(sink.lifecycle.size() - 1),
+                "成功路径最后一个生命周期阶段必须是 completed");
+    }
+
+    private static DeliveryOutcome.Failed awaitFailure(RecordingSink sink) throws InterruptedException {
+        assertTrue(sink.finished.await(30, TimeUnit.SECONDS), "编排 30s 未收尾");
+        assertInstanceOf(DeliveryOutcome.Failed.class, sink.outcome,
+                "失败路径必须以 Failed 结果收尾");
+        assertEquals("failed", sink.lifecycle.get(sink.lifecycle.size() - 1),
+                "失败路径最后一个生命周期阶段必须是 failed");
+        return (DeliveryOutcome.Failed) sink.outcome;
     }
 
     private static final class RecordingSink implements ChatSink {
         final StringBuilder answer = new StringBuilder();
         final CountDownLatch finished = new CountDownLatch(1);
+        final List<String> lifecycle = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+        volatile Meta meta;
+        volatile DeliveryOutcome outcome;
+        volatile AnswerDelivery answerDelivery;
         volatile List<AnswerPayload.Ref> refs = List.of();
         volatile List<com.opspilot.action.Action> actions = List.of();
         volatile String cacheHit;
@@ -178,25 +198,42 @@ class ChatOrchestratorTest {
         /** meta 帧上的 refused（ADR-0020 起随帧下发）——拒答/澄清/回放三条路各自的取值在此断言。 */
         volatile Boolean refused;
         /** meta 帧上的 gate（ADR-0023）：none|clarify|refuse——把"没答"细分成"哪道闸拦下的"。 */
-        volatile String gate;
+        volatile Gate gate;
         /** done 帧上的 near_miss（ADR-0023）：拒答时的候选标识符，非拒答路径恒空表。 */
         volatile List<AnswerPayload.NearMiss> nearMiss = List.of();
         volatile Throwable error;
 
-        @Override public void meta(String fp, String cacheHit, Level level,
-                                  boolean fastPath, boolean dedup, long ms, boolean refused, String gate) {
-            this.cacheHit = cacheHit; this.deduplicated = dedup; this.refused = refused; this.gate = gate;
+        @Override public void meta(Meta meta) {
+            this.meta = meta;
+            this.cacheHit = meta.cacheHit();
+            this.deduplicated = meta.deduplicated();
+            this.refused = meta.refused();
+            this.gate = meta.gate();
+            lifecycle.add("meta");
         }
-        @Override public void delta(String token) { answer.append(token); }
-        @Override public void streamInChunks(String a) { answer.append(a); }
-        @Override public void done(long t0, long ft, List<AnswerPayload.Ref> refs,
-                                  List<com.opspilot.action.Action> actions,
-                                  List<AnswerPayload.NearMiss> nearMiss) {
-            this.refs = refs; this.actions = actions; this.nearMiss = nearMiss; finished.countDown();
+        @Override public void delta(String token) {
+            answer.append(token);
+            lifecycle.add("delta");
         }
-        @Override public void error(Throwable t, List<AnswerPayload.Ref> refs,
-                                    List<com.opspilot.action.Action> actions) {
-            this.error = t; this.actions = actions; finished.countDown();
+        @Override public void deliver(DeliveryOutcome outcome) {
+            this.outcome = outcome;
+            if (outcome instanceof DeliveryOutcome.Completed completed) {
+                AnswerPayload payload = completed.payload();
+                this.answerDelivery = completed.answerDelivery();
+                if (completed.answerDelivery() == AnswerDelivery.BUFFERED) {
+                    answer.append(payload.answer());
+                }
+                this.refs = payload.refs();
+                this.actions = payload.actionsOrEmpty();
+                this.nearMiss = payload.nearMissOrEmpty();
+                lifecycle.add("completed");
+            } else if (outcome instanceof DeliveryOutcome.Failed failed) {
+                this.error = failed.error();
+                this.refs = failed.refs();
+                this.actions = failed.actions();
+                lifecycle.add("failed");
+            }
+            finished.countDown();
         }
     }
 
@@ -209,6 +246,37 @@ class ChatOrchestratorTest {
 
     private static String q() {
         return "50042_PAY_SIGN_INVALID 支付验签批量失败复盘 根因与修复";
+    }
+
+    @Test
+    void successfulStreamingUsesOrderedMetaDeltaCompletedLifecycle() throws Exception {
+        llmGate.countDown();
+        RecordingSink sink = new RecordingSink();
+        orchestrator.submit(req(q()), INTERNAL, sink, "sse");
+        awaitSuccess(sink);
+
+        assertEquals(List.of("meta", "delta", "completed"), sink.lifecycle,
+                "成功流式路径必须按 meta → delta → completed 交付");
+        assertEquals(AnswerDelivery.STREAMED, sink.answerDelivery,
+                "LLM 已流式下发的正文不得在收尾时重复缓冲投递");
+    }
+
+    @Test
+    void l2SopFallbackUsesBufferedCompletedDelivery() throws Exception {
+        when(degrade.current()).thenReturn(Level.L2);
+        when(sopFallback.lookup(eq(q()), isNull(), eq("tenant-internal")))
+                .thenReturn("先扩容连接池并回放死信队列。");
+        RecordingSink sink = new RecordingSink();
+
+        orchestrator.submit(req(q()), INTERNAL, sink, "sse");
+        awaitSuccess(sink);
+
+        assertEquals(List.of("meta", "completed"), sink.lifecycle,
+                "SOP 直出必须由 Completed 终态的 BUFFERED 模式写入正文");
+        assertEquals(AnswerDelivery.BUFFERED, sink.answerDelivery);
+        assertEquals("先扩容连接池并回放死信队列。", sink.answer.toString());
+        verifyNoInteractions(searchService);
+        verify(llm, never()).streamChat(any(), any());
     }
 
     /**
@@ -298,7 +366,8 @@ class ChatOrchestratorTest {
         RecordingSink sink = new RecordingSink();
         orchestrator.replay(sink, json, "none", true, "fp1", System.nanoTime(), ACME, q(), "sse", "manual");
 
-        assertNotNull(sink.error, "外来租户载荷必须走 error 收尾而非回放");
+        awaitFailure(sink);
+        assertNotNull(sink.error, "外来租户载荷必须走 Failed 终态而非回放");
         assertEquals("", sink.answer.toString(), "绊线触发前不得吐出任何内容");
         verify(audit, AUDIT_WAIT).log(eq(ACME), eq("chat"), anyString(), eq("manual"), anyString(), anyString(),
                 eq("dedup_guard"), anyString(), eq(true), anyInt(), anyLong(), isNull(), isNull(), isNull(),
@@ -328,11 +397,10 @@ class ChatOrchestratorTest {
 
         RecordingSink sink = new RecordingSink();
         orchestrator.submit(req(q()), INTERNAL, sink, "sse");
-        assertTrue(sink.finished.await(30, TimeUnit.SECONDS), "编排 30s 未收尾");
-        assertNotNull(sink.error, "LLM 失败必须以 error 收尾");
-        assertEquals(1, sink.actions.size(), "契约须在异常帧里送达: " + sink.actions);
-        assertTrue(sink.actions.get(0).command().contains("jstack"), sink.actions.toString());
-        assertTrue(sink.actions.get(0).step().contains("排查"), sink.actions.toString());
+        DeliveryOutcome.Failed failed = awaitFailure(sink);
+        assertEquals(1, failed.actions().size(), "契约须在异常帧里送达: " + failed.actions());
+        assertTrue(failed.actions().get(0).command().contains("jstack"), failed.actions().toString());
+        assertTrue(failed.actions().get(0).step().contains("排查"), failed.actions().toString());
     }
 
     /** 组键口径：tenant 是第一字段——与 L1 key 的 cache:l1:<tenant>:<level>: 同构（权限维度完备）。 */
@@ -358,7 +426,10 @@ class ChatOrchestratorTest {
         assertTrue(text.contains("检索置信度不足"), "应拒答: " + text);
         assertFalse(text.matches("(?s).*\\d\\.\\d+<\\d\\.\\d+.*"), "话术不得含分数回显: " + text);
         assertFalse(text.contains("0.2"), "阈值不得外显: " + text);
-        assertEquals("refuse", sink.gate,
+        assertEquals(List.of("meta", "delta", "completed"), sink.lifecycle,
+                "拒答必须走完整的三段式交付生命周期");
+        assertEquals(AnswerDelivery.STREAMED, sink.answerDelivery);
+        assertEquals(Gate.REFUSE, sink.gate,
                 "无据拒答：gate=refuse——与澄清（clarify）在帧上必须可区分（ADR-0023）");
         assertEquals(1, sink.nearMiss.size(),
                 "拒答时有召回：必须给出最接近的候选标识符: " + sink.nearMiss);
@@ -375,8 +446,11 @@ class ChatOrchestratorTest {
                         new AnswerPayload("OK", List.of(), List.of(), "hybrid", true, 3, "tenant-internal",
                                 false, List.of())),
                 "L1", false, "fp1", System.nanoTime(), INTERNAL, q(), "sse", "manual");
+        assertEquals(List.of("meta", "completed"), follower.lifecycle,
+                "缓存回放必须以 Completed 的 BUFFERED 模式交付正文");
+        assertEquals(AnswerDelivery.BUFFERED, follower.answerDelivery);
         assertEquals(Boolean.FALSE, follower.refused, "非拒答载荷回放：帧上 refused 必须是 false，不得恒真");
-        assertEquals("none", follower.gate,
+        assertEquals(Gate.NONE, follower.gate,
                 "非拒答载荷回放：gate 取载荷值（refused=false ∧ mode≠clarify → none）");
         assertEquals(List.of(), follower.nearMiss, "非拒答载荷回放：near_miss 恒空表");
         verify(audit, AUDIT_WAIT).log(eq(INTERNAL), eq("chat"), anyString(), eq("manual"), anyString(), anyString(),
@@ -528,8 +602,11 @@ class ChatOrchestratorTest {
         awaitSuccess(sink);
 
         assertTrue(sink.answer.toString().contains("单轮"), "应是澄清话术: " + sink.answer);
+        assertEquals(List.of("meta", "delta", "completed"), sink.lifecycle,
+                "澄清必须走完整的三段式交付生命周期");
+        assertEquals(AnswerDelivery.STREAMED, sink.answerDelivery);
         assertEquals(List.of(), sink.refs, "澄清不携带引用");
-        assertEquals("clarify", sink.gate,
+        assertEquals(Gate.CLARIFY, sink.gate,
                 "澄清在帧上必须是 gate=clarify——它同样 refused=true，但**不是拒答**（CONTEXT.md 回指澄清条）");
         assertEquals(List.of(), sink.nearMiss, "澄清是零检索，没有候选可给（近失候选只在拒答路径出现）");
         verifyNoInteractions(searchService);                       // 没检索
@@ -565,10 +642,13 @@ class ChatOrchestratorTest {
 
         assertTrue(sink.answer.toString().contains("无足够相关的参考"),
                 "客户端收到的仍是拒答话术: " + sink.answer);
+        assertEquals(List.of("meta", "completed"), sink.lifecycle,
+                "拒答回放必须由 Completed 的 BUFFERED 模式交付正文");
+        assertEquals(AnswerDelivery.BUFFERED, sink.answerDelivery);
         assertEquals(Boolean.TRUE, sink.refused,
                 "回放一条被拒答的载荷：帧上的 refused 必须取载荷值而非硬编码 false——"
                         + "否则帧说\"没拒答\"、话术却在拒答，正是 live QA F-1 那类失真从帧侧再开一次（ADR-0020）");
-        assertEquals("refuse", sink.gate,
+        assertEquals(Gate.REFUSE, sink.gate,
                 "回放一条被拒答的载荷：gate 同样取载荷值（refused=true → refuse），不得硬编码 none");
         verify(audit, AUDIT_WAIT).log(eq(INTERNAL), eq("chat"), eq("sse"), eq("manual"), eq("今天天气怎么样"),
                 anyString(), eq("L1"), anyString(), eq(true), eq(0), anyLong(),
