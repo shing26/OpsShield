@@ -23,8 +23,24 @@ public class SseEvents {
 
     private static final Logger log = LoggerFactory.getLogger(SseEvents.class);
 
+    /**
+     * meta 帧（8 键，2026-10-19 起）。新增键的位置固定在末尾：既有键的次序是既有客户端
+     * （troubleshoot.html 与 A3 断言）读惯的形态，新增键只许追加不许插队。
+     *
+     * <p>为什么必须有这个键（ADR-0020）：拒答路径此前发的是与正常路径**逐字无差别**的 meta
+     * 帧，客户端只能靠匹配拒答话术来区分——那是拿话术当协议，话术一改就静默失效（troubleshoot.html
+     * 里那段判拒答的分支就是这么变成死代码的）。而 {@code refused} 本来就是 {@link AnswerPayload}
+     * 的存储合同字段，它只是没被送上帧。
+     *
+     * <p>{@code gate}（{@code none|clarify|refuse}，ADR-0023）：{@code refused} 只说"没答"，
+     * 说不清"为什么没答"。回指澄清与无据拒答的成因、代价都不同（零检索零 LLM vs 检索跑完但
+     * 低于阈值），CONTEXT.md 明确写着"澄清不是拒答"——只给 {@code refused} 会让页面只能把两者
+     * 渲染成同一个徽标。**不得用 {@code retrieval_ms == 0} 反推澄清**：那是拿性能量当状态量，
+     * 任何一次缓存命中都会让它误判。
+     */
     public void emitMeta(SseEmitter emitter, String fp, String cacheHit, Level level,
-                         boolean fastPath, boolean deduplicated, long retrievalMs) {
+                         boolean fastPath, boolean deduplicated, long retrievalMs, boolean refused,
+                         String gate) {
         Map<String, Object> meta = new LinkedHashMap<>();
         meta.put("fingerprint", fp);
         meta.put("cache_hit", cacheHit);
@@ -32,6 +48,8 @@ public class SseEvents {
         meta.put("fast_path", fastPath);
         meta.put("deduplicated", deduplicated);
         meta.put("retrieval_ms", retrievalMs);
+        meta.put("refused", refused);
+        meta.put("gate", gate);
         trySend(emitter, "meta", meta);
     }
 
@@ -47,7 +65,8 @@ public class SseEvents {
     }
 
     public void emitDone(SseEmitter emitter, long t0, long firstTokenNano, List<AnswerPayload.Ref> refs,
-                         List<com.opspilot.action.Action> actions) {
+                         List<com.opspilot.action.Action> actions,
+                         List<AnswerPayload.NearMiss> nearMiss) {
         long ttftMs = (firstTokenNano - t0) / 1_000_000;
         Map<String, Object> done = new LinkedHashMap<>();
         done.put("ttft_ms", ttftMs);
@@ -55,6 +74,9 @@ public class SseEvents {
         // ADRs 0017：只读行动契约随 done 下发（键恒给，空表给 []——客户端不必判存在性）；
         // 每条命令都摘自已引用的 chunk 原文并经只读策略核准，网关自身不执行
         done.put("actions", actions == null ? List.of() : actions);
+        // ADR-0023：拒答时的候选标识符（键恒给，空表给 []）——只带 service 与 error_codes，
+        // 不带 chunk_id/面包屑/正文：给的是"下一步该问什么"，不是"低置信度的答案"
+        done.put("near_miss", nearMiss == null ? List.of() : nearMiss);
         trySend(emitter, "done", done);
         completeQuietly(emitter);
     }

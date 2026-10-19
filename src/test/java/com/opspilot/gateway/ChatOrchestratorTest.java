@@ -79,6 +79,7 @@ class ChatOrchestratorTest {
     private final CountDownLatch llmGate = new CountDownLatch(1);
 
     private L1CacheService l1;
+    private FingerprintService fps;
     private HybridSearchService searchService;
     private LlmClient llm;
     private AuditService audit;
@@ -95,8 +96,9 @@ class ChatOrchestratorTest {
                 new OpsPilotProperties.Retrieval(10, 10, 60, 5, 3, 4500, 0.2), null);
         l1 = mock(L1CacheService.class);
         L2SemanticCacheService l2 = mock(L2SemanticCacheService.class);
-        FingerprintService fps = mock(FingerprintService.class);
+        fps = mock(FingerprintService.class);
         when(fps.fingerprint(any(), any(), anyString())).thenReturn("fp1");
+        when(fps.identity(anyString())).thenReturn("fp-alert");
         SlidingWindowService sw = mock(SlidingWindowService.class);
         when(sw.tryAcquire(anyString(), anyString()))
                 .thenReturn(new com.opspilot.storm.SlidingWindow.WindowResult(true, 1));
@@ -173,17 +175,24 @@ class ChatOrchestratorTest {
         volatile List<com.opspilot.action.Action> actions = List.of();
         volatile String cacheHit;
         volatile Boolean deduplicated;
+        /** meta 帧上的 refused（ADR-0020 起随帧下发）——拒答/澄清/回放三条路各自的取值在此断言。 */
+        volatile Boolean refused;
+        /** meta 帧上的 gate（ADR-0023）：none|clarify|refuse——把"没答"细分成"哪道闸拦下的"。 */
+        volatile String gate;
+        /** done 帧上的 near_miss（ADR-0023）：拒答时的候选标识符，非拒答路径恒空表。 */
+        volatile List<AnswerPayload.NearMiss> nearMiss = List.of();
         volatile Throwable error;
 
         @Override public void meta(String fp, String cacheHit, Level level,
-                                  boolean fastPath, boolean dedup, long ms) {
-            this.cacheHit = cacheHit; this.deduplicated = dedup;
+                                  boolean fastPath, boolean dedup, long ms, boolean refused, String gate) {
+            this.cacheHit = cacheHit; this.deduplicated = dedup; this.refused = refused; this.gate = gate;
         }
         @Override public void delta(String token) { answer.append(token); }
         @Override public void streamInChunks(String a) { answer.append(a); }
         @Override public void done(long t0, long ft, List<AnswerPayload.Ref> refs,
-                                  List<com.opspilot.action.Action> actions) {
-            this.refs = refs; this.actions = actions; finished.countDown();
+                                  List<com.opspilot.action.Action> actions,
+                                  List<AnswerPayload.NearMiss> nearMiss) {
+            this.refs = refs; this.actions = actions; this.nearMiss = nearMiss; finished.countDown();
         }
         @Override public void error(Throwable t, List<AnswerPayload.Ref> refs,
                                     List<com.opspilot.action.Action> actions) {
@@ -195,7 +204,7 @@ class ChatOrchestratorTest {
         return req(query, "manual");
     }
     private static ChatRequest req(String query, String source) {
-        return new ChatRequest(query, source, null, null);
+        return new ChatRequest(query, source, null, null, null);
     }
 
     private static String q() {
@@ -285,7 +294,7 @@ class ChatOrchestratorTest {
         String json = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(
                 new AnswerPayload("INTERNAL-SECRET", List.of(
                         new AnswerPayload.Ref("rb-001::s1", "面包屑", "svc")), List.of(),
-                        "hybrid", false, 3, "tenant-internal", false));
+                        "hybrid", false, 3, "tenant-internal", false, List.of()));
         RecordingSink sink = new RecordingSink();
         orchestrator.replay(sink, json, "none", true, "fp1", System.nanoTime(), ACME, q(), "sse", "manual");
 
@@ -349,13 +358,27 @@ class ChatOrchestratorTest {
         assertTrue(text.contains("检索置信度不足"), "应拒答: " + text);
         assertFalse(text.matches("(?s).*\\d\\.\\d+<\\d\\.\\d+.*"), "话术不得含分数回显: " + text);
         assertFalse(text.contains("0.2"), "阈值不得外显: " + text);
+        assertEquals("refuse", sink.gate,
+                "无据拒答：gate=refuse——与澄清（clarify）在帧上必须可区分（ADR-0023）");
+        assertEquals(1, sink.nearMiss.size(),
+                "拒答时有召回：必须给出最接近的候选标识符: " + sink.nearMiss);
+        assertEquals("svc", sink.nearMiss.get(0).service());
+        assertEquals(List.of("50042_PAY_SIGN_INVALID"), sink.nearMiss.get(0).errorCodes(),
+                "候选只带 service + error_codes 两类标识符（键集由 SseEventsTest 的序列化断言钉住）");
+        assertEquals(Boolean.TRUE, sink.refused,
+                "拒答必须在 meta 帧上标 refused=true——否则客户端只能靠匹配话术来区分（ADR-0020）");
 
         // 同租户 dedup 回放（另一请求）：审计行携带 src_tenant=载荷租户
         RecordingSink follower = new RecordingSink();
         orchestrator.replay(follower,
                 new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(
-                        new AnswerPayload("OK", List.of(), List.of(), "hybrid", true, 3, "tenant-internal", false)),
+                        new AnswerPayload("OK", List.of(), List.of(), "hybrid", true, 3, "tenant-internal",
+                                false, List.of())),
                 "L1", false, "fp1", System.nanoTime(), INTERNAL, q(), "sse", "manual");
+        assertEquals(Boolean.FALSE, follower.refused, "非拒答载荷回放：帧上 refused 必须是 false，不得恒真");
+        assertEquals("none", follower.gate,
+                "非拒答载荷回放：gate 取载荷值（refused=false ∧ mode≠clarify → none）");
+        assertEquals(List.of(), follower.nearMiss, "非拒答载荷回放：near_miss 恒空表");
         verify(audit, AUDIT_WAIT).log(eq(INTERNAL), eq("chat"), anyString(), eq("manual"), anyString(), anyString(),
                 eq("L1"), anyString(), eq(false), anyInt(), anyLong(), eq("tenant-internal"), isNull(), isNull(),
                 eq("L0"));   // 末位=档位：缓存命中在 L0（cache_hit 的 "L1" 与降级档位是两回事，别读混）
@@ -379,13 +402,62 @@ class ChatOrchestratorTest {
                 eq("L0"));
     }
 
+    /**
+     * 拆身份回归锁（2026-10-17，台账 §3.1）：带 {@code alertId} 的请求指纹走
+     * {@link FingerprintService#identity}（不透明身份），不走文本指纹；L1 与审计行消费的
+     * 都是这个身份 fp，而不是 query 文本哈希。
+     *
+     * <p>变异验证：把 handle() 的 alertId 分支删掉（永远走 fingerprint）→ L1 键会变成 "fp1"
+     * 而非 "fp-alert"，本用例必红。
+     */
+    @Test
+    void alertIdentityDrivesFingerprintAndL1Key() throws Exception {
+        llmGate.countDown();   // 本用例只验身份分支与键，不需要闸锁语义
+        RecordingSink sink = new RecordingSink();
+        orchestrator.submit(new ChatRequest("上游模型限流 0.020 次/秒", "alert", "opspilot", "local",
+                "c817f438192dbb63f17859b36e149f81"), INTERNAL, sink, "sse");
+        awaitSuccess(sink);
+
+        verify(fps, times(1)).identity("c817f438192dbb63f17859b36e149f81");
+        verify(fps, never()).fingerprint(any(), any(), anyString());
+        verify(l1).get(eq("tenant-internal"), eq(3), eq("fp-alert"));
+        verify(l1).put(eq("tenant-internal"), eq(3), eq("fp-alert"), anyString());
+        verify(audit, AUDIT_WAIT).log(eq(INTERNAL), eq("chat"), eq("sse"), eq("alert"), anyString(),
+                eq("fp-alert"), eq("none"), anyString(), eq(false), anyInt(), anyLong(),
+                isNull(), isNull(), any(StageTimings.class), eq("L0"));
+    }
+
+    /**
+     * 身份稳定性的端到端锁：同一 {@code alertId}、**不同 message**（模拟规则模板每次渲染出
+     * 不同的 `$value`）第二次必须命中 L1 回放——这正是拆身份要兑现的验收判据①。
+     * 若 L1 仍按 query 文本建键，本用例拿不到 cacheHit=L1 且会调检索/LLM。
+     */
+    @Test
+    void sameAlertIdWithDifferentMessageHitsL1Replay() throws Exception {
+        String cached = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(
+                new AnswerPayload("缓存答案：上游限流处置", List.of(), List.of(),
+                        "hybrid", true, 3, "tenant-internal", false, List.of()));
+        when(l1.get("tenant-internal", 3, "fp-alert")).thenReturn(cached);
+
+        RecordingSink sink = new RecordingSink();
+        orchestrator.submit(new ChatRequest("上游模型限流 0.999 次/秒（模板每次都在变）", "alert",
+                "opspilot", "local", "c817f438192dbb63f17859b36e149f81"), INTERNAL, sink, "sse");
+        awaitSuccess(sink);
+
+        assertEquals("缓存答案：上游限流处置", sink.answer.toString());
+        assertEquals("L1", sink.cacheHit);
+        verify(fps).identity("c817f438192dbb63f17859b36e149f81");
+        verifyNoInteractions(searchService);
+        verify(llm, never()).streamChat(any(), any());
+    }
+
     /** 缺省来源归一（DTO sourceOrDefault）：审计行不得出现 null/空白来源。 */
     @Test
     void blankSourceNormalizesToManualInAudit() throws Exception {
         when(searchService.search(anyString(), eq("tenant-internal"), anyInt(), anyString()))
                 .thenReturn(outcome("rb-201::s1"));
         RecordingSink sink = new RecordingSink();
-        orchestrator.submit(new ChatRequest(q(), "   ", null, null), INTERNAL, sink, "sse");
+        orchestrator.submit(new ChatRequest(q(), "   ", null, null, null), INTERNAL, sink, "sse");
         llmGate.countDown();
         awaitSuccess(sink);
         verify(audit, AUDIT_WAIT).log(eq(INTERNAL), eq("chat"), eq("sse"), eq("manual"), anyString(), anyString(),
@@ -457,6 +529,9 @@ class ChatOrchestratorTest {
 
         assertTrue(sink.answer.toString().contains("单轮"), "应是澄清话术: " + sink.answer);
         assertEquals(List.of(), sink.refs, "澄清不携带引用");
+        assertEquals("clarify", sink.gate,
+                "澄清在帧上必须是 gate=clarify——它同样 refused=true，但**不是拒答**（CONTEXT.md 回指澄清条）");
+        assertEquals(List.of(), sink.nearMiss, "澄清是零检索，没有候选可给（近失候选只在拒答路径出现）");
         verifyNoInteractions(searchService);                       // 没检索
         verify(llm, never()).streamChat(any(), any());             // 也没调 LLM（零 token）
         // **澄清刻意不写 L1**（2026-09-28 code-review 抓出）：门在 l1.get 之前，写了也读不到（死写）；
@@ -482,7 +557,7 @@ class ChatOrchestratorTest {
         // 载荷 = 拒答分支真实写进 L1 的形状：maxAuthLevel=0、refused=true
         String json = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(
                 new AnswerPayload("当前知识库无足够相关的参考（检索置信度不足），无法可靠作答。",
-                        List.of(), List.of(), "hybrid", false, 0, "tenant-internal", true));
+                        List.of(), List.of(), "hybrid", false, 0, "tenant-internal", true, List.of()));
         RecordingSink sink = new RecordingSink();
         orchestrator.replay(sink, json, "L1", false, "fp-refusal", System.nanoTime(),
                 INTERNAL, "今天天气怎么样", "sse", "manual");
@@ -490,6 +565,11 @@ class ChatOrchestratorTest {
 
         assertTrue(sink.answer.toString().contains("无足够相关的参考"),
                 "客户端收到的仍是拒答话术: " + sink.answer);
+        assertEquals(Boolean.TRUE, sink.refused,
+                "回放一条被拒答的载荷：帧上的 refused 必须取载荷值而非硬编码 false——"
+                        + "否则帧说\"没拒答\"、话术却在拒答，正是 live QA F-1 那类失真从帧侧再开一次（ADR-0020）");
+        assertEquals("refuse", sink.gate,
+                "回放一条被拒答的载荷：gate 同样取载荷值（refused=true → refuse），不得硬编码 none");
         verify(audit, AUDIT_WAIT).log(eq(INTERNAL), eq("chat"), eq("sse"), eq("manual"), eq("今天天气怎么样"),
                 anyString(), eq("L1"), anyString(), eq(true), eq(0), anyLong(),
                 eq("tenant-internal"),   // src_tenant 随行（回放路径既有特性）：载荷租户=请求者租户

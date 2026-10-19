@@ -65,7 +65,7 @@ public class OpenAiController {
         // 本面恒 source=manual：协议体的角色是"人在客户端里说话"，告警链路只走 /chat/stream
         // （自举告警源经那条入口，ADR-0011）。若将来有人把生产者指到本面，审计会把告警静默
         // 标成 manual，且 service="" / env="prod" 会与 SSE 面算出不同指纹——两处都是坑。
-        orchestrator.submit(new ChatRequest(query, "manual", "", "prod"),
+        orchestrator.submit(new ChatRequest(query, "manual", "", "prod", null),
                 user, new OpenAiChatSink(emitter, DEFAULT_MODEL), "openai");
         return emitter;
     }

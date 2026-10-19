@@ -11,9 +11,14 @@ import java.util.regex.Pattern;
 import org.springframework.stereotype.Service;
 
 /**
- * 告警指纹：`SHA256(service + "|" + env + "|" + normalized_error_msg)` 的**前 128 位**
- * （32 位十六进制）。
- * 归一化剥离时间戳/UUID/十六进制地址/数字，使同质告警收敛到同一指纹。
+ * 问题指纹（前 128 位、32 位十六进制）的两个来源：
+ * <ul>
+ *   <li><b>查询指纹</b>（{@link #fingerprint}）：`SHA256(service + "|" + env + "|" +
+ *       normalized_error_msg)`——归一化剥离时间戳/UUID/十六进制地址/数字，使同质告警收敛到同一指纹。
+ *       适用于人工提问与既有自举源。</li>
+ *   <li><b>告警身份</b>（{@link #identity}）：`SHA256("alert-id|" + alertId)`——输入是调用方
+ *       显式给出的稳定身份，不做文本归一化。适用于外部告警模板会把 `$value` 渲染进文案的场景。</li>
+ * </ul>
  *
  * 分隔符与长度都写明的原因：指纹同时是 L1 缓存键的组分、SSE meta 的回传值、以及反馈端点
  * 用来归档"问题"的键——外部要靠它对上，只写"SHA256(...)"会让人以为是 64 位（实测误解过一次）。
@@ -74,8 +79,29 @@ public class FingerprintService {
     }
 
     public String fingerprint(String service, String env, String errorMsg) {
-        String raw = (service == null ? "" : service) + "|" + (env == null ? "" : env)
-                + "|" + normalizeError(errorMsg);
+        return digest((service == null ? "" : service) + "|" + (env == null ? "" : env)
+                + "|" + normalizeError(errorMsg));
+    }
+
+    /**
+     * **告警身份**（2026-10-17，与"查询指纹"拆开）：调用方给的稳定身份 → 同一个 32 位十六进制形状。
+     *
+     * <p>为什么不是把 alertId 当文本再走 {@link #normalizeError}：身份是**不透明的**，
+     * 没有"数字/时间戳该不该掩码"这回事——掩码是给人类可读文案发明的手段，
+     * 对已经是稳定标识的输入做掩码只会引入无意义的不确定性（也正是不该由服务端做判断的那部分）。
+     *
+     * <p>固定前缀 {@code "alert-id|"} 让两种身份的输入空间**在实践中**分开：文本指纹形如
+     * {@code service|env|文本}，告警身份形如 {@code alert-id|<身份>}；bridge 产出的身份是定长
+     * 十六进制，不含分隔符。**这是约定隔离，不是密码学隔离**——{@code service}/{@code env} 是
+     * 自由文本，理论上仍可构造出撞车的输入；真正的权限隔离是与本指纹同列的
+     * {@code tenant×authLevel}（L1 键、SingleFlight 组键都带）。形状与文本指纹一致
+     * （前 128 位、32 位十六进制），故 SSE meta、审计列、{@code FeedbackRequest} 的形状校验都不需要变。
+     */
+    public String identity(String alertId) {
+        return digest("alert-id|" + (alertId == null ? "" : alertId));
+    }
+
+    private static String digest(String raw) {
         try {
             byte[] d = MessageDigest.getInstance("SHA-256").digest(raw.getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(d).substring(0, 32);

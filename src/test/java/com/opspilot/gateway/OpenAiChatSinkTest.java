@@ -41,7 +41,7 @@ class OpenAiChatSinkTest {
         sink.delta("，同学");
         // actions 传空表：本用例只锁 refs 注入与帧序，行动契约另有专项用例
         sink.done(0L, 1L, List.of(new AnswerPayload.Ref("rb-001::x", "订单超时手册", "order-service")),
-                List.of());
+                List.of(), List.of());
 
         // 空契约不发帧（无 actions 的 done 仍是 5 帧）：平白一个空 content 帧会让客户端多渲染一跳
         assertEquals(5, em.frames.size(), "role+content / content / refs / stop / [DONE]");
@@ -98,7 +98,7 @@ class OpenAiChatSinkTest {
         Capturing em = new Capturing();
         OpenAiChatSink sink = new OpenAiChatSink(em, "opspilot");
         sink.delta("答案");
-        sink.done(0L, 1L, List.of(), List.of());
+        sink.done(0L, 1L, List.of(), List.of(), List.of());
 
         assertEquals(3, em.frames.size(), "无 refs、无契约：role+content / stop / [DONE]，不得凭空多一跳空帧");
         assertFalse(String.join("|", em.frames).contains("只读行动契约"), "空契约不得渲染标题");
@@ -108,7 +108,8 @@ class OpenAiChatSinkTest {
     void metaIsDroppedWithoutSideEffects() {
         Capturing em = new Capturing();
         new OpenAiChatSink(em, "opspilot")
-                .meta("fp", "none", com.opspilot.resilience.DegradationState.Level.L0, false, false, 0);
+                .meta("fp", "none", com.opspilot.resilience.DegradationState.Level.L0, false, false, 0, false,
+                        "none");
         assertTrue(em.frames.isEmpty(), "meta 在 OpenAI 帧无位置：丢弃且不产生输出");
     }
 }

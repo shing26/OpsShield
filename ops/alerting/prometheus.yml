@@ -1,0 +1,31 @@
+# Prometheus 抓取面（alerting profile）。
+#
+# 抓的是**网关自己暴露的** aiops_* 指标（ADR-0016 的 /actuator/prometheus，无凭证）。
+# 于是这条环完全闭合：OpsPilot 暴露指标 → Prometheus 规则判定 → Alertmanager 投递 →
+# alert_bridge 翻译 → 回到 OpsPilot 的编排链路。环里没有任何人造数据。
+#
+# 为什么是 host.docker.internal 而不是 localhost：网关按本仓既定形态跑在**宿主裸进程**
+# （scripts/start_gateway.sh 的注释写明容器网关形态在本机不可复现）。容器里的 localhost
+# 是容器自己，不是宿主。compose 侧显式加了 extra_hosts 把这个名字钉住——
+# Linux 的 Docker 不默认提供它，缺了会静默抓不到（表现为 target down，而非启动报错）。
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
+scrape_configs:
+  - job_name: opspilot
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["host.docker.internal:8081"]
+        labels:
+          # job 名由这里定义，并**原样**成为 bridge 转发时的 service 维度
+          # （FingerprintService 的 service 组分）——桥不猜，这条注释是那份契约的锚点。
+          service: opspilot

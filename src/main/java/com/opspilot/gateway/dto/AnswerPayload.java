@@ -20,6 +20,12 @@ import java.util.List;
  * 只读诊断命令清单，与 refs 同源同权——因此它跟着载荷一起进 L1/L2，回放路径零额外成本也
  * 零漂移。**兼容性**：字段加在既有存储格式尾部，旧缓存 JSON 反序列化时它是 null，消费侧一律
  * 走 {@link #actionsOrEmpty()}（2h TTL 内自然换代，不写迁移脚本）。
+ *
+ * <p><b>nearMiss 是拒答时的"最接近的候选"（ADR-0023）</b>：只带 {@code service} 与
+ * {@code error_codes} 两类**标识符**，不带 chunk_id / 面包屑 / 正文——它给的是"下一步该问什么"，
+ * 不是"低置信度的答案"。与 actions 同样的兼容策略：尾部字段、旧缓存为 null、消费侧走
+ * {@link #nearMissOrEmpty()}。**为什么必须进载荷**：拒答会写 L1（省一次检索），若只把它放在
+ * 生成路径上，同键重发走回放时就丢了导航——那正是 live QA F-1 那类"回放与首答不一致"的复刻。
  */
 public record AnswerPayload(
         String answer,
@@ -29,12 +35,33 @@ public record AnswerPayload(
         boolean fastPath,
         int maxAuthLevel,
         String tenant,
-        boolean refused
+        boolean refused,
+        List<NearMiss> nearMiss
 ) {
     public record Ref(String chunkId, String breadcrumb, String service) {}
+
+    /** 拒答时的候选标识符（ADR-0023）：{@code service} + {@code errorCodes}，两者都可为空。 */
+    public record NearMiss(String service, List<String> errorCodes) {}
 
     /** 旧缓存（JSON 无 actions 字段）反序列化后为 null：回放/审计侧统一走这个取值口。 */
     public List<Action> actionsOrEmpty() {
         return actions == null ? List.of() : actions;
+    }
+
+    /** 同上：旧缓存没有 nearMiss 字段，一律走这个取值口。 */
+    public List<NearMiss> nearMissOrEmpty() {
+        return nearMiss == null ? List.of() : nearMiss;
+    }
+
+    /**
+     * 协议面的**闸门**标记（ADR-0020 注记 / ADR-0023）：{@code clarify | refuse | none}。
+     *
+     * <p>派生自本载荷自己的两个状态字段，**刻意不新增存储字段**——多存一个就有第三处能与之打架，
+     * 而"帧上的状态与话术不一致"正是 2026-09-28 live QA F-1 那类失真的形态。派生规则：
+     * 回指澄清（{@code mode="clarify"}）优先，其次 {@code refused}。
+     */
+    public String gate() {
+        if ("clarify".equals(mode)) return "clarify";
+        return refused ? "refuse" : "none";
     }
 }

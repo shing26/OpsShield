@@ -121,7 +121,14 @@ public class ChatOrchestrator {
     private void handle(ChatRequest req, UserContext user, ChatSink sink, String via) throws Exception {
         String query = req.query();
         String source = req.sourceOrDefault();
-        String fp = fingerprintService.fingerprint(req.service(), req.env(), query);
+        // 身份拆分（2026-10-17，台账 §3.1）：调用方给了稳定 alertId 就用它当不透明身份，
+        // 不再从人类可读文案里推断"这是不是同一条告警"——外部规则模板会把 $value 渲染进注解，
+        // 同一故障每次评估都不一样。alertId 缺失（人工提问、既有自举源）才回退文本指纹，
+        // 逐字保持今天的行为；L1、SingleFlight、滑动窗口、审计、meta 全部消费同一个 fp。
+        String alertId = req.alertIdOrNull();
+        String fp = alertId != null
+                ? fingerprintService.identity(alertId)
+                : fingerprintService.fingerprint(req.service(), req.env(), query);
         long t0 = System.nanoTime();
 
         // Single-Flight 为主闸门：同 (tenant, fingerprint, authLevel) 并发仅 1 个 leader 穿透，
@@ -153,12 +160,15 @@ public class ChatOrchestrator {
             if (level != Level.L2 && ClarificationGate.needsClarification(query)) {
                 String clarify = ClarificationGate.MESSAGE;
                 AnswerPayload p = new AnswerPayload(clarify, List.of(), List.of(), "clarify", false,
-                        user.authLevel(), user.tenantId(), true);
+                        user.authLevel(), user.tenantId(), true, List.of());
                 String json = mapper.writeValueAsString(p);
-                sink.meta(fp, "none", level, false, false, 0);
+                // 回指澄清在载荷里同样标 refused=true（CONTEXT.md 回指澄清条）——帧上如实带出，
+                // 客户端因此不必靠匹配澄清话术来区分"系统没答"
+                // gate=clarify（ADR-0023）：与无据拒答（gate=refuse）分开——两者的成因与代价都不同
+                sink.meta(fp, "none", level, false, false, 0, true, p.gate());
                 long clarifyNano = System.nanoTime();
                 sink.delta(clarify);
-                sink.done(t0, clarifyNano, List.of(), List.of());
+                sink.done(t0, clarifyNano, List.of(), List.of(), List.of());
                 // **刻意不写 L1**（2026-09-28 code-review 抓出）：本门在 `l1.get` 之前，L0/L1 期刚写的
                 // 条目永不可读＝死写；而 L2 期门让位、`l1.get` 反会回放它——澄清抢在 SOP 直出之前，
                 // 复刻 A2-6 的已修坑（"降级期答案入缓存 → 同 query 仍回放"）。同指纹 follower 已由
@@ -171,7 +181,7 @@ public class ChatOrchestrator {
                 return;
             }
 
-            String cached = l1.get(user.tenantId(), user.authLevel(), query);
+            String cached = l1.get(user.tenantId(), user.authLevel(), fp);
             if (cached != null) {
                 metrics.l1Hit();
                 reg.future().complete(cached);
@@ -182,7 +192,7 @@ public class ChatOrchestrator {
             if (l2hit != null) {
                 metrics.l2Hit();
                 String json = l2hit.payloadJson();   // 含 refs，回放溯源完整
-                l1.put(user.tenantId(), user.authLevel(), query, json);
+                l1.put(user.tenantId(), user.authLevel(), fp, json);
                 reg.future().complete(json);
                 replay(sink, json, "L2", false, fp, t0, user, query, via, source);
                 return;
@@ -211,12 +221,12 @@ public class ChatOrchestrator {
             String sop = sopFallback.lookup(query, req.service(), user.tenantId());
             String answer = sop != null ? sop : "系统高负载，已触发熔断降级，暂无可用止损清单，请联系值班 SRE。";
             AnswerPayload p = new AnswerPayload(answer, List.of(), List.of(), "sop_fallback", false,
-                    user.authLevel(), user.tenantId(), false);
+                    user.authLevel(), user.tenantId(), false, List.of());
             String json = mapper.writeValueAsString(p);
-            sink.meta(fp, "none", level, false, false, 0);
+            sink.meta(fp, "none", level, false, false, 0, false, p.gate());
             long sopFirstDeltaNano = System.nanoTime();
             sink.streamInChunks(answer);
-            sink.done(t0, sopFirstDeltaNano, List.of(), List.of());
+            sink.done(t0, sopFirstDeltaNano, List.of(), List.of(), List.of());
             audit.log(user, "chat", via, source, query, fp, "none", "sop_fallback", false, user.authLevel(),
                     (System.nanoTime() - t0) / 1_000_000, null, null,
                     null,   // SOP 直出：检索与 LLM 都未发生，无分段可测（null = 没测，非"测得为 0"）
@@ -242,15 +252,25 @@ public class ChatOrchestrator {
             String reason = chunks.isEmpty() ? "未匹配到任何参考" : "检索置信度不足";
             String refusal = "当前知识库无足够相关的参考（" + reason + "），无法可靠作答。"
                     + "请补充错误码（如 50012_DB_TIMEOUT）或服务名后重试，或联系值班 SRE。";
+            // ADR-0023：拒答时给"最接近的候选"——**只带标识符**（service + error_codes），不带
+            // chunk_id / 面包屑 / 正文。给的是"下一步该问什么"，不是"低置信度的答案"：一旦把内容
+            // 摆出来，用户就会拿它当答案用，而系统无法保证那几段不是**别的故障**的手册。候选取自
+            // **已经按 tenant×authLevel 过滤过**的检索结果，且只带覆盖清单本来就要公开的标识符，
+            // 故不新增越权面。零召回时为空表，页面自动退回覆盖清单。
+            List<AnswerPayload.NearMiss> nearMiss = chunks.stream().limit(3)
+                    .map(c -> new AnswerPayload.NearMiss(c.service(),
+                            c.errorCodes() == null ? List.of() : c.errorCodes()))
+                    .distinct()
+                    .toList();
             // maxAuthLevel=0：拒答不触达任何语料（回放路径的审计 max_level 由此而来，live QA F-1）
             AnswerPayload p = new AnswerPayload(refusal, List.of(), List.of(), outcome.mode(), false, 0,
-                    user.tenantId(), true);
+                    user.tenantId(), true, nearMiss);
             String json = mapper.writeValueAsString(p);
-            sink.meta(fp, "none", level, false, false, outcome.tookMs());
+            sink.meta(fp, "none", level, false, false, outcome.tookMs(), true, p.gate());
             long refusalNano = System.nanoTime();
             sink.delta(refusal);
-            sink.done(t0, refusalNano, List.of(), List.of());
-            l1.put(user.tenantId(), user.authLevel(), query, json);
+            sink.done(t0, refusalNano, List.of(), List.of(), p.nearMissOrEmpty());
+            l1.put(user.tenantId(), user.authLevel(), fp, json);
             audit.log(user, "chat", via, source, query, fp, "none", outcome.mode(), true, 0,
                     (System.nanoTime() - t0) / 1_000_000, null, null,
                     stageTimings(outcome, 0, 0, 0),   // 拒答在 LLM 前 return：llm/l2_store 恒 0（测了且为 0）
@@ -260,7 +280,7 @@ public class ChatOrchestrator {
 
         int maxAuth = chunks.stream().mapToInt(ScoredChunk::authLevel).max().orElse(user.authLevel());
 
-        sink.meta(fp, "none", level, outcome.fastPath(), false, outcome.tookMs());
+        sink.meta(fp, "none", level, outcome.fastPath(), false, outcome.tookMs(), false, "none");
 
         // 只读行动契约（ADRs 0017）：从**本轮引用的同一批 chunk** 逐字抽，与 refs 同源同权，
         // 因此租户/密级闸不在这里重设。放这里（LLM 之前）而非答完后：契约与"引用了什么"绑定，
@@ -290,9 +310,9 @@ public class ChatOrchestrator {
             degrade.llmSuccess();
             if (masked > 0) metrics.verbatimMasked(masked);
             AnswerPayload p = new AnswerPayload(answer, refs, actions, outcome.mode(), outcome.fastPath(),
-                    maxAuth, user.tenantId(), false);
+                    maxAuth, user.tenantId(), false, List.of());
             String json = mapper.writeValueAsString(p);
-            l1.put(user.tenantId(), user.authLevel(), query, json);
+            l1.put(user.tenantId(), user.authLevel(), fp, json);
             // L2 写入：存完整 payload（含 refs）。**注意这里是第二次 embedding 调用**——
             // 检索腿里那次算出的向量没有被回传复用（腿的返回面只有 chunk 列表），故同一次请求
             // 会 embed 两次。G2 的 stage_ms.l2_store 把这段成本显式化，供后续决定是否值得回传复用。
@@ -303,7 +323,7 @@ public class ChatOrchestrator {
             long ftNano = firstTokenNano.get();
             long llmMs = (System.nanoTime() - llmStartNano) / 1_000_000;
             long llmTtftMs = ftNano == 0 ? llmMs : (ftNano - llmStartNano) / 1_000_000;
-            sink.done(t0, ftNano == 0 ? System.nanoTime() : ftNano, refs, actions);
+            sink.done(t0, ftNano == 0 ? System.nanoTime() : ftNano, refs, actions, List.of());
             audit.log(user, "chat", via, source, query, fp, "none", outcome.mode(), false, maxAuth,
                     (System.nanoTime() - t0) / 1_000_000, null, masked > 0 ? masked : null,
                     stageTimings(outcome, llmTtftMs, llmMs, l2StoreMs), level.name());
@@ -373,10 +393,14 @@ public class ChatOrchestrator {
                     List.of(), List.of());
             return;
         }
-        sink.meta(fp, cacheHit, lvl, p.fastPath(), deduplicated, 0);
+        // refused / gate / near_miss **一律取载荷里的值**（不硬编码）：拒答也写 L1，回放一条被
+        // 拒答的 query 时客户端收到的仍是拒答话术——2026-09-28 live QA F-1 正是"帧上说没拒答、
+        // 话术却在拒答"的失真，那个坑不能从帧这一侧再开一次（ADR-0020）。gate 与 near_miss
+        // 同理：回放一条澄清、一条拒答，帧上的闸门与候选必须与首答一致（ADR-0023）。
+        sink.meta(fp, cacheHit, lvl, p.fastPath(), deduplicated, 0, p.refused(), p.gate());
         long replayFirstDeltaNano = System.nanoTime();
         sink.streamInChunks(p.answer());
-        sink.done(t0, replayFirstDeltaNano, p.refs(), p.actionsOrEmpty());
+        sink.done(t0, replayFirstDeltaNano, p.refs(), p.actionsOrEmpty(), p.nearMissOrEmpty());
         // src_tenant 随行（QA P1-2"命中来源"）：与 tenant 相等=正常同租户回放；
         // grep 不等即可发现任何新的跨租户共享旁路。
         audit.log(user, "chat", via, source, query, fp, cacheHit + (deduplicated ? "+dedup" : ""),

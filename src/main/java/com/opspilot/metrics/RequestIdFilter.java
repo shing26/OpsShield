@@ -24,10 +24,15 @@ import org.springframework.web.filter.OncePerRequestFilter;
  *
  * <p><b>调用方关联键 {@code X-Trace-Id}（2026-09-28，OP-A7）</b>：上面那个 {@code request_id} 是
  * **服务端自生**的，调用方拿不到——于是"被测 agent 分三步调用本底座"时，三行审计之间没有任何
- * 东西能把它们串成一次 incident（既有 {@code fingerprint} 是**内容派生**的"问题身份"，三步问不同
+ * 东西能把它们串成**一条调用链**（既有 {@code fingerprint} 是**内容派生**的"问题身份"，三步问不同
  * 错误码就会散成三个指纹）。故新增一个**调用方提供**的键，随请求头进入 MDC 并落到审计行。
  * 两者分工**互不覆盖**（ADR-0007 修订注）：{@code trace_id}=调用链（跨调用整段取出）；
  * {@code request_id}=单次请求回查（服务端权威，绝不因调用方输入而变）。
+ *
+ * <p><b>该列有两个生产者（2026-10-17，ADR-0019）</b>：其一仍是上层 agent 自述的调用链 id；
+ * 其二是告警桥从 Alertmanager 分组派生的 {@code am-…}（一次事故的关联身份，见 CONTEXT.md
+ * 「告警分组身份」）。两者共用同一列是**刻意的**——列语义是"调用方给的关联键"，不是"某种特定
+ * 调用方的键"。术语上的区分（调用链 / 事故）属领域模型，见 CONTEXT.md。
  *
  * <p>为什么要放在过滤器而不是请求体字段：本过滤器作用于**全部 servlet 路径**，一处改动即覆盖
  * copilot / v1 / search / feedback 四个面，且不碰任何 DTO——{@code /v1} 的 OpenAI 兼容请求体

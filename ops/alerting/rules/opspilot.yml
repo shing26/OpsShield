@@ -1,0 +1,47 @@
+# OpsPilot 的三条告警规则——**两种错误码粒度刻意混用**。
+#
+# 为什么是这三条而不是全部指标：可抓的 aiops_* 里，只有"上游坏了""检索腿劣化"
+# "兜底直出增多"构成值得叫人的故障条件。llm_calls / dedup_aggregated 是纯计数——
+# 它们涨得快说明系统在正常工作，拿它们触发告警等于用这套系统自己的指标制造噪声，
+# 而消灭噪声告警正是它存在的理由。
+#
+# 混粒度的理由：第三条刻意**不带 error_code**。它逼着同一条管道处理一个没有强标识符
+# 可锚定的告警——min-relevance 门控、语义召回、纯语义兜底三条路径在无标识符输入下的
+# 行为差异只在这里可见。前两条走精确符号快路径，第三条走语义路，对照才有意义。
+#
+# 契约：`annotations.summary` 是给 bridge 的自然语言正文，`labels.error_code` 是精确符号。
+# bridge 只拼接、不发明——标签缺失就走语义路，那是被设计的分支，不是错误。
+groups:
+  - name: opspilot
+    rules:
+      - alert: OpsPilotUpstreamRateLimited
+        # 增量 > 0 即报：这是"上游真的开始限流了"的直接证据，
+        # 攒够阈值再报会把 429 期间的真实排障需求挡在门外。
+        expr: sum(rate(aiops_llm_rate_limited_total[5m])) > 0
+        for: 0m
+        labels:
+          severity: warning
+          error_code: "51001_MODEL_ARREARAGE"
+        annotations:
+          summary: "OpsPilot 上游模型服务正在限流（近 5 分钟 {{ $value | printf \"%.3f\" }} 次/秒 429）。流式链路可能整体失败，请给出分型诊断与止损操作。"
+          description: "指标 aiops_llm_rate_limited_total 在上升。"
+
+      - alert: OpsPilotRetrievalTimeouts
+        expr: sum(rate(aiops_retrieval_timeouts_total[5m])) > 0
+        for: 0m
+        labels:
+          severity: warning
+          error_code: "51005_LEG_TIMEOUT_SILENT_DEGRADE"
+        annotations:
+          summary: "OpsPilot 检索腿持续超时（近 5 分钟 {{ $value | printf \"%.3f\" }} 次/秒）。双路检索可能已静默退化为单路，请给出排查与止损步骤。"
+          description: "指标 aiops_retrieval_timeouts_total 在上升。"
+
+      - alert: OpsPilotSopFallbacks
+        # 刻意不加 error_code 标签——见文件头"混粒度"说明。
+        expr: sum(rate(aiops_sop_fallbacks_total[5m])) > 0
+        for: 0m
+        labels:
+          severity: info
+        annotations:
+          summary: "OpsPilot 静态 SOP 兜底次数在上升（近 5 分钟 {{ $value | printf \"%.3f\" }} 次/秒）。可能命中了熔断档位或知识库与上游错位，请给出排查方向。"
+          description: "指标 aiops_sop_fallbacks_total 在上升。"

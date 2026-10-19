@@ -59,7 +59,7 @@ public class OpenAiChatSink implements ChatSink {
 
     @Override
     public void meta(String fp, String cacheHit, Level level, boolean fastPath,
-                     boolean deduplicated, long retrievalMs) {
+                     boolean deduplicated, long retrievalMs, boolean refused, String gate) {
         // OpenAI 帧无元信息位：有意丢弃（客户端不识别自定义事件；溯源经 refs 注入正文保展示）
     }
 
@@ -76,7 +76,8 @@ public class OpenAiChatSink implements ChatSink {
 
     @Override
     public void done(long t0, long firstTokenNano, List<AnswerPayload.Ref> refs,
-                     List<com.opspilot.action.Action> actions) {
+                     List<com.opspilot.action.Action> actions,
+                     List<AnswerPayload.NearMiss> nearMiss) {
         // 空契约不发帧：OpenAI 客户端把空 content 帧也当一次增量渲染，平白多一跳
         String act = actionMarkdown(actions);
         if (!act.isEmpty()) {

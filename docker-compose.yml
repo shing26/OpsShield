@@ -92,6 +92,56 @@ services:
       retries: 30
     restart: unless-stopped
 
+  # 告警侧（alerting profile）：真实 Prometheus 规则 → Alertmanager → 宿主 bridge。
+  # 默认不启动——Prometheus+Alertmanager 约 400MB，不进基础栈的内存预算（≈1.6GB）。
+  #
+  # 抓取与投递目标都是**宿主**（网关与 bridge 都按本仓既定形态跑宿主裸进程），
+  # 故两容器都必须显式声明 host.docker.internal：Linux 的 Docker 不默认提供该 DNS 名，
+  # 缺了不会启动报错，只会静默抓不到/投递失败（表现为 target down 或通知丢失）。
+  prometheus:
+    profiles: ["alerting"]
+    image: prom/prometheus:v2.55.1
+    container_name: opspilot-prometheus
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./ops/alerting/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./ops/alerting/rules:/etc/prometheus/rules:ro
+    ports:
+      - "127.0.0.1:9090:9090"
+    mem_limit: 256m
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --web.enable-lifecycle
+    healthcheck:
+      # prom/prometheus 是 busybox 底，wget 可用。/-/ready 只在配置与规则文件都加载成功时回 200，
+      # 规则语法写错会让它一直不 ready——这正是我们要的判据（否则表现为 target 面空白而容器"健康"）。
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:9090/-/ready || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  alertmanager:
+    profiles: ["alerting"]
+    image: prom/alertmanager:v0.27.0
+    container_name: opspilot-alertmanager
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./ops/alerting/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    ports:
+      - "127.0.0.1:9093:9093"
+    mem_limit: 96m
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:9093/-/ready || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
 volumes:
   qdrant-data:
   es-data:

@@ -1,0 +1,50 @@
+# Alertmanager 配置（alerting profile）。
+#
+# 投递目标是**宿主上的 bridge**（scripts/alert_bridge.py，监听 127.0.0.1:8089）。
+# 为什么经 host.docker.internal 而不是容器内地址：bridge 必须跑在宿主——它复用
+# offline/localapi.py 的 assert_local 环回白名单（只允许 http + 环回，且校验解析后的 IP），
+# 容器里的 localhost 指向容器自己，够不到宿主网关。为部署整齐去松那条 SSRF 防线
+# 不划算，故桥留在宿主、由容器回连。
+#
+# 时间参数就是本轮"重复告警"的闸门：
+#   repeat_interval 4h —— 一条不恢复的告警每 4 小时才重发一次。这是**规则参数层面的防重**，
+#     而不是 bridge 的内容判重；桥必须原样转发，重复才能真的打到网关、才看得见 L1 与单飞。
+#   group_wait 30s / group_interval 1m —— 摊平仍在 bridge 侧做（N 条仍是 N 个独立请求）。
+#
+# group_by 是**上游对"这是一次事故"的定义**，桥不再重新发明这层判断（ADR-0019）：
+#   `["job"]` 去掉 alertname 是刻意的——带着 alertname 时 group 与单条告警**同粒度**，
+#   桥派生出的 incident 身份就等于告警身份，跨指纹关联等于没做。
+#   不加 severity 也是刻意的：severity 不是根因维度，加进去只会把同一根因的告警
+#   拆到两个 incident 里，方向与目标相反。
+# group_interval 1m（缺省 5m）是拿重复换迟到：新告警并入已有 group 后要等一个 group_interval
+#   才投递，5 分钟对"告警进来后多久拿到答案"太贵；压到 1m 的代价是组的更新通知更频繁，
+#   而**重复转发正是我们要观测的面**（桥刻意不判重，重复必须真打到网关）。实测读数落
+#   logs/alert-bridge.jsonl（同 incident_id 的多次投递 + 各自的 cache_hit）。
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: opspilot-bridge
+  # 不加 severity 子路由：三条规则现在走同一条链路，加分层只会把"哪条规则真的 fire 过"
+  # 这件事藏进配置里。要分派时再说。
+  group_by: ["job"]
+  group_wait: 30s
+  group_interval: 1m
+  repeat_interval: 4h
+
+receivers:
+  - name: opspilot-bridge
+    webhook_configs:
+      - url: http://host.docker.internal:8089/api/v2/alerts
+        send_resolved: true      # resolved 也是真实输入，照转（见 alert_bridge.py 的摊平口径）
+        # Alertmanager 默认对 5xx 重试；bridge 对畸形载荷回 400（不诱发重试风暴），
+        # 对正常载荷一律 200，即使内部转发失败也只在台账里记 sent_ok=false。
+
+inhibit_rules:
+  # 上游限流是"根"，SOP 兜底是它的下游表现——抑制掉后者，避免一次上游抖动
+  # 同时开出多条告警。这层抑制也是要在真实流量上看的：它决定 bridge 收到的量级。
+  # **注意它与关联是两件事**：抑制决定"哪些告警根本不投递"，关联决定"投递进来的
+  # 几条怎么读成一次 incident"；抑制掉的告警不会出现在 incident 里，这是上游的判断，不是丢数据。
+  - source_matchers: ['alertname="OpsPilotUpstreamRateLimited"']
+    target_matchers: ['alertname="OpsPilotSopFallbacks"']
+    equal: ["job"]

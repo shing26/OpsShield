@@ -70,4 +70,32 @@ class FingerprintServiceTest {
         assertNotEquals(svc.fingerprint("a", "bc", "m"), svc.fingerprint("ab", "c", "m"),
                 "`|` 分隔符必须参与摘要，否则 service/env 边界可被拼接抹平");
     }
+
+    /** 告警身份形状与文本指纹一致（32 位小写十六进制），否则 SSE meta/审计/反馈形状锁会松。 */
+    @Test
+    void alertIdentityShapeMatchesFingerprintShape() {
+        String id = svc.identity("c817f438192dbb63f17859b36e149f81");
+        assertEquals(32, id.length(), "告警身份同为 SHA-256 前 128 位: " + id);
+        assertTrue(id.matches("[0-9a-f]{32}"), "只允许小写十六进制: " + id);
+        assertEquals(id, svc.identity("c817f438192dbb63f17859b36e149f81"), "身份必须可重放（缓存键组分）");
+    }
+
+    /** 身份对小差异敏感：firing/resolved 的隔离由调用方在 alertId 里带上，这里锁住"不同即不同"。 */
+    @Test
+    void differentAlertIdsDiffer() {
+        assertNotEquals(svc.identity("alert-a|firing"), svc.identity("alert-a|resolved"));
+    }
+
+    /**
+     * 前缀参与摘要的变异锁：{@code service="aaaa", env=""} 的文本指纹输入恰是 {@code "aaaa||bbbb"}。
+     * 去掉 {@code "alert-id|"} 前缀，本用例必红。
+     *
+     * <p>注意：这是**具体构造**的隔离锁，不是"全局不可能撞车"的证明——service/env 是自由文本，
+     * 理论上仍存在其他构造（见 {@link FingerprintService#identity(String)} 的扁注）。
+     */
+    @Test
+    void identityPrefixKeepsItDistinctFromTextFingerprint() {
+        assertNotEquals(svc.identity("aaaa||bbbb"), svc.fingerprint("aaaa", "", "bbbb"),
+                "去掉 alert-id 前缀会让这个构造的两种身份撞车");
+    }
 }

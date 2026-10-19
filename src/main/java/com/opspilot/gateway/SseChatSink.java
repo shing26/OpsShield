@@ -18,8 +18,8 @@ public class SseChatSink implements ChatSink {
 
     @Override
     public void meta(String fp, String cacheHit, Level level, boolean fastPath,
-                     boolean deduplicated, long retrievalMs) {
-        events.emitMeta(emitter, fp, cacheHit, level, fastPath, deduplicated, retrievalMs);
+                     boolean deduplicated, long retrievalMs, boolean refused, String gate) {
+        events.emitMeta(emitter, fp, cacheHit, level, fastPath, deduplicated, retrievalMs, refused, gate);
     }
 
     @Override
@@ -34,8 +34,9 @@ public class SseChatSink implements ChatSink {
 
     @Override
     public void done(long t0, long firstTokenNano, List<AnswerPayload.Ref> refs,
-                     List<com.opspilot.action.Action> actions) {
-        events.emitDone(emitter, t0, firstTokenNano, refs, actions);
+                     List<com.opspilot.action.Action> actions,
+                     List<AnswerPayload.NearMiss> nearMiss) {
+        events.emitDone(emitter, t0, firstTokenNano, refs, actions, nearMiss);
     }
 
     @Override
