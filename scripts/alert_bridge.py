@@ -67,6 +67,8 @@ from alert_delivery import (  # noqa: E402
     DeliveryAttempt,
     DeliveryPolicy,
     HourAccounting,
+    LoginFailureMode,
+    TransportFailureHandling,
 )
 
 LEDGER = REPO / "logs" / "alert-bridge.jsonl"
@@ -311,7 +313,11 @@ class Bridge:
         self.group_cap = args.group_cap
         self.stats = {"received": 0, "forwarded": 0, "skipped": 0, "errors": 0}
         self.delivery = AlertDelivery(
-            AlertSession(self.user, api=localapi),
+            AlertSession(
+                self.user,
+                api=localapi,
+                login_failure_mode=LoginFailureMode.AUTH_STATUSES,
+            ),
             ledger_path=LEDGER,
         )
 
@@ -342,7 +348,7 @@ class Bridge:
             quota_reserve=self.quota_reserve,
             hour_accounting=HourAccounting.ATTEMPT,
             login_before_send=True,
-            ledger_transport_failure=True,
+            transport_failure_handling=TransportFailureHandling.CONTINUE,
             response_code_key="error_code_resp",
             dry_run=self.dry_run,
         )

@@ -124,7 +124,7 @@ def test_upstream_and_refusal_rules():
 
 def test_gate_order_budget_beats_quota_beats_cooldown(monkeypatch):
     p = _producer(max_per_hour=1)
-    p.delivery.emits = [__import__("time").time()]           # 已用满小时预算
+    p.delivery.budget_events = [__import__("time").time()]   # 已用满小时预算
     low_q = _state(quota={"limit": 100, "used": 99})
     alert = {"rule": "dep_down", "service": "qdrant", "query": "q"}
     assert p.gate(alert, low_q, 0.0)["skip"] == "hour_budget"
@@ -161,6 +161,22 @@ def test_cooldown_is_per_component_not_per_rule(monkeypatch):
     assert p.gate(a_redis, _state(), 1000.0).get("emit") is True
     assert p.gate(a_es, _state(), 1100.0).get("emit") is True, "另一组件的故障不得被冷却吞掉"
     assert p.gate(a_redis, _state(), 1100.0)["skip"] == "cooldown", "同一组件仍受冷却约束"
+
+
+def test_emit_bypass_does_not_consume_hour_budget_or_cooldown(monkeypatch):
+    p = _producer(max_per_hour=1, cooldown=300)
+    p.token = "t"
+    calls = []
+    monkeypatch.setattr(ap.localapi, "stream_chat",
+                        lambda body, token, timeout=120, collect_deltas=True:
+                        calls.append(token) or {
+                            "status": 200, "meta": {}, "done": {}, "deltas": [],
+                            "error": None, "ttft_s": None, "total_s": 0.01})
+    alert = {"rule": "dep_down", "service": "qdrant", "query": "q"}
+
+    assert p.emit(alert).get("emit") is True
+    assert p.gate(alert, _state(), 1000.0).get("emit") is True
+    assert len(calls) == 2
 
 
 def test_gate_skips_are_recorded_with_rule_and_query():
@@ -234,6 +250,24 @@ def test_login_failure_backs_off_then_exits(monkeypatch):
     assert rc == 2 and p.login_failures == ap.MAX_LOGIN_FAILURES
     assert all(w["skip"] == "login_failed" for w in writes), writes
     assert len(writes) == ap.MAX_LOGIN_FAILURES
+
+
+def test_login_http_500_uses_backoff_threshold(monkeypatch):
+    """Producer 旧语义把登录端点的任何 HTTPError 都归为登录失败，而不是网关不可达。"""
+    p = _producer()
+    writes = []
+    monkeypatch.setattr(p, "ledger", lambda rec: writes.append(rec))
+    monkeypatch.setattr(ap.time, "sleep", lambda s: None)
+    monkeypatch.setattr(
+        ap.localapi,
+        "login",
+        lambda username=None: (_ for _ in ()).throw(_http_error(500)),
+    )
+
+    assert p.run(interval=0) == 2
+    assert p.login_failures == ap.MAX_LOGIN_FAILURES
+    assert len(writes) == ap.MAX_LOGIN_FAILURES
+    assert all(w["skip"] == "login_failed" and "HTTP 500" in w["note"] for w in writes)
 
 
 def test_login_success_resets_failure_counter(monkeypatch):

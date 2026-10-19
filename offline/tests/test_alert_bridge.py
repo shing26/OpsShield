@@ -449,6 +449,30 @@ def test_gateway_unreachable_records_failure_without_raising(monkeypatch):
     assert b.token == "", "不可达后凭证态未知，须置空以便下次重登"
 
 
+def test_transport_failure_does_not_stop_later_items_in_batch(monkeypatch):
+    b = _bridge()
+    b.token = "stale"
+    _allow_live_quota(monkeypatch, b)
+    monkeypatch.setattr(ab.localapi, "login", lambda user: "fresh")
+    calls = []
+
+    def _stream(*args, **kwargs):
+        calls.append(1)
+        if len(calls) == 1:
+            raise ConnectionRefusedError("refused")
+        return {
+            "status": 200, "meta": {}, "done": {},
+            "error": None, "ttft_s": 0.1, "total_s": 0.2,
+        }
+
+    monkeypatch.setattr(ab.localapi, "stream_chat", _stream)
+
+    out = b.handle_payload(_payload(_alert(), _alert(name="Other")))
+
+    assert out["records"] == 2
+    assert b.stats["errors"] == 1 and b.stats["forwarded"] == 2
+
+
 def test_401_clears_token_for_self_healing(monkeypatch):
     b = _bridge()
     b.token = "stale"

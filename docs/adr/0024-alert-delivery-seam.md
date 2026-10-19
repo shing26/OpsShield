@@ -29,8 +29,10 @@ quota 的观察方式（实时读取或本轮快照）、hour budget、quota res
 "hour budget → 本轮 quota 快照 → cooldown → dry-run"的顺序。Cooldown 只作为可选闸门：Bridge 不启用，
 Producer 保持 `(rule, service)` 键和原有计时语义。登录失败也不强行统一：Bridge 记 `login_failed` 后继续
 同批其他告警，Producer 继续累计失败、退避并按既有上限退出；401 不新增自动重试，只沿用"清 token，
-下一次尝试或下一轮重登"的自愈路径。传输异常的继续/中止控制流同样由来源策略保持：Bridge 单条失败后
-继续批次，Producer 仍把该轮转为 `unreachable` 并继续后续轮次。
+下一次尝试或下一轮重登"的自愈路径。登录失败分类按来源显式选择：Bridge 只把 401/403（或带同值 `code`
+的异常）视为凭据失败，其他登录异常仍是传输失败；Producer 将登录端点的任何 `HTTPError` 视为需退避的
+登录失败。传输异常以 `TransportFailureHandling.CONTINUE / RAISE` 进入来源策略：Bridge 记录单条失败后
+继续批次，Producer 不写候选行并由适配器按 `RAISE` 将本轮转为 `unreachable`，后续轮次仍继续。
 
 理由：① 这些重复不是四个独立的工具函数，而是一条完整的投递生命周期；若只抽 login/quota/ledger 小工具，
 调用方仍需自行排列顺序、理解 401 与结果字段，重复和漏用不会消失。② 四态结果把"未发、已发且成功、

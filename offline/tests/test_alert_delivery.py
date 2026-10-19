@@ -3,7 +3,10 @@ from __future__ import annotations
 
 import json
 import sys
+import urllib.error
 from pathlib import Path
+
+import pytest
 
 REPO = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO / "offline"))
@@ -45,7 +48,7 @@ def _bridge_policy(**kw) -> ad.DeliveryPolicy:
         "quota_reserve": 50,
         "hour_accounting": ad.HourAccounting.ATTEMPT,
         "login_before_send": True,
-        "ledger_transport_failure": True,
+        "transport_failure_handling": ad.TransportFailureHandling.CONTINUE,
         "response_code_key": "error_code_resp",
     }
     values.update(kw)
@@ -59,7 +62,7 @@ def _producer_policy(**kw) -> ad.DeliveryPolicy:
         "quota_reserve": 50,
         "hour_accounting": ad.HourAccounting.RESPONSE,
         "login_before_send": False,
-        "ledger_transport_failure": False,
+        "transport_failure_handling": ad.TransportFailureHandling.RAISE,
         "response_code_key": "error_code",
     }
     values.update(kw)
@@ -252,6 +255,7 @@ def test_bridge_transport_failure_is_recorded_and_clears_token(tmp_path):
     assert outcome.record["sent_ok"] is False
     assert outcome.record["refs"] == []
     assert "ConnectionRefusedError" in outcome.record["error"]
+    assert outcome.handling is ad.TransportFailureHandling.CONTINUE
     assert delivery.session.token == ""
     rows = [
         json.loads(line)
@@ -318,6 +322,30 @@ def test_bridge_non_auth_login_failure_is_a_transport_outcome(tmp_path):
     ]
     assert len(rows) == 1
     assert rows[0]["sent_ok"] is False
+
+
+def test_producer_classifies_any_http_login_error_as_login_failure(tmp_path):
+    class LoginHttpErrorApi(FakeApi):
+        def login(self, username):
+            self.login_calls += 1
+            raise urllib.error.HTTPError(
+                "http://gateway/api/v1/auth/login",
+                500,
+                "login unavailable",
+                hdrs=None,
+                fp=None,
+            )
+
+    api = LoginHttpErrorApi()
+    session = ad.AlertSession(
+        "sre-watcher",
+        api=api,
+        login_failure_mode=ad.LoginFailureMode.ANY_HTTP_ERROR,
+    )
+
+    with pytest.raises(ad.LoginFailed, match="HTTP 500"):
+        session.login()
+    assert api.login_calls == 1
 
 
 def test_producer_response_starts_cooldown(tmp_path):
@@ -410,9 +438,10 @@ def test_producer_transport_failure_does_not_append_candidate_row(tmp_path):
 
     assert isinstance(outcome, ad.TransportFailed)
     assert outcome.record["emit"] is True
+    assert outcome.handling is ad.TransportFailureHandling.RAISE
     assert delivery.session.token == ""
     assert not (tmp_path / "alert.jsonl").exists()
-    assert delivery.emits == []
+    assert delivery.budget_events == []
 
 
 def test_observe_state_relogins_once_on_401(tmp_path):

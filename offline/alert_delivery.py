@@ -5,6 +5,7 @@ import json
 import sys
 import threading
 import time
+import urllib.error
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -46,6 +47,16 @@ class HourAccounting(str, Enum):
     RESPONSE = "response"
 
 
+class LoginFailureMode(str, Enum):
+    AUTH_STATUSES = "auth_statuses"
+    ANY_HTTP_ERROR = "any_http_error"
+
+
+class TransportFailureHandling(str, Enum):
+    CONTINUE = "continue"
+    RAISE = "raise"
+
+
 @dataclass(frozen=True)
 class QuotaSnapshot:
     limit: int
@@ -71,7 +82,7 @@ class DeliveryPolicy:
     quota_reserve: int
     hour_accounting: HourAccounting
     login_before_send: bool
-    ledger_transport_failure: bool
+    transport_failure_handling: TransportFailureHandling
     response_code_key: str
     dry_run: bool = False
     quota: QuotaSnapshot | None = None
@@ -101,6 +112,7 @@ class Rejected(DeliveryOutcome):
 
 @dataclass(frozen=True)
 class TransportFailed(DeliveryOutcome):
+    handling: TransportFailureHandling = TransportFailureHandling.CONTINUE
     error: str = ""
     exception: BaseException | None = None
 
@@ -108,18 +120,29 @@ class TransportFailed(DeliveryOutcome):
 class AlertSession:
     """Authenticated gateway session shared by state reads and delivery."""
 
-    def __init__(self, user: str, *, api=localapi):
+    def __init__(
+        self,
+        user: str,
+        *,
+        api=localapi,
+        login_failure_mode: LoginFailureMode = LoginFailureMode.AUTH_STATUSES,
+    ):
         self.user = user
         self.api = api
+        self.login_failure_mode = login_failure_mode
         self.token = ""
 
     def login(self) -> None:
         try:
             self.token = self.api.login(self.user)
         except Exception as exc:  # noqa: BLE001 - normalize only actionable auth failures
-            code = getattr(exc, "code", None)
-            if code in (401, 403):
-                raise LoginFailed(f"HTTP {code}") from exc
+            if self.login_failure_mode is LoginFailureMode.ANY_HTTP_ERROR:
+                if isinstance(exc, urllib.error.HTTPError):
+                    raise LoginFailed(f"HTTP {exc.code}") from exc
+            else:
+                code = getattr(exc, "code", None)
+                if code in (401, 403):
+                    raise LoginFailed(f"HTTP {code}") from exc
             raise
 
     def stream_chat(self, attempt: DeliveryAttempt) -> dict[str, Any]:
@@ -163,7 +186,7 @@ class AlertDelivery:
         self.session = session
         self.ledger = AlertLedger(ledger_path, session.user)
         self.clock = clock
-        self.emits: list[float] = []
+        self.budget_events: list[float] = []
         self.last_emit: dict[str, float] = {}
         self._gate_lock = threading.Lock()
 
@@ -173,8 +196,11 @@ class AlertDelivery:
             if skip_reason:
                 return self._skip(attempt, skip_reason)
 
-            if policy.hour_accounting is HourAccounting.ATTEMPT:
-                self.emits.append(self.clock())
+            if (
+                policy.hour_accounting is HourAccounting.ATTEMPT
+                and Gate.HOUR_BUDGET in policy.gates
+            ):
+                self.budget_events.append(self.clock())
 
         if policy.login_before_send and not self.session.token:
             try:
@@ -216,9 +242,12 @@ class AlertDelivery:
             outcome = Delivered(record=record, status=status)
         else:
             outcome = Rejected(record=record, status=status)
-        if policy.hour_accounting is HourAccounting.RESPONSE:
-            self.emits.append(self.clock())
-        if policy.cooldown_key:
+        if (
+            policy.hour_accounting is HourAccounting.RESPONSE
+            and Gate.HOUR_BUDGET in policy.gates
+        ):
+            self.budget_events.append(self.clock())
+        if policy.cooldown_key and Gate.COOLDOWN in policy.gates:
             self.last_emit[policy.cooldown_key] = self.clock()
         self.ledger.append(record)
         return outcome
@@ -239,9 +268,14 @@ class AlertDelivery:
             "refs": [],
             "ref_docs": [],
         }
-        if policy.ledger_transport_failure:
+        if policy.transport_failure_handling is TransportFailureHandling.CONTINUE:
             self.ledger.append(record)
-        return TransportFailed(record=record, error=error, exception=exc)
+        return TransportFailed(
+            record=record,
+            handling=policy.transport_failure_handling,
+            error=error,
+            exception=exc,
+        )
 
     def observe_state(self) -> dict[str, Any]:
         """Read Producer's truth surface through the shared authenticated session."""
@@ -299,8 +333,8 @@ class AlertDelivery:
 
     def _hour_budget_exhausted(self, policy: DeliveryPolicy) -> bool:
         now = self.clock()
-        self.emits = [t for t in self.emits if now - t < 3600]
-        return len(self.emits) >= policy.max_per_hour
+        self.budget_events = [t for t in self.budget_events if now - t < 3600]
+        return len(self.budget_events) >= policy.max_per_hour
 
     def _skip(
         self,

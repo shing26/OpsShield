@@ -40,9 +40,11 @@ from alert_delivery import (  # noqa: E402
     Gate,
     HourAccounting,
     LoginFailed,
+    LoginFailureMode,
     PRODUCER_GATES,
     QuotaSnapshot,
     TransportFailed,
+    TransportFailureHandling,
 )
 
 REPO = Path(__file__).resolve().parent.parent
@@ -169,7 +171,11 @@ class Producer:
         self.prev: dict | None = None
         self.stats = {"cycles": 0, "candidates": 0, "emitted": 0, "skipped": 0, "errors": 0}
         self.delivery = AlertDelivery(
-            AlertSession(self.user, api=localapi),
+            AlertSession(
+                self.user,
+                api=localapi,
+                login_failure_mode=LoginFailureMode.ANY_HTTP_ERROR,
+            ),
             ledger_path=LEDGER,
         )
 
@@ -210,7 +216,7 @@ class Producer:
             quota_reserve=self.quota_reserve,
             hour_accounting=HourAccounting.RESPONSE,
             login_before_send=False,
-            ledger_transport_failure=False,
+            transport_failure_handling=TransportFailureHandling.RAISE,
             response_code_key="error_code",
             dry_run=self.dry_run,
             quota=quota,
@@ -233,7 +239,10 @@ class Producer:
             )
         finally:
             self.delivery.clock = old_clock
-        if isinstance(outcome, TransportFailed):
+        if (
+            isinstance(outcome, TransportFailed)
+            and outcome.handling is TransportFailureHandling.RAISE
+        ):
             if outcome.exception is not None:
                 raise outcome.exception
             raise RuntimeError(outcome.error)
