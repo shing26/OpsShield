@@ -1,10 +1,10 @@
 package com.opspilot.auth;
 
 import java.time.Duration;
-import org.redisson.api.RedissonClient;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import com.opspilot.config.OpsPilotProperties;
+import com.opspilot.store.KvStore;
 
 /**
  * 登录与凭证签发（P2）：凭据校验走 H2 主库（UserStore），暴力防护走 Redis
@@ -26,24 +26,24 @@ public class AuthService {
 
     private final UserStore users;
     private final JwtService jwt;
-    private final RedissonClient redisson;
+    private final KvStore store;
     private final OpsPilotProperties props;
     private final com.opspilot.metrics.AuditService audit;
     private final BCryptPasswordEncoder bcrypt = new BCryptPasswordEncoder(10);
 
-    public AuthService(UserStore users, JwtService jwt, RedissonClient redisson, OpsPilotProperties props,
+    public AuthService(UserStore users, JwtService jwt, KvStore store, OpsPilotProperties props,
                        com.opspilot.metrics.AuditService audit) {
         this.users = users;
         this.jwt = jwt;
-        this.redisson = redisson;
+        this.store = store;
         this.props = props;
         this.audit = audit;
     }
 
     /** 校验通过返回 24h JWT（携带签发时刻的 tver）；失败抛 Bad/Locked。失败必留痕（QA P1-2）。 */
     public String login(String sub, String password) {
-        var fails = redisson.getAtomicLong("auth:fail:" + sub);
-        if (fails.get() >= MAX_FAILURES) {
+        String failKey = "auth:fail:" + sub;
+        if (store.readLong(failKey) >= MAX_FAILURES) {
             audit.logAuthDenied(sub, "/api/v1/auth/login", "login_failed", "locked");
             throw new LoginLockedException();
         }
@@ -51,8 +51,8 @@ public class AuthService {
         UserStore.Credential c = users.credential(sub);
         if (c == null || c.disabled() || password == null
                 || !bcrypt.matches(password, c.passBcrypt())) {
-            long n = fails.incrementAndGet();
-            if (n == 1) fails.expire(WINDOW);
+            // TTL 只在首次失败时设（KvStore.increment 的 ttlOnCreate），窗口不会因持续失败被续期
+            long n = store.increment(failKey, WINDOW);
             if (n >= MAX_FAILURES) {
                 audit.logAuthDenied(sub, "/api/v1/auth/login", "login_failed", "locked");
                 throw new LoginLockedException();
@@ -60,7 +60,7 @@ public class AuthService {
             audit.logAuthDenied(sub, "/api/v1/auth/login", "login_failed", "bad_credentials");
             throw new BadCredentialsException(); // 不区分"无此人/错密码/已禁用"，防枚举（对外话术统一，审计内部可辨）
         }
-        fails.delete();
+        store.delete(failKey);
         return jwt.issue(c.sub(), c.role(), c.tenant(), c.authLevel(), c.tokenVer(),
                 props.jwt().ttlSeconds());
     }

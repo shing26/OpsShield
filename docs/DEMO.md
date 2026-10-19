@@ -48,8 +48,11 @@ curl -s -X POST http://localhost:8081/api/v1/admin/cache/flush \
   -H "Authorization: Bearer $L3" -H "Content-Type: application/json" -d '{}'
 ```
 
-**底幕：Ops Console 面板**——浏览器开 `http://localhost:8081/`，粘贴 $L3 的 JWT 接入（只读可观测面，ADR-0009）。
-顶栏 live/mock 徽标与三依赖灯常亮做背景；幕④⑥的关键数字（在途组计数/熔断倒计时/收敛墙）从这里指给观众看，比终端滚日志抓眼。取 token 命令见 OPS.md §9。
+**底幕：统一工作台**——浏览器开 `http://localhost:8081/`，右上角**账号胶囊**填 `sre-full` + 口令（`.env` 的 `DEMO_PASSWORD`）接入。默认落在**排障台视图**（ADR-0020/ADR-0021）；点顶栏「运行面板」切到只读可观测面（ADR-0009）。
+顶栏 live/mock 徽标与三依赖灯常亮做背景；幕④⑥的关键数字（在途组计数/熔断倒计时/收敛墙）从这里指给观众看，比终端滚日志抓眼。
+（`bash scripts/console_token.sh` 那条取 token 路径现在服务 curl / 探针 / 自动化，页面侧不再粘贴 token——见 OPS.md §9。）
+
+> **零依赖底幕（可选，电脑上什么都没装时）**：`STORAGE_MODE=memory DASHSCOPE_MODE=live bash scripts/start_gateway.sh`——ES/Qdrant/Redis 三者全换内存实现，界面与协议一字未动，但**不承诺任何检索质量数字**（向量是词法哈希）。想完全离线把 `DASHSCOPE_MODE` 换成 `mock`，代价是域外提问不再被拒答。取舍与三个实测坑见 [OPS.md §14](../OPS.md)、[ADR-0022](adr/0022-standalone-storage-mode.md)。注意 `demo.sh` 第 1 检要求三个中间件容器在跑，是 **live 形态预检**——memory 模式跑它会红，属预期。
 
 ## 1. 六幕脚本
 

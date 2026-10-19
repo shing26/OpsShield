@@ -93,6 +93,6 @@ else
 fi
 
 echo "---"
-[ "$fails" = "0" ] && echo "READY：按 docs/DEMO.md 开演（底幕=Ops Console 面板 http://localhost:8081/）" \
+[ "$fails" = "0" ] && echo "READY：按 docs/DEMO.md 开演（底幕=统一工作台 http://localhost:8081/，默认视图=排障台）" \
   || echo "预检 $fails 项失败，先修复"
 exit "$fails"
