@@ -56,3 +56,6 @@ _archive/
 # 脚本与讲解稿入库（DEMO.md §5「3 分钟一镜到底录屏讲解稿」），录/拍出来的东西不入库。
 docs/demo/*.webm
 docs/demo/*.png
+
+# 编辑器本地忽略文件（ZCode）：与 .gitignore 同族的本机工具配置，不入库
+.zcodeignore
