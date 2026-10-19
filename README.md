@@ -307,7 +307,7 @@ $PY load/l1_latency.py       # L1 回放延迟（热点命中口径）→ load/r
 
 ## 📐 架构决策记录
 
-系统的演进过程严格遵从 ADR 机制，每篇含否决项与后果。关键决策索引如下（完整 **23 篇**见 [docs/adr/](docs/adr/)）：
+系统的演进过程严格遵从 ADR 机制，每篇含否决项与后果。关键决策索引如下（完整 **24 篇**见 [docs/adr/](docs/adr/)）：
 
 | # | 决策 | 一句话理由 |
 | --- | --- | --- |
@@ -325,6 +325,7 @@ $PY load/l1_latency.py       # L1 回放延迟（热点命中口径）→ load/r
 | [0021](docs/adr/0021-unified-workbench-single-shell.md) | 统一工作台：一个壳、两个面，抽屉按身份分级 | 排障时同屏看见运行态；不新开非 admin 状态端点 |
 | [0022](docs/adr/0022-standalone-storage-mode.md) | 零依赖试跑：显式开关，不自动回退 | 中间件可达性会抖，自动回退会产出"假绿"实例 |
 | [0023](docs/adr/0023-public-surface-terminology.md) | 对外面：术语双轨、双向门闩、覆盖范围声明 | 内部精确术语不外泄；覆盖边界按身份过滤、现算 |
+| [0024](docs/adr/0024-alert-delivery-seam.md) | Bridge 与 Producer 共用告警投递入口，来源策略不归一 | 统一认证、闸门、投影与台账机制，同时保持行为不变 |
 
 ---
 
@@ -338,7 +339,7 @@ $PY load/l1_latency.py       # L1 回放延迟（热点命中口径）→ load/r
 | 日常运维、脚本索引、**债务触发线** | [OPS.md](OPS.md)（脚本按"服务生命周期 / 门禁检查 / 故障注入与演示"分组索引） |
 | 领域词汇 | [docs/CONTEXT.md](docs/CONTEXT.md) |
 | 目录地图 / 逐包职责 / 维护者向内容 | [docs/repo-map.md](docs/repo-map.md) |
-| 架构决策与否决理由 | [docs/adr/](docs/adr/)（17 篇，每篇含否决项与后果） |
+| 架构决策与否决理由 | [docs/adr/](docs/adr/)（24 篇，每篇含否决项与后果） |
 
 ---
 

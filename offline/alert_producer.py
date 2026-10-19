@@ -24,16 +24,26 @@ unreachable——"进程内自证自己已死"不可能，这是自举路径的�
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import re
 import sys
 import time
-import urllib.error
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import localapi  # noqa: E402  （单一事实源：登录/取数/SSRF 白名单/SSE 原语）
+from alert_delivery import (  # noqa: E402
+    AlertDelivery,
+    AlertSession,
+    DeliveryAttempt,
+    DeliveryPolicy,
+    Gate,
+    HourAccounting,
+    LoginFailed,
+    PRODUCER_GATES,
+    QuotaSnapshot,
+    TransportFailed,
+)
 
 REPO = Path(__file__).resolve().parent.parent
 LEDGER = REPO / "logs" / "alert-producer.jsonl"
@@ -51,13 +61,6 @@ MAX_LOGIN_FAILURES = 3
 # 刻意不含 < > ` $ 与引号：错误文本不需要它们，而它们正是拼接/注入类写法的原料。
 DETAIL_SAFE = re.compile(r"[^\w\s:.,;/()\[\]=@+\-]")
 DETAIL_MAX = 120
-
-
-class LoginFailed(RuntimeError):
-    """登录面失败（凭据错 / 主体被锁 / 登录端点异常）。
-
-    与"网关不可达"必须分开：前者重试有害（加深锁定）且需人介入，后者是瞬时可自愈。
-    """
 
 # 规则 → 告警文案。文案刻意带错误码：真实告警本就携带错误码，且精确符号走快路径
 # （跳过 rerank 压 TTFT）；两条复用既有语料（51001/51005），两条指向 2xx 自举语料，
@@ -162,33 +165,30 @@ class Producer:
         # 否则保留线总是先一步挡住，429 分支永远测不到。
         self.quota_reserve = getattr(args, "quota_reserve", QUOTA_RESERVE)
         self.collect_deltas = getattr(args, "collect_deltas", False)
-        self.token = ""
         self.login_failures = 0
         self.prev: dict | None = None
-        self.last_emit: dict[str, float] = {}   # "规则:组件" → 上次**真的发出去**的时刻（冷却只约束发送）
-        self.emits: list[float] = []
         self.stats = {"cycles": 0, "candidates": 0, "emitted": 0, "skipped": 0, "errors": 0}
+        self.delivery = AlertDelivery(
+            AlertSession(self.user, api=localapi),
+            ledger_path=LEDGER,
+        )
 
     # ---- 与网关交互 -------------------------------------------------------
+    @property
+    def token(self) -> str:
+        return self.delivery.session.token
+
+    @token.setter
+    def token(self, value: str) -> None:
+        self.delivery.session.token = value
+
     def login(self) -> None:
         """登录失败归类为 LoginFailed（凭据/锁定，需人介入），其余异常才是瞬时不可达。"""
-        try:
-            self.token = localapi.login(self.user)
-        except urllib.error.HTTPError as e:
-            raise LoginFailed(f"HTTP {e.code}") from e
+        self.delivery.session.login()
 
     def fetch_state(self) -> dict:
         """读管理面；401 重登一次（24h token 过期是常态），403 直接判主体配置错误。"""
-        try:
-            return localapi.get_json("/api/v1/admin/state", self.token)
-        except urllib.error.HTTPError as e:
-            if e.code == 401:
-                self.login()
-                return localapi.get_json("/api/v1/admin/state", self.token)
-            if e.code == 403:
-                raise PermissionError(
-                    f"主体 {self.user} 无权读 /admin/state（需 role=platform 且 auth_level>=3）") from e
-            raise
+        return self.delivery.observe_state()
 
     @staticmethod
     def _key(alert: dict) -> str:
@@ -200,67 +200,56 @@ class Producer:
         """
         return f"{alert.get('rule')}:{alert.get('service', '')}"
 
-    def emit(self, alert: dict) -> dict:
-        """发一条告警；台账记录里带上服务端权威事实（fingerprint/cache_hit/refs）。
+    def _deliver(self, alert: dict, state: dict | None, *, gates=PRODUCER_GATES,
+                 now: float | None = None) -> dict:
+        q = ((state or {}).get("runtime") or {}).get("quota") or {}
+        quota = QuotaSnapshot(limit=_num(q.get("limit")), used=_num(q.get("used")))
+        policy = DeliveryPolicy(
+            gates=gates,
+            max_per_hour=self.max_per_hour,
+            quota_reserve=self.quota_reserve,
+            hour_accounting=HourAccounting.RESPONSE,
+            login_before_send=False,
+            ledger_transport_failure=False,
+            response_code_key="error_code",
+            dry_run=self.dry_run,
+            quota=quota,
+            cooldown_key=self._key(alert),
+            cooldown_seconds=self.cooldown,
+        )
+        old_clock = self.delivery.clock
+        if now is not None:
+            self.delivery.clock = lambda: now
+        try:
+            outcome = self.delivery.deliver(
+                DeliveryAttempt(
+                    body={"query": alert["query"], "source": "alert",
+                          "service": alert["service"], "env": ENV},
+                    ledger={"rule": alert["rule"], "service": alert["service"],
+                            "query": alert["query"]},
+                    collect_deltas=self.collect_deltas,
+                ),
+                policy,
+            )
+        finally:
+            self.delivery.clock = old_clock
+        if isinstance(outcome, TransportFailed):
+            if outcome.exception is not None:
+                raise outcome.exception
+            raise RuntimeError(outcome.error)
+        return outcome.record
 
-        非 2xx 仍记 `emit=true`（请求确实发出去了、配额确实扣了）但带 `sent_ok=false`：
-        冷却与小时预算照常生效——这是刻意的保守取舍，409/429/5xx 时"立刻重发"比"少发一条"更危险。
-        401 额外清空 token，让下一轮走重登路径（自愈），不必等到下个 fetch_state。
-        """
-        body = {"query": alert["query"], "source": "alert", "service": alert["service"], "env": ENV}
-        if self.dry_run:
-            return {"rule": alert["rule"], "service": alert["service"], "emit": False,
-                    "skip": "dry_run", "query": alert["query"]}
-        r = localapi.stream_chat(body, self.token, collect_deltas=self.collect_deltas)
-        meta, done = r.get("meta") or {}, r.get("done") or {}
-        if r["status"] == 401:
-            self.token = ""                      # 凭证失效：下一轮重登（自愈路径）
-        # refs 帧字段是 chunkId（AnswerPayload.Ref 的 Jackson 默认命名，非 chunk_id）；
-        # chunk_id 形如 "<doc_id>::<breadcrumb>"，doc_id 侧由此派生——台账同时留原始与派生，
-        # 便于读者拿原始帧对账而不必信派生结果。
-        refs = [x.get("chunkId") or "" for x in (done.get("refs") or [])]
-        return {"rule": alert["rule"], "service": alert["service"], "emit": True,
-                "http": r["status"], "sent_ok": 200 <= r["status"] < 300,
-                "error_code": r.get("code"),
-                "fp": meta.get("fingerprint"), "cache_hit": meta.get("cache_hit"),
-                "deduplicated": meta.get("deduplicated"),
-                "degradation_level": meta.get("degradation_level"),
-                "refs": refs, "ref_docs": sorted({c.split("::")[0] for c in refs if c}),
-                "ttft_s": r.get("ttft_s"), "total_s": r.get("total_s"),
-                "server_error": r.get("error"), "query": alert["query"]}
+    def emit(self, alert: dict) -> dict:
+        """Send one candidate without the Producer gate plan (test/internal primitive)."""
+        return self._deliver(alert, None, gates=(Gate.DRY_RUN,))
 
     def ledger(self, rec: dict) -> None:
-        rec = {"ts": int(time.time() * 1000), "user": self.user, **rec}
-        try:
-            LEDGER.parent.mkdir(parents=True, exist_ok=True)
-            with open(LEDGER, "a", encoding="utf-8") as fh:
-                fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
-        except OSError as e:
-            print(f"[warn] 台账写入失败（不阻断告警）: {e}", file=sys.stderr)
+        self.delivery.ledger.append(rec)
 
     # ---- 发送闸门 ---------------------------------------------------------
-    def budget_exhausted(self) -> bool:
-        now = time.time()
-        self.emits = [t for t in self.emits if now - t < 3600]
-        return len(self.emits) >= self.max_per_hour
-
-    def quota_low(self, state: dict) -> bool:
-        q = (state.get("runtime") or {}).get("quota") or {}
-        limit, used = _num(q.get("limit")), _num(q.get("used"))
-        return limit > 0 and (limit - used) < self.quota_reserve
-
     def gate(self, alert: dict, state: dict, now: float) -> dict:
         """闸门顺序即优先级：预算 > 配额 > 冷却。每个 skip 都留痕，便于事后问"为什么没发"。"""
-        if self.budget_exhausted():
-            return {"rule": alert["rule"], "service": alert["service"], "emit": False,
-                    "skip": "hour_budget", "query": alert["query"]}
-        if self.quota_low(state):
-            return {"rule": alert["rule"], "service": alert["service"], "emit": False,
-                    "skip": "quota_reserve", "query": alert["query"]}
-        if now - self.last_emit.get(self._key(alert), 0.0) < self.cooldown:
-            return {"rule": alert["rule"], "service": alert["service"], "emit": False,
-                    "skip": "cooldown", "query": alert["query"]}
-        return self.emit(alert)
+        return self._deliver(alert, state, now=now)
 
     # ---- 主循环 -----------------------------------------------------------
     def cycle(self) -> list[dict]:
@@ -279,14 +268,11 @@ class Producer:
             self.stats["candidates"] += 1
             rec = self.gate(alert, state, now)
             if rec.get("emit"):
-                self.last_emit[self._key(alert)] = now
-                self.emits.append(now)
                 self.stats["emitted"] += 1
                 print(f"[alert] {alert['rule']} service={alert['service']} http={rec.get('http')} "
                       f"fp={(rec.get('fp') or '')[:12]} cache={rec.get('cache_hit')} refs={rec.get('refs')}")
             else:
                 self.stats["skipped"] += 1
-            self.ledger(rec)
             written.append(rec)
         return written
 
