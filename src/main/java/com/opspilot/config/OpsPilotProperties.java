@@ -33,6 +33,7 @@ import org.springframework.validation.annotation.Validated;
 @ConfigurationProperties(prefix = "opspilot")
 public record OpsPilotProperties(
         @Valid DashScope dashscope,
+        @Valid Storage storage,
         @Valid Es es,
         @Valid Qdrant qdrant,
         @Valid Jwt jwt,
@@ -41,6 +42,73 @@ public record OpsPilotProperties(
         @Valid Retrieval retrieval,
         @Valid Degrade degrade
 ) {
+
+    /**
+     * 规范构造（九参，含 {@code storage}）上显式标注 {@code @ConstructorBinding}。
+     *
+     * <p>为什么必须显式：本 record 另有一个八参便捷构造（见下），于是 Spring 无法自行判定
+     * 该用哪个——实测表现为启动期 {@code No default constructor found}，
+     * 连带 {@code OpsPilotPropertiesValidationTest} 全红。标注之后绑定面是确定的：
+     * 配置绑定只走九参规范构造，八参那个纯给单测用。
+     */
+    @org.springframework.boot.context.properties.bind.ConstructorBinding
+    public OpsPilotProperties {
+    }
+
+    /**
+     * 八参便捷构造：**存储模式缺省为 live**。
+     *
+     * <p>为什么留这个口：本 record 被大量单测按位置构造，而"这次跑的是哪个存储后端"在那些用例里
+     * 从不关心（它们只验领域逻辑）。让它们全部补一个 {@code new Storage("live")} 参数，
+     * 只会把一次装配变更摊成几十处与断言无关的噪音。缺省值与 {@code application.yml} 的
+     * {@code ${STORAGE_MODE:live}} 和装配侧 {@code matchIfMissing=true} 三处一致——
+     * 这三个"默认 live"必须同口径，否则"没配就是 live"会在不同路径上给出不同答案。
+     */
+    public OpsPilotProperties(DashScope dashscope, Es es, Qdrant qdrant, Jwt jwt, Cache cache,
+                              Storm storm, Retrieval retrieval, Degrade degrade) {
+        this(dashscope, new Storage("live"), es, qdrant, jwt, cache, storm, retrieval, degrade);
+    }
+
+    /**
+     * 存储后端开关（ADR-0022）：{@code live}=真中间件（ES/Qdrant/Redis，缺则启动失败），
+     * {@code memory}=内存实现，零外部依赖。
+     *
+     * <p><b>为什么不是 {@code auto}</b>：key 的有无是**配置期事实**（一次定死），中间件可达性是
+     * **运行期事实**（会抖）。把 auto 套到会抖的信号上，会出现"同一台机器、同一份代码、两次启动
+     * 跑在不同后端"，而页面与审计里的数字长得一模一样——这正是本仓库反复在防的那类假绿。
+     *
+     * <p>写错值在**启动期**拒绝（与 {@code dashscope.mode} 同范式）：静默按 live 处理会让
+     * "我以为跑的是内存模式"变成一条查不出来的错觉。
+     */
+    public record Storage(
+            @Pattern(regexp = "live|memory", flags = Pattern.Flag.CASE_INSENSITIVE,
+                    message = "storage.mode 只接受 live|memory（不区分大小写）")
+            String mode) {
+        /** 空值归一到 live：让 {@code new Storage(null)} 与"没配"表现一致。 */
+        public Storage {
+            if (mode == null || mode.isBlank()) mode = "live";
+        }
+
+        public boolean inMemory() {
+            return "memory".equalsIgnoreCase(mode);
+        }
+    }
+
+    /**
+     * {@code storage} 的**空值兜底**：整个 {@code opspilot.storage.*} 缺失时，Spring 会把嵌套
+     * record 绑成 {@code null}（不是绑成"字段全空"的实例），于是任何 {@code props.storage().inMemory()}
+     * 都会 NPE。
+     *
+     * <p>这不是理论风险——2026-10-19 落地时被 {@code storageDefaultsToLiveWhenUnset} 当场抓到。
+     * 修法选在访问器而不是每个调用点：默认值只该有一处，否则"没配就是 live"这件事会随着调用点
+     * 增加而漏掉。与 {@code application.yml} 的 {@code ${STORAGE_MODE:live}}、装配侧
+     * {@code matchIfMissing=true} 三处同口径。
+     */
+    @Override
+    public Storage storage() {
+        return storage == null ? new Storage("live") : storage;
+    }
+
     public record DashScope(String baseUrl, String apiKey, String embeddingModel,
                             @Min(1) int embeddingDim, String rerankModel, String llmModel,
                             @Min(1) int llmTimeoutSeconds,

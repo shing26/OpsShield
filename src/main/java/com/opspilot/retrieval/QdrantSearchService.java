@@ -6,15 +6,14 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
-import org.springframework.stereotype.Component;
 import com.opspilot.config.OpsPilotProperties;
 import com.opspilot.llm.EmbeddingClient;
 
 /**
  * Qdrant 向量检索：Query 实时向量化 + auth_level Payload 硬过滤（权限隔离第二道闸）。
+ * 装配方式见 {@link EsSearchService} 的类注释（ADR-0022：由 {@code RetrievalWiring} 显式装配）。
  */
-@Component
-public class QdrantSearchService {
+public class QdrantSearchService implements RetrievalLeg {
 
     private final QdrantClient qdrant;
     private final EmbeddingClient embedding;
@@ -26,6 +25,7 @@ public class QdrantSearchService {
         this.props = props;
     }
 
+    @Override
     public List<ScoredChunk> search(String query, String tenant, int authLevel, int topK) throws Exception {
         float[] vector = embedding.embedOne(query);
         Points.SearchPoints.Builder req = Points.SearchPoints.newBuilder()
@@ -54,14 +54,14 @@ public class QdrantSearchService {
         return Points.Filter.newBuilder()
                 .addMust(Points.Condition.newBuilder()
                         .setField(Points.FieldCondition.newBuilder()
-                                .setKey("metadata.tenant")
+                                .setKey(IdentityFilter.TENANT_FIELD)
                                 .setMatch(Points.Match.newBuilder()
                                         .setKeyword(tenant == null ? "" : tenant).build())
                                 .build())
                         .build())
                 .addMust(Points.Condition.newBuilder()
                         .setField(Points.FieldCondition.newBuilder()
-                                .setKey("metadata.auth_level")
+                                .setKey(IdentityFilter.AUTH_LEVEL_FIELD)
                                 .setRange(Points.Range.newBuilder().setLte(Math.max(authLevel, 0)).build())
                                 .build())
                         .build())

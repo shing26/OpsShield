@@ -40,6 +40,7 @@ class OpsPilotPropertiesValidationTest {
 
     /** 与 application.yml 数值面一致的完整合法基线（改 yml 默认值时同步这里）。 */
     private static final String[] LEGAL_BASELINE = {
+            "opspilot.storage.mode=live",
             "opspilot.dashscope.embedding-dim=1024",
             "opspilot.dashscope.llm-timeout-seconds=60",
             "opspilot.dashscope.connect-timeout-ms=3000",
@@ -114,6 +115,42 @@ class OpsPilotPropertiesValidationTest {
             // 基线未给 api-key → auto 语义回落 mock（双模判定的既有行为，勿被校验破坏）
             assertThat(ctx.getBean(OpsPilotProperties.class).dashscope().live()).isFalse();
         });
+    }
+
+    /**
+     * ADR-0022：{@code storage.mode} 与 {@code dashscope.mode} 同一范式——大小写不敏感、
+     * 非法值启动期点名拒绝。写错的代价不是"报错"而是**静默按 live 处理**：
+     * 于是"我以为跑的是内存模式"变成一条查不出来的错觉，最后卡在 Redis 上。
+     */
+    @Test
+    void storageModeIsCaseInsensitive() {
+        runnerWith("opspilot.storage.mode=MEMORY").run(ctx -> {
+            assertThat(ctx).hasNotFailed();
+            assertThat(ctx.getBean(OpsPilotProperties.class).storage().inMemory()).isTrue();
+        });
+    }
+
+    @Test
+    void invalidStorageModeIsRejectedAtStartup() {
+        runnerWith("opspilot.storage.mode=auto").run(ctx -> {
+            assertThat(ctx).hasFailed();
+            assertThat(ctx.getStartupFailure()).hasStackTraceContaining("storage.mode");
+        });
+    }
+
+    @Test
+    void storageDefaultsToLiveWhenUnset() {
+        // 缺配置项 ⇒ live：与 application.yml 的 ${STORAGE_MODE:live}、装配侧 matchIfMissing
+        // 三处同口径。默认值若漂了，历史行为会静默变成"缺中间件也能起"。
+        new ApplicationContextRunner()
+                .withUserConfiguration(BindCfg.class)
+                .withPropertyValues(java.util.Arrays.stream(LEGAL_BASELINE)
+                        .filter(p -> !p.startsWith("opspilot.storage."))
+                        .toArray(String[]::new))
+                .run(ctx -> {
+                    assertThat(ctx).hasNotFailed();
+                    assertThat(ctx.getBean(OpsPilotProperties.class).storage().inMemory()).isFalse();
+                });
     }
 
     @Test

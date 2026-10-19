@@ -44,6 +44,13 @@ public class StartupConfigSummary implements ApplicationRunner {
 
         log.info(String.join("\n",
                 "=== 生效配置摘要（凭据脱敏，H1 持久化至 logs/app.log） ===",
+                // storage 与 dashscope.mode 并列打印：两者共同决定"这次跑的是哪条链路"。
+                // memory 模式额外点明"不承诺检索质量"——否则同一句 mode=mock 会让人以为
+                // 后端与 live 只差一个 API key（ADR-0022 决策 5）。
+                "storage=" + props.storage().mode()
+                        + (props.storage().inMemory()
+                                ? " backend=in-memory（ES/Qdrant/Redis 全部由内存实现承接，不承诺检索质量）"
+                                : " backend=redis+es+qdrant"),
                 "mode=" + (live ? "live" : "mock") + " backend=" + backendOf(live, ds),
                 "dashscope.apiKey=" + apiKeyState + " jwt.secret=" + jwtSecretState,
                 "h2.db=" + env.getProperty("spring.datasource.url", "?") + " h2.password=" + h2State,

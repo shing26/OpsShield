@@ -9,8 +9,9 @@ import io.qdrant.client.grpc.Collections;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.redisson.api.RedissonClient;
+import org.springframework.beans.factory.ObjectProvider;
 import com.opspilot.config.OpsPilotProperties;
+import com.opspilot.store.KvStore;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -21,23 +22,31 @@ class HealthProbeTest {
 
     private ElasticsearchClient es;
     private QdrantClient qdrant;
-    private RedissonClient redisson;
+    private KvStore kv;
     private HealthProbe probe;
 
     @BeforeEach
     void setUp() {
         es = mock(ElasticsearchClient.class);
         qdrant = mock(QdrantClient.class);
-        redisson = mock(RedissonClient.class);
-        var bucket = mock(org.redisson.api.RBucket.class);
-        when(redisson.<String>getBucket(anyString())).thenReturn(bucket);
-        when(bucket.isExists()).thenReturn(false); // 键不存在没关系——没抛异常=连通
+        kv = mock(KvStore.class);
+        // 键不存在没关系——没抛异常=连通；这里 stub 的正是"单键 GET 不 SCAN"那条路径
+        when(kv.exists(anyString())).thenReturn(false);
         OpsPilotProperties props = new OpsPilotProperties(
                 new OpsPilotProperties.DashScope("http://mock", "", "m", 1024, "m", "m", 30, 3000, 15000, "mock"),
                 new OpsPilotProperties.Es("http://localhost:9200", "opspilot-chunks-read", "elastic", "", 3000, 10000),
                 new OpsPilotProperties.Qdrant("localhost", 6334, "opspilot-vectors-live", "semantic-cache", ""),
                 new OpsPilotProperties.Jwt("secret", 3600), null, null, null, null);
-        probe = new HealthProbe(es, qdrant, redisson, props);
+        // live 用例：两个客户端 bean 在场（provider 给真 mock），内存索引缺席
+        probe = new HealthProbe(provider(es), provider(qdrant), kv, provider(null), props);
+    }
+
+    /** 造一个"按需给出该 bean"的 provider；给 null 就是"这个 bean 不存在"。 */
+    @SuppressWarnings("unchecked")
+    private static <T> ObjectProvider<T> provider(T bean) {
+        ObjectProvider<T> p = mock(ObjectProvider.class);
+        when(p.getIfAvailable()).thenReturn(bean);
+        return p;
     }
 
     private void stubHealthy() throws Exception {

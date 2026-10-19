@@ -95,7 +95,8 @@ for i in $(seq 1 60); do
     grep "Started OpsPilotApplication" "$LOG" | tail -1 | sed 's/^.*: //'
     echo "面板   http://localhost:${PORT}/"
     echo "健康   http://localhost:${PORT}/actuator/health"
-    echo "凭证   bash scripts/console_token.sh   # 取 role=platform 的 JWT，面板要用"
+    echo "工作台 http://localhost:${PORT}/  # 右上角账号胶囊填用户名+口令；默认视图=排障台"
+    echo "凭证   bash scripts/console_token.sh   # role=platform 的 JWT，给 curl/探针/自动化用"
     exit 0
   fi
   if grep -q "APPLICATION FAILED TO START" "$LOG" 2>/dev/null; then

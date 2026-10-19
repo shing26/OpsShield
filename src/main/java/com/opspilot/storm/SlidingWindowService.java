@@ -1,10 +1,9 @@
 package com.opspilot.storm;
 
 import java.time.Duration;
-import org.redisson.api.RScoredSortedSet;
-import org.redisson.api.RedissonClient;
 import org.springframework.stereotype.Service;
 import com.opspilot.config.OpsPilotProperties;
+import com.opspilot.store.KvStore;
 
 /**
  * Redisson 聚合计数窗口（{@link SlidingWindow} 默认实现，生成质量包 Q4 语义矫正）：
@@ -19,11 +18,11 @@ import com.opspilot.config.OpsPilotProperties;
 @Service
 public class SlidingWindowService implements SlidingWindow {
 
-    private final RedissonClient redisson;
+    private final KvStore store;
     private final OpsPilotProperties props;
 
-    public SlidingWindowService(RedissonClient redisson, OpsPilotProperties props) {
-        this.redisson = redisson;
+    public SlidingWindowService(KvStore store, OpsPilotProperties props) {
+        this.store = store;
         this.props = props;
     }
 
@@ -37,13 +36,11 @@ public class SlidingWindowService implements SlidingWindow {
         int windowSec = "alert".equals(source)
                 ? props.storm().alertWindowSeconds() : props.storm().windowSeconds();
         long now = System.currentTimeMillis();
-        RScoredSortedSet<String> zset =
-                redisson.getScoredSortedSet("storm:win:" + source + ":" + fingerprint);
-        // 清理窗口外成员（本源窗口，不再误删别源成员）
-        zset.removeRangeByScore(0, true, now - windowSec * 1000L, true);
-        long size = zset.size();
-        zset.add(now, now + "-" + Thread.currentThread().threadId());
-        zset.expire(Duration.ofSeconds(windowSec + 10L));
+        // 修剪/计数/登记三步收在 KvStore.windowRegister 里：两个后端各自实现同一顺序，
+        // 上层拿到的仍是"此前几条"这一个语义（ADR-0022 决策 4）。
+        long size = store.windowRegister("storm:win:" + source + ":" + fingerprint, now,
+                windowSec * 1000L, now + "-" + Thread.currentThread().threadId(),
+                Duration.ofSeconds(windowSec + 10L));
         return new WindowResult(size == 0, size);
     }
 }

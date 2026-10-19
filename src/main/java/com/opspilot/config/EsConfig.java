@@ -7,6 +7,7 @@ import co.elastic.clients.transport.rest_client.RestClientTransport;
 import org.apache.http.HttpHost;
 import org.apache.http.client.config.RequestConfig;
 import org.elasticsearch.client.RestClient;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -36,7 +37,16 @@ public class EsConfig {
         return applyTimeouts(RequestConfig.custom(), es).build();
     }
 
+    /**
+     * memory 模式下**不建**（ADR-0022）。两个理由，第二个才是关键：
+     * ① 零依赖模式不该存在一条连不上的客户端，那只会给人"它可能被用到"的错觉；
+     * ② Boot 会按 {@code RestClient} bean 自动注册 {@code ElasticsearchRestClientHealthIndicator}，
+     *    它**无条件 ping ES**——于是内存模式下 `/actuator/health` 恒为 DOWN。
+     *    实测咬到：memory 模式启动成功、功能正常，健康面却报 DOWN，而 demo.sh / liveness.py /
+     *    compose healthcheck 都以这个端点当存活判据 ⇒ 整条零依赖路径被判"没起来"。
+     */
     @Bean
+    @ConditionalOnProperty(name = "opspilot.storage.mode", havingValue = "live", matchIfMissing = true)
     public RestClient esRestClient(OpsPilotProperties props) {
         HttpHost host = HttpHost.create(props.es().uri());
         org.elasticsearch.client.RestClientBuilder builder = RestClient.builder(host)
@@ -55,6 +65,7 @@ public class EsConfig {
     }
 
     @Bean
+    @ConditionalOnProperty(name = "opspilot.storage.mode", havingValue = "live", matchIfMissing = true)
     public ElasticsearchClient elasticsearchClient(RestClient restClient) {
         ElasticsearchTransport transport = new RestClientTransport(restClient, new JacksonJsonpMapper());
         return new ElasticsearchClient(transport);

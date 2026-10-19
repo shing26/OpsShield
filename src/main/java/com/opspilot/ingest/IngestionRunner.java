@@ -19,9 +19,10 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-import org.redisson.api.RedissonClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.InitializingBean;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
@@ -29,6 +30,8 @@ import org.springframework.stereotype.Component;
 import com.opspilot.chunk.Chunk;
 import com.opspilot.config.OpsPilotProperties;
 import com.opspilot.llm.EmbeddingClient;
+import com.opspilot.retrieval.InMemoryIndex;
+import com.opspilot.store.KvStore;
 import static io.qdrant.client.PointIdFactory.id;
 import static io.qdrant.client.ValueFactory.value;
 import static io.qdrant.client.VectorsFactory.vectors;
@@ -42,14 +45,24 @@ import static io.qdrant.client.VectorsFactory.vectors;
  * 任何验收不通过都保留旧别名指向，失败只影响 staging。
  */
 @Component
-public class IngestionRunner implements ApplicationRunner {
+public class IngestionRunner implements ApplicationRunner, InitializingBean {
 
     private static final Logger log = LoggerFactory.getLogger(IngestionRunner.class);
     private static final DateTimeFormatter TS = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
 
-    private final ElasticsearchClient es;
-    private final QdrantClient qdrant;
-    private final RedissonClient redisson;
+    /*
+     * live 路径的两个客户端在 run() 里一次性解析并存入字段。**非 final 是刻意的**：
+     * memory 模式下这两个 bean 根本不存在（EsConfig/QdrantConfig 按 storage.mode 装配），
+     * 而 live 路径的十几个调用点散在 8 个方法里——把它们全改成 `es().xxx()` 只会制造噪音，
+     * 换不来任何安全性：字段的生命周期与 bean 一致，且只在 live 分支被触碰。
+     * 解析失败（live 却没有 bean = 装配被改坏）在 run() 里当场抛，不留到第一次重灌才炸。
+     */
+    private ElasticsearchClient es;
+    private QdrantClient qdrant;
+    private final ObjectProvider<ElasticsearchClient> esProvider;
+    private final ObjectProvider<QdrantClient> qdrantProvider;
+    private final KvStore store;
+    private final ObjectProvider<InMemoryIndex> memoryIndex;
     private final EmbeddingClient embedding;
     private final OpsPilotProperties props;
     private final ObjectMapper mapper = new ObjectMapper()
@@ -58,12 +71,15 @@ public class IngestionRunner implements ApplicationRunner {
     private final AtomicBoolean busy = new AtomicBoolean(false);
     private final AtomicReference<String> lastResult = new AtomicReference<>("never");
 
-    public IngestionRunner(ElasticsearchClient es, QdrantClient qdrant, RedissonClient redisson,
+    public IngestionRunner(ObjectProvider<ElasticsearchClient> esProvider,
+                           ObjectProvider<QdrantClient> qdrantProvider, KvStore store,
+                           ObjectProvider<InMemoryIndex> memoryIndex,
                            EmbeddingClient embedding, OpsPilotProperties props,
                            @Value("${opspilot.chunks-path:offline/corpus/chunks.jsonl}") String chunksPath) {
-        this.es = es;
-        this.qdrant = qdrant;
-        this.redisson = redisson;
+        this.esProvider = esProvider;
+        this.qdrantProvider = qdrantProvider;
+        this.store = store;
+        this.memoryIndex = memoryIndex;
         this.embedding = embedding;
         this.props = props;
         this.chunksPath = chunksPath;
@@ -71,12 +87,43 @@ public class IngestionRunner implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) throws Exception {
+        // memory 模式的装载在 afterPropertiesSet 里就做完了（见那里的理由），这里不再重复
+        if (props.storage().inMemory()) return;
+        this.es = esProvider.getIfAvailable();
+        this.qdrant = qdrantProvider.getIfAvailable();
+        if (es == null || qdrant == null) {
+            throw new IllegalStateException(
+                    "storage.mode=live 但 ES/Qdrant 客户端未装配（装配被改坏？）");
+        }
         // flag 显式触发；或首启自愈（ES 读别名不存在=从未灌过）——容器化场景重启不再
         // 需要人工带 flag，也避免每次重启白烧一遍 embedding（live 下是真金白银）。
         if (args.containsOption("opspilot.ingest") || firstBootMissingAlias()) ingest("startup");
     }
 
+    /**
+     * memory 模式的装载时机（ADR-0022 落地实测）：必须在**端口对外之前**完成。
+     *
+     * <p>原先放在 {@code ApplicationRunner}（与 live 同一条路）时实测咬到：Spring 的启动顺序是
+     * "先起 Tomcat、再跑 ApplicationRunner"，于是内存索引装载期间（本机实测 20s+，因为
+     * {@code dashscope.mode=live} 时 embedding 要走网络）网关已经对外服务——那段时间里
+     * 检索恒空、排障台对任何问题都答"知识库无足够参考"。**它看起来像拒答，实际是没装完**，
+     * 而拒答恰恰是最贵的诚实性资产（ADR-0023 理由④），不能被这个竞态污染。
+     *
+     * <p>live 模式没有这个问题：语料在 ES/Qdrant 里，重启期间旧别名照常服务，装载发生在
+     * 首次灌库时才需要，且那时确实还没有可服务的语料（首启语义）。
+     *
+     * <p>代价如实登记：memory 模式启动耗时 = 装载耗时（零依赖演示约 1–3s；带真 key 走网络时
+     * 实测 20s+）。这是"启动慢"换"起来就能用"，比"起来了但答不了"正确。
+     */
+    @Override
+    public void afterPropertiesSet() throws Exception {
+        if (props.storage().inMemory()) ingest("startup-memory");
+    }
+
     private boolean firstBootMissingAlias() {
+        // memory 模式（ADR-0022）：内存索引每次启动都是空的，**必然要装**——否则
+        // "敲一行命令就能用"会退化成"敲一行命令 + 记得带 --opspilot.ingest=true"。
+        if (props.storage().inMemory()) return true;
         try {
             return !Boolean.TRUE.equals(es.indices().exists(e -> e.index(props.es().index())).value());
         } catch (Exception e) {
@@ -113,6 +160,12 @@ public class IngestionRunner implements ApplicationRunner {
         String qdrPhys = stripSuffix(qdrAlias) + "-" + ts;
 
         List<Chunk> chunks = readChunks();
+        // memory 模式（ADR-0022）走另一条装载路径，直接返回——staging/别名/计数验收那一套
+        // 是为"换语料时不许有空窗"建的，内存索引换的是引用，本来就没有空窗（见 ingestMemory）。
+        if (props.storage().inMemory()) {
+            ingestMemory(chunks, trigger, t0);
+            return;
+        }
         log.info("[{}] 读取 chunks.jsonl: {} 条, staging es={} qdrant={}", trigger, chunks.size(), esPhys, qdrPhys);
 
         createEsIndex(esPhys);
@@ -127,6 +180,29 @@ public class IngestionRunner implements ApplicationRunner {
         warmSop(chunks);
         lastResult.set("ok @ " + LocalDateTime.now() + " (trigger=" + trigger + ")");
         log.info("[{}] 入库完成: {} chunks, 别名已原子切换, 耗时 {}ms", trigger, chunks.size(),
+                System.currentTimeMillis() - t0);
+    }
+
+    /**
+     * memory 模式的装载（ADR-0022）：语料读进内存索引 + 预热 SOP，**没有** staging / 别名 /
+     * 计数验收。理由：那一整套解决的是"换一份语料时检索侧不许有空窗"，而内存索引的替换
+     * 是一次 volatile 引用写（{@code InMemoryIndex.load} 先建好整份新列表再一次性换上），
+     * 旧索引在新索引就绪前一直服务——原子性是这个数据结构自带的，照搬 staging 只会造出
+     * 一堆没有对应风险的机制。embedding 仍走同一个 {@link EmbeddingClient}（mock 模式下是
+     * 本地词法哈希，零出站），并保留 {@link EmbeddingSanity} 校验：维度错了必须在装载期响，
+     * 不能等到检索时给出"看起来正常但毫无意义"的排序。
+     */
+    private void ingestMemory(List<Chunk> chunks, String trigger, long t0) throws Exception {
+        InMemoryIndex idx = memoryIndex.getIfAvailable();
+        if (idx == null) {
+            throw new IllegalStateException("storage.mode=memory 但内存索引 bean 缺席（装配异常）");
+        }
+        List<float[]> vectors = embedding.embed(chunks.stream().map(Chunk::text).toList());
+        EmbeddingSanity.check(vectors, chunks.size(), props.dashscope().embeddingDim());
+        idx.load(chunks, vectors);
+        warmSop(chunks);
+        lastResult.set("ok @ " + LocalDateTime.now() + " (trigger=" + trigger + ", backend=memory)");
+        log.info("[{}] 内存索引装载完成: {} chunks, 耗时 {}ms", trigger, chunks.size(),
                 System.currentTimeMillis() - t0);
     }
 
@@ -219,6 +295,7 @@ public class IngestionRunner implements ApplicationRunner {
     private void dualWrite(List<Chunk> chunks, String esIndex, String qdrCollection) throws Exception {
         List<String> texts = chunks.stream().map(Chunk::text).toList();
         List<float[]> vectors = embedding.embed(texts);
+        EmbeddingSanity.check(vectors, chunks.size(), props.dashscope().embeddingDim());
 
         es.bulk(b -> {
             for (int i = 0; i < chunks.size(); i++) {
@@ -353,17 +430,17 @@ public class IngestionRunner implements ApplicationRunner {
         java.util.Set<String> tenants = chunks.stream()
                 .map(c -> c.metadata().tenant()).collect(java.util.stream.Collectors.toSet());
         for (String t : tenants) {
-            redisson.getKeys().getKeysStreamByPattern("sop:" + t + ":*").forEach(k -> redisson.getKeys().delete(k));
+            store.deleteByPrefix("sop:" + t + ":");
         }
         for (Chunk c : chunks) {
             if (c.breadcrumb() != null && c.breadcrumb().contains("止损操作")) {
                 String tenant = c.metadata().tenant();
-                var steps = redisson.getMap("sop:" + tenant + ":steps");
-                steps.put(c.docId(), c.text());
+                String stepsKey = "sop:" + tenant + ":steps";
+                store.mapPut(stepsKey, c.docId(), c.text());
                 for (String code : c.metadata().errorCodes()) {
-                    redisson.getSet("sop:" + tenant + ":code:" + code).add(c.docId());
+                    store.setAdd("sop:" + tenant + ":code:" + code, c.docId());
                 }
-                redisson.getSet("sop:" + tenant + ":service:" + c.metadata().service()).add(c.docId());
+                store.setAdd("sop:" + tenant + ":service:" + c.metadata().service(), c.docId());
             }
         }
         log.info("SOP 预热完成（按租户分片）");

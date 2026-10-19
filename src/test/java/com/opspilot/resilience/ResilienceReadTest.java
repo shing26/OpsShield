@@ -1,9 +1,8 @@
 package com.opspilot.resilience;
 
+import com.opspilot.store.KvStore;
 import java.time.Duration;
 import org.junit.jupiter.api.Test;
-import org.redisson.api.RAtomicLong;
-import org.redisson.api.RedissonClient;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -18,16 +17,14 @@ class ResilienceReadTest {
 
     @Test
     void usedTodayReadsWithoutIncrementing() {
-        RedissonClient redisson = mock(RedissonClient.class);
-        RAtomicLong day = mock(RAtomicLong.class);
-        when(redisson.getAtomicLong(startsWith("quota:"))).thenReturn(day);
-        when(day.get()).thenReturn(42L);
-        QuotaService quota = new QuotaService(redisson, 5000L);
+        KvStore kv = mock(KvStore.class);
+        when(kv.readLong(startsWith("quota:"))).thenReturn(42L);
+        QuotaService quota = new QuotaService(kv, 5000L);
 
         assertEquals(42L, quota.usedToday("sre-x"));
         assertEquals(5000L, quota.dailyLimit());
-        verify(day, never()).incrementAndGet();
-        verify(day, never()).expire(any(Duration.class));
+        // 读不得消耗配额：只许 readLong，任何 increment（哪怕只为取当前值）都是观测者效应
+        verify(kv, never()).increment(anyString(), any(Duration.class));
     }
 
     @Test

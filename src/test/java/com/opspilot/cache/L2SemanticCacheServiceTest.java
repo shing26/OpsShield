@@ -10,6 +10,7 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.ObjectProvider;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -46,7 +47,15 @@ class L2SemanticCacheServiceTest {
     }
 
     private L2SemanticCacheService service() {
-        return new L2SemanticCacheService(qdrant, mock(EmbeddingClient.class), props, vt);
+        return new L2SemanticCacheService(provider(qdrant), mock(EmbeddingClient.class), props, vt);
+    }
+
+    /** live 用例：Qdrant 客户端 bean 在场（memory 模式下它根本不存在，见 ADR-0022）。 */
+    @SuppressWarnings("unchecked")
+    private static <T> ObjectProvider<T> provider(T bean) {
+        ObjectProvider<T> p = mock(ObjectProvider.class);
+        when(p.getIfAvailable()).thenReturn(bean);
+        return p;
     }
 
     /** 变异验证（改坏必红）：把 store 改回同步 `.get(...)` → 首条断言必红（耗时 > 200ms）。 */

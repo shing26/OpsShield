@@ -2,12 +2,11 @@ package com.opspilot.resilience;
 
 import java.time.Duration;
 import java.time.LocalDate;
-import org.redisson.api.RAtomicLong;
-import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
+import com.opspilot.store.KvStore;
 
 /**
  * 每用户日配额（P4）：Redis INCR + 首次设 TTL，超限 429。
@@ -19,19 +18,18 @@ import org.springframework.web.server.ResponseStatusException;
 @Component
 public class QuotaService {
 
-    private final RedissonClient redisson;
+    private final KvStore store;
     private final long dailyLimit;
 
-    public QuotaService(RedissonClient redisson,
+    public QuotaService(KvStore store,
                         @Value("${opspilot.quota.daily-limit:5000}") long dailyLimit) {
-        this.redisson = redisson;
+        this.store = store;
         this.dailyLimit = dailyLimit;
     }
 
     public void checkAndConsume(String sub) {
-        RAtomicLong day = redisson.getAtomicLong("quota:" + sub + ":" + LocalDate.now());
-        long n = day.incrementAndGet();
-        if (n == 1) day.expire(Duration.ofHours(26)); // 跨时区余量，日切后自然换新 key
+        // TTL 只在首次创建时设（跨时区余量，日切后自然换新 key）——该语义在 KvStore 里
+        long n = store.increment("quota:" + sub + ":" + LocalDate.now(), Duration.ofHours(26));
         if (n > dailyLimit) {
             throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,
                     "日请求配额已用尽（" + dailyLimit + "/天），明日重置或联系管理员");
@@ -40,7 +38,7 @@ public class QuotaService {
 
     /** 只读水位（Ops Console）：当日已用；键不存在返回 0，绝不 INCR（读不得消耗配额）。 */
     public long usedToday(String sub) {
-        return redisson.getAtomicLong("quota:" + sub + ":" + LocalDate.now()).get();
+        return store.readLong("quota:" + sub + ":" + LocalDate.now());
     }
 
     public long dailyLimit() { return dailyLimit; }

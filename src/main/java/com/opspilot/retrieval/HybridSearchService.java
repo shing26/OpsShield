@@ -7,6 +7,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import com.opspilot.config.OpsPilotProperties;
 import com.opspilot.llm.RerankClient;
@@ -16,22 +17,30 @@ import com.opspilot.metrics.OpsMetrics;
  * 双路并行召回编排：CompletableFuture（虚拟线程）+ 单路超时隔离 + RRF + Rerank。
  * mode: hybrid | es_only | vector_only（评测对比开关，A3-3 验收依据）。
  * tenant+authLevel 恒透传两路引擎做硬过滤（权限第一/二道闸，见各 SearchService）。
+ *
+ * <p><b>2026-10-19（ADR-0022）：两条腿是 {@link RetrievalLeg}，不再是 ES/Qdrant 这两个具体类。</b>
+ * 按 {@code lexicalLeg} / {@code vectorLeg} 两个 bean 名注入，于是 memory 模式下同一段编排
+ * 原样跑在内存索引的两种打分上——RRF、超时隔离、降级判定都不用改。协议面上的
+ * {@code es_only} / {@code vector_only} 模式名**保持原样**：它们是给评测对比用的对外口径，
+ * 换成"词法腿/向量腿"会让历史评测报告与基线不可比。
  */
 @Service
 public class HybridSearchService {
 
-    private final EsSearchService es;
-    private final QdrantSearchService qdrant;
+    private final RetrievalLeg lexicalLeg;
+    private final RetrievalLeg vectorLeg;
     private final RerankClient rerank;
     private final OpsMetrics metrics;
     private final ExecutorService vt;
     private final OpsPilotProperties props;
 
-    public HybridSearchService(EsSearchService es, QdrantSearchService qdrant, RerankClient rerank,
+    public HybridSearchService(@Qualifier("lexicalLeg") RetrievalLeg lexicalLeg,
+                               @Qualifier("vectorLeg") RetrievalLeg vectorLeg,
+                               RerankClient rerank,
                                OpsMetrics metrics, ExecutorService virtualThreadExecutor,
                                OpsPilotProperties props) {
-        this.es = es;
-        this.qdrant = qdrant;
+        this.lexicalLeg = lexicalLeg;
+        this.vectorLeg = vectorLeg;
         this.rerank = rerank;
         this.metrics = metrics;
         this.vt = virtualThreadExecutor;
@@ -49,10 +58,10 @@ public class HybridSearchService {
         AtomicLong esMs = new AtomicLong();
         AtomicLong vecMs = new AtomicLong();
         CompletableFuture<List<ScoredChunk>> esF = useEs
-                ? supply(() -> es.search(query, tenant, authLevel, cfg.esTopK()), esMs)
+                ? supply(() -> lexicalLeg.search(query, tenant, authLevel, cfg.esTopK()), esMs)
                 : CompletableFuture.completedFuture(List.of());
         CompletableFuture<List<ScoredChunk>> vecF = useVector
-                ? supply(() -> qdrant.search(query, tenant, authLevel, cfg.qdrantTopK()), vecMs)
+                ? supply(() -> vectorLeg.search(query, tenant, authLevel, cfg.qdrantTopK()), vecMs)
                 : CompletableFuture.completedFuture(List.of());
 
         List<ScoredChunk> esRes = joinSafe(esF, cfg.legTimeoutMs());

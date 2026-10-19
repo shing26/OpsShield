@@ -9,15 +9,18 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import org.springframework.stereotype.Component;
 import com.opspilot.config.OpsPilotProperties;
 
 /**
  * ES 倒排检索：精确符号（错误码/类名/endpoint）走 keyword term 加权，
  * 正文走 match；auth_level 硬过滤在引擎层注入（权限隔离第一道闸）。
+ *
+ * <p><b>2026-10-19（ADR-0022）起不再是 {@code @Component}</b>：它由 {@code RetrievalWiring}
+ * 按 {@code opspilot.storage.mode} 装配成名为 {@code lexicalLeg} 的 {@link RetrievalLeg}。
+ * 改成显式装配的理由与 Redisson 那侧同源——自动扫描会让 memory 模式也把这个类装进上下文，
+ * 于是"零依赖"这句话就有了一个随时会被误用的 ES 依赖口。
  */
-@Component
-public class EsSearchService {
+public class EsSearchService implements RetrievalLeg {
 
     public static final Pattern ERROR_CODE = Pattern.compile("\\b\\d{5}_[A-Z][A-Z0-9_]*\\b");
     public static final Pattern FQCN = Pattern.compile("\\b(?:[a-z][a-z0-9]*\\.){2,}[A-Z][A-Za-z0-9]*\\b");
@@ -47,6 +50,25 @@ public class EsSearchService {
         return query != null && (ERROR_CODE.matcher(query).find() || FQCN.matcher(query).find());
     }
 
+    /**
+     * 身份硬过滤（**ES 侧单一事实源**）：`metadata.tenant` 等值 term + `metadata.auth_level` range lte，
+     * 两条都是 `filter`（不打分）。**fail-closed**：tenant 为 null/空时 term 匹配不到任何文档 → 空集，
+     * 与 Qdrant 侧语义一致。
+     *
+     * 为什么提出来当静态方法而不是留在 {@link #search} 里：覆盖清单（{@code CoverageService}）也要按
+     * 身份过滤，而**清单本身就是越权面**——给外部租户列出内部租户的服务名，等于把语料边界泄出去
+     * （ADR-0023 理由③）。两处各写一遍必然漂移，故共用这一份。
+     */
+    public static List<Query> identityFilters(String tenant, int authLevel) {
+        return List.of(
+                Query.of(q -> q.term(t -> t.field(IdentityFilter.TENANT_FIELD)
+                        .value(co.elastic.clients.elasticsearch._types.FieldValue
+                                .of(tenant == null ? "" : tenant)))),
+                Query.of(q -> q.range(r -> r.field(IdentityFilter.AUTH_LEVEL_FIELD)
+                        .lte(co.elastic.clients.json.JsonData.of(authLevel)))));
+    }
+
+    @Override
     public List<ScoredChunk> search(String query, String tenant, int authLevel, int topK) throws Exception {
         List<String> codes = extractErrorCodes(query);
         List<Query> should = new ArrayList<>();
@@ -68,13 +90,8 @@ public class EsSearchService {
                 .size(topK)
                 .query(q -> q.bool(b -> b
                         .minimumShouldMatch("1")
-                        // P1 租户显式化：等值 term 与 auth_level range 同为 filter 硬条件（失败关闭：
-                        // tenant 为 null/空时 term 不匹配任何文档 → 空集，与 Qdrant 侧语义一致）
-                        .filter(f -> f.term(t -> t.field("metadata.tenant")
-                                .value(co.elastic.clients.elasticsearch._types.FieldValue
-                                        .of(tenant == null ? "" : tenant))))
-                        .filter(f -> f.range(r -> r.field("metadata.auth_level")
-                                .lte(co.elastic.clients.json.JsonData.of(authLevel))))
+                        // P1 租户显式化：等值 term 与 auth_level range 同为 filter 硬条件（失败关闭）
+                        .filter(identityFilters(tenant, authLevel))
                         .should(should))),
                 Map.class);
 

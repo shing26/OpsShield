@@ -27,6 +27,19 @@ spring:
   threads:
     virtual:
       enabled: true
+  # ADR-0022：两处自动装配**恒排除**，客户端由 StoreConfig / EsConfig / QdrantConfig 显式构造
+  # 并按 opspilot.storage.mode 装配。两个都排除，理由各一条：
+  #   ① RedissonAutoConfigurationV2：它会在 memory 模式下照样建客户端并**急连** Redis，
+  #      于是"零依赖模式"反过来依赖 Redis；显式构造还顺手把连接参数的出处从魔法约定变成可读代码。
+  #   ② RedisAutoConfiguration（Lettuce 那套）：它按 spring.data.redis.* 建 RedisConnectionFactory，
+  #      而 Boot 会据此注册 RedisHealthIndicator——**无条件 ping Redis**。memory 模式下
+  #      /actuator/health 因此恒为 DOWN（实测咬到），而 demo.sh / liveness.py / compose healthcheck
+  #      都以这个端点当存活判据，整条零依赖路径会被判"没起来"。本项目从不使用 RedisConnectionFactory
+  #      （唯一消费者是 RedissonClient），排除它不损失任何能力。
+  autoconfigure:
+    exclude:
+      - org.redisson.spring.starter.RedissonAutoConfigurationV2
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
   data:
     redis:
       host: ${REDIS_HOST:localhost}
@@ -34,6 +47,11 @@ spring:
       password: ${REDIS_PASSWORD:}   # P3：中间件凭据只从环境注入；空=无认证（CI/单测形态）
 
 opspilot:
+  storage:
+    # live=真中间件（缺则启动失败，与历史行为一致）| memory=内存实现，零外部依赖（ADR-0022）。
+    # **不自动回退**：探不到中间件只打印一条可执行的提示，然后照常失败——配置期事实不该
+    # 跟着运行期抖动走（理由见 OpsPilotProperties.Storage 注释）。
+    mode: ${STORAGE_MODE:live}
   dashscope:
     base-url: https://dashscope.aliyuncs.com
     api-key: ${DASHSCOPE_API_KEY:}
@@ -97,6 +115,15 @@ logging:
 # demo.sh 预检 / backup.sh / quickstart.sh / liveness.py 的存活判据（check_panel_contract.sh
 # 第五层把这一条钉成 CI 红）。
 management:
+  health:
+    # ADR-0022 落地实测：Boot 的 ElasticsearchRestClientHealthIndicator 是**按 classpath**注册的
+    # （不是按 RestClient bean），所以"memory 模式不建 ES 客户端"挡不住它——它照样 ping
+    # localhost:9200 并把 /actuator/health 拖成 DOWN。
+    # 关掉它**不损失任何能力**：本项目自己的 elasticsearchClusterHealth（HealthCheckConfig）
+    # 做的是同一件事且更准（走别名、带 opspilot.es.* 的 socket 超时、能报 docs 计数），
+    # 而 demo.sh / liveness.py / compose healthcheck 读的正是聚合状态。
+    elasticsearch:
+      enabled: false
   endpoints:
     web:
       exposure:
