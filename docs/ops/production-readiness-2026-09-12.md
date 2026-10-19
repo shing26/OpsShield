@@ -20,7 +20,7 @@
 | M2 磁盘哨兵 | **已修** | `daily_usage.py` 输出 `logs_disk_mb`，>500MB 告警 |
 | M3 告警接入 | **自举源已上线**（ADR-0011）；**外部监控 adapter 第一版已落地**（2026-10-17，触发线①兑现） | 宿主桥 `scripts/alert_bridge.py` + `ops/alerting/`（Prometheus 规则 → Alertmanager → 桥）+ compose `alerting` profile；实证见 `docs/qa/2026-10-17-alertmanager-intake.md`。**「提升为网关原生端点」是另一个决策**，触发线见 `OPS.md` §5.1 |
 | M4 错误码枚举 | **不立项**（实测全仓恰好 1 处且属拒答话术文案，"<10 处"原判不实） | `docs/qa/2026-09-13-module-verification.md` §8 |
-| L1–L5 企业级项 | **挂起**（Prometheus 导出 / 多实例 / OIDC / TLS / 增量 ingest） | 触发线见 `OPS.md` §5；勿提前做 |
+| L1–L5 企业级项 | **挂起**（多实例 / OIDC / TLS / 增量 ingest）——**Prometheus 导出已于 2026-10-10 落地**（ADR-0016） | 触发线见 `OPS.md` §5；勿提前做 |
 | B3 出站超时 | **已修**（2026-09-22） | 精排/embedding/ES 三路此前**完全无超时**；改为两个配置点覆盖四个调用位 + 4 个 env 键 |
 | B9 覆盖率棘轮 | **已接**（2026-09-22）：LINE 设闸、BRANCH 只报 | `scripts/check_coverage.py` + jacoco `target/site/jacoco/jacoco.xml`；**本机量不到覆盖率**的边界见文末该节 |
 | O1 证据链打包 | **已修**（2026-09-18），2026-09-21 增强 | 出包前自检"报告↔语料同代"，分叉默认拒绝、`--allow-stale` 才放行并留痕；CI 每次干净检出跑一次 |
