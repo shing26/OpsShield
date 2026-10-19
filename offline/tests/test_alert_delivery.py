@@ -213,7 +213,7 @@ def test_producer_cooldown_precedes_dry_run(tmp_path):
     api = FakeApi()
     delivery = _delivery(tmp_path, api)
     delivery.clock = lambda: 1000.0
-    delivery.last_emit["dep_down:qdrant"] = 900.0
+    delivery.last_delivery_at["dep_down:qdrant"] = 900.0
     attempt = ad.DeliveryAttempt(
         body={"query": "q", "source": "alert"},
         ledger={"rule": "dep_down", "query": "q"},

@@ -139,7 +139,7 @@ def test_gate_order_budget_beats_quota_beats_cooldown(monkeypatch):
                         lambda body, token, timeout=120, collect_deltas=True:
                         {"status": 200, "meta": {}, "done": {}, "deltas": [],
                          "error": None, "ttft_s": None, "total_s": 0.01})
-    p3.delivery.last_emit[p3._key(alert)] = 1000.0
+    p3.delivery.last_delivery_at[p3._key(alert)] = 1000.0
     assert p3.gate(alert, _state(), 1200.0)["skip"] == "cooldown"
     assert p3.gate(alert, _state(), 1400.0).get("emit") is True
 

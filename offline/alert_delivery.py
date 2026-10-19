@@ -187,7 +187,7 @@ class AlertDelivery:
         self.ledger = AlertLedger(ledger_path, session.user)
         self.clock = clock
         self.budget_events: list[float] = []
-        self.last_emit: dict[str, float] = {}
+        self.last_delivery_at: dict[str, float] = {}
         self._gate_lock = threading.Lock()
 
     def deliver(self, attempt: DeliveryAttempt, policy: DeliveryPolicy) -> DeliveryOutcome:
@@ -248,7 +248,7 @@ class AlertDelivery:
         ):
             self.budget_events.append(self.clock())
         if policy.cooldown_key and Gate.COOLDOWN in policy.gates:
-            self.last_emit[policy.cooldown_key] = self.clock()
+            self.last_delivery_at[policy.cooldown_key] = self.clock()
         self.ledger.append(record)
         return outcome
 
@@ -312,7 +312,7 @@ class AlertDelivery:
                 ):
                     return "quota_reserve"
             if gate is Gate.COOLDOWN and policy.cooldown_key:
-                last = self.last_emit.get(policy.cooldown_key, 0.0)
+                last = self.last_delivery_at.get(policy.cooldown_key, 0.0)
                 if self.clock() - last < policy.cooldown_seconds:
                     return "cooldown"
         return None

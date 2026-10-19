@@ -16,8 +16,9 @@ Bridge 已把 `offline/` 加入导入路径，Producer 本身也在该目录。�
 
 `attempt` 携带发送所需的请求体、可选的 `trace_id` 与来源特有台账上下文；`policy` 携带来源闸门顺序、
 quota 的观察方式（实时读取或本轮快照）、hour budget、quota reserve、可选 cooldown 键与窗口、dry-run，
-以及登录失败/传输失败时是继续还是中止来源循环。登录、quota 读取、引用投影与台账追加不单独暴露为公共
-组合 API；共享 `session()` 只额外提供 Producer 检测所需的只读状态获取。
+以及传输失败时是继续还是中止来源循环。登录失败分类由同一来源 session 的 `LoginFailureMode` 固定；
+Producer 在投递生命周期之前预登录时的累计、退避与退出仍由既有主循环承担。登录、quota 读取、引用投影
+与台账追加不单独暴露为公共组合 API；共享 `session()` 只额外提供 Producer 检测所需的只读状态获取。
 
 投递结果封闭为四态：`Skipped`（请求未发出）、`Delivered`（已收到 2xx）、`Rejected`（已收到非 2xx，
 包括 401/429）与 `TransportFailed`（未拿到响应）。现有 JSONL 字段 `emit`、`sent_ok`、`skip`、`http`、
