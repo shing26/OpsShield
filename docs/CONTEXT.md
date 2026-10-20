@@ -47,6 +47,18 @@ Reciprocal Rank Fusion，倒数排名融合（k=60），将双路排名无量纲
 **告警分组身份（Alert Group Identity）**:
 上面那次事故的**不透明关联键**：`am-` + `SHA256(groupKey + "|" + 组内最早 startsAt)` 取摘要前 128 位（32 位十六进制）。拼 `startsAt` 的原因：`groupKey` 是**路由桶 id 而非事故 id**——它不含时间维，同一条规则下周再 fire 会落回同一个桶。它随 `X-Trace-Id` 请求头发给网关、落在审计行 `trace_id` 列，因此"一次事故里的 N 条告警"可用 `grep '"trace_id":"am-…"'` 整段取出。**只做关联，不进任何键**（与告警身份的分工：那条回答"这一条告警是什么"，进 L1 缓存与单飞组键；这条回答"这几条告警属于哪一次事故"，不改检索、不改缓存）。_对外_: 无对外别名。_Avoid_: 事故 id（中文侧统一用"告警分组身份"）、trace_id（那是传输层的列名，不是这个概念的命名）
 
+**投递策略（Delivery Policy）**:
+Bridge 或 Producer 为一次告警投递选择的来源规则，规定哪些发送前闸门按什么顺序适用、配额取自实时读取还是周期快照，以及是否启用来源冷却。_对外_: 无对外别名。_Avoid_: 告警规则（它产生候选，不决定投递）、重试策略（系统没有自动重试）
+
+**投递尝试（Alert Delivery Attempt）**:
+一份已翻译、可发送的告警请求连同来源上下文进入共用投递 seam 的单位；一次尝试至多发出一次 HTTP 请求，并以一个投递结果结束。Alertmanager 翻译与 Producer 异常判定发生在尝试之前。_对外_: 无对外别名。_Avoid_: 告警请求（易与 ChatRequest 混淆）、webhook（只是 Bridge 的输入形态）
+
+**投递结果（Alert Delivery Outcome）**:
+一次投递尝试的封闭结局：跳过（Skipped）、送达（Delivered）、被拒（Rejected）、传输失败（TransportFailed）。Skipped 表示请求未发出；Delivered / Rejected 表示已收到 HTTP 响应；TransportFailed 表示没有拿到响应，401 的自愈动作不改变其 Rejected 分类。_对外_: 无对外别名。_Avoid_: 发送成功 / 失败（会把"是否发出"与"服务端是否接受"压成一件事）、emit / sent_ok（它们是台账字段，不是领域结局）
+
+**告警台账（Alert Ledger）**:
+Bridge 与 Producer 追加写出的 JSONL 证据流，记录闸门判定、登录失败、投递结果与来源特有上下文；它不是应用日志，也不以成功发送为前提。_对外_: 无对外别名。_Avoid_: 审计日志（那是 Chat 请求的权限留痕，不是告警来源的处置证据）、事件日志（过泛）
+
 **滑动窗口（Sliding Window）**:
 按 `来源×指纹` 维护的 Redis ZSET 聚合计数窗口（manual 30s / alert 60s），仅服务 dedup 计数与"风暴收敛"叙事；穿透闸门的唯一归属是单飞，窗口不做排除。_对外_: 无对外别名。_Avoid_: 防抖（口语可用，代码中统一 Sliding Window）、"窗口内仅首条穿透"（旧口径与实现不符，2026-09-13 grill 裁定废止）
 

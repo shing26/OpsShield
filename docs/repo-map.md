@@ -26,7 +26,7 @@
 | `src/main/java/com/opspilot/store/` | **存储接缝**（[ADR-0022](adr/0022-standalone-storage-mode.md)）：`KvStore` 窄接口（15 操作）+ `RedisKvStore`/`MemoryKvStore` 两实现 + `StoreConfig` 按 `opspilot.storage.mode` 装配。内存实现**刻意复刻 Redis 语义**（TTL 仅建于创建、闭区间窗口裁剪、成员去重、`mapValues` 无顺序承诺）——不是"够用就行"，否则两套实现会在窗口计数/配额水位上悄悄分叉 | ✅ |
 | `src/main/java/com/opspilot/retrieval/` | 检索腿接缝（[ADR-0022](adr/0022-standalone-storage-mode.md)）：`RetrievalLeg` 接口（ES/Qdrant 与内存腿同形）+ `IdentityFilter`（`tenant × auth_level` 过滤**单一事实源**，检索与覆盖范围共用）+ `InMemoryIndex`/`InMemoryLegs`/`Vectors`（内存词法+向量腿，词法哈希非神经语义）+ `RetrievalWiring`（`lexicalLeg`/`vectorLeg` 命名 bean）。**权限过滤复用同一份判据是构造保证**，不是两套实现各自承诺 | ✅ |
 | `src/test/java/` | 单测与集成（301 用例，`@Test` 声明数） | ✅ |
-| `docs/adr/` | 23 项架构决策（每份含否决项与后果）——**改架构先写 ADR** | ✅ |
+| `docs/adr/` | 24 项架构决策（每份含否决项与后果）——**改架构先写 ADR** | ✅ |
 | `docs/agents/` | **engineering skills 的 repo 配置**：issue tracker 约定 / triage label 映射 / 领域文档位置与消费规则（根级 `AGENTS.md` 的 `## Agent skills` 块指向这里）。由 `/setup-matt-pocock-skills` 写入，切换 tracker 或从头开始时才需重跑 | ✅ |
 | `docs/qa/` | 红队缺陷台账 / 模块复验台账（缺陷与验证的单一事实源） | ✅ |
 | `docs/ops/` | 生产化就绪度台账（现行状态置顶 + 历史归档） | ✅ |
@@ -42,15 +42,16 @@
 | `offline/load/` | Locust 压测脚本与报告 | ✅ |
 | `offline/load/sweep.py` | **并发-延迟曲线**：扫 25/50/100/200/300/500 六档出 P50/P95/P99 + 失败率 + RPS，标出**首次 L1 触发档**与各档**实到并发/在途峰值**。原始 locust 产物留本地（`.gitignore`），只入汇总报告 | ✅ |
 | `offline/load/cache_savings.py` | **缓存节省账**：受控混合负载 → 命中/未命中延迟差 × 命中率 = 单请求平均节省。归因靠本脚本自己的负载（`hits/total_requests` 的分母含 Single-Flight follower，是浑的） | ✅ |
-| `offline/tests/` | pytest（切分器不变量 + 告警生产者判定/闸门 + 本地 HTTP 契约 + 行动契约/预设探针的判据极性/变异，**不触网**由 fixture 强制） | ✅ |
+| `offline/tests/` | pytest（切分器不变量 + 告警投递 seam / 生产者判定 + 本地 HTTP 契约 + 行动契约/预设探针的判据极性/变异，**不触网**由 fixture 强制） | ✅ |
 | `offline/requirements-dev.txt` | 开发/验证依赖的**锁定版本**（运行时代码零第三方依赖，全 stdlib） | ✅ |
 | `offline/localapi.py` | **验收/评测脚本的本机 HTTP 单点**（SSRF 白名单 + token 路径解析；基址可用 `OPSPILOT_BASE` 覆盖）——新增脚本复用它，别再造轮子 | ✅ |
 | `offline/acceptance_a2.py` / `acceptance_a3.py` | A2 机制验收 / A3 综合验收 | ✅ |
 | `offline/qa_gen_quality_probes.py` | 生成质量门禁的 live 六道（V2/V3/V4/V5/V7/V9）+ chat 预算闸；V9 复用 V2/V4 答案故不占预算。V1/V6/V8 分属 Java 单测、ZSET 用例、文档核对 | ✅ |
 | `offline/grounding.py` | **答案接地判据**（V9 的纯函数实现）：答案中的错误码是否都落在本轮 refs 覆盖内——防幻觉链路的**事后**环（前几道管"没证据就不答"，这项管"答了的都有据"）。词法复用 `chunkers/errorcode.py`，不另立副本 | ✅ |
 | `offline/console_client.py` | 控制台演示客户端（SSE 打字机 / 风暴模拟） | ✅ |
-| `offline/alert_producer.py` | **自举告警生产者**（[ADR-0011](adr/0011-self-bootstrapped-alert-source.md)）：读运行态真相面 → 命中即以 `source=alert` 回打自身链路 | ✅ |
-| `scripts/alert_bridge.py` | **Alertmanager webhook 桥**（外部监控 adapter 的第一个真实输入端）：收 `/api/v2/alerts` → 逐条摊平 → 翻译成 `ChatRequest` 打现有编排链。停宿主（复用 `localapi` 的环回白名单，不新开产品面、不新增鉴权维度）；**不判重**——firing 与 resolved 照转，重复必须真的打到网关才看得见 L1 与单飞。**两件身份的产地**：`alert_id`（单条告警，四元组派生）与 `incident_id`（`am-…`，groupKey+最早 startsAt 派生，走 `X-Trace-Id` 头当**关联键**，[ADR-0019](adr/0019-incident-boundary-owned-by-upstream.md)） | ✅ |
+| `offline/alert_delivery.py` | **Bridge / Producer 共用的告警投递 seam**（[ADR-0024](adr/0024-alert-delivery-seam.md)）：`deliver(attempt, policy)` 统一认证、来源闸门、401、响应/引用投影与 JSONL；四态结果为 Skipped / Delivered / Rejected / TransportFailed。闸门顺序由来源 policy 显式保留，不做行为归一 | ✅ |
+| `offline/alert_producer.py` | **自举告警生产者**（[ADR-0011](adr/0011-self-bootstrapped-alert-source.md)）：读运行态真相面 → 命中后经共享投递 seam 以 `source=alert` 回打自身链路；异常判定仍在本脚本 | ✅ |
+| `scripts/alert_bridge.py` | **Alertmanager webhook 桥**（外部监控 adapter 的第一个真实输入端）：收 `/api/v2/alerts` → 逐条摊平 → 翻译成 `ChatRequest` → 共享投递 seam。停宿主（复用 `localapi` 的环回白名单，不新开产品面、不新增鉴权维度）；**不判重**——firing 与 resolved 照转，重复必须真的打到网关才看得见 L1 与单飞。**两件身份的产地**：`alert_id`（单条告警，四元组派生）与 `incident_id`（`am-…`，groupKey+最早 startsAt 派生，走 `X-Trace-Id` 头当**关联键**，[ADR-0019](adr/0019-incident-boundary-owned-by-upstream.md)） | ✅ |
 | `offline/action_contract_probe.py` | **只读行动契约的活体复核探针**（[ADR-0017](adr/0017-read-only-action-contract.md)）：把单测已锁的四条不变式搬到线上流量——`actions` 帧形状 / 命令逐字于来源 chunk / 契约⊆引用（含段名闸、写操作段黑名单、编号连续）/ 破坏性形态绊线 / 缓存回放保真 / 跨租户不出界（含 tenant-acme 零围栏块⇒契约必须空）/ 拒绝计数器单调。**自己也只读**：只 login+chat+actuator，`/admin` 一条不打（连 cache/flush 也不打——没有判据需要它），HTTP 复用 localapi。判据极性由 `tests/test_action_contract_probe.py` 用合成坏响应逐条钉住 | ✅ |
 | `offline/preset_probe.py` | **左栏预设与覆盖范围的活体复核探针**（[ADR-0023](adr/0023-public-surface-terminology.md)）：P-1 预设 query **从 `index.html` 现读**（改了页面不改探针即红）/ P-2 每个预设的 `gate` 精确断言、命令条数**只锁有无不锁产额**（沿用 action_contract_probe 的取舍）/ P-3 `GET /api/v1/copilot/coverage` 的三个计数与两份清单必须与 `corpus/chunks.jsonl` 按 (tenant, auth_level≤level) 现算的结果**逐项相等**，外加"低密级⊆高密级"与"外部租户不出内部独有服务"（真值取自语料而非回包，防自证式空转）。**只读**：login + chat/stream + coverage，`/admin` 一条不打 | ✅ |
 | `ops/alerting/` | **告警侧配置**（`alerting` profile）：`prometheus.yml`（抓宿主 8081 的 `aiops_*`）+ `rules/opspilot.yml`（三条规则，两种错误码粒度）+ `alertmanager.yml`（投递到宿主 bridge；`group_by: ["job"]` 是**上游对"一次事故"的定义**、`group_interval: 1m` 是从 5m 换来的迟到成本，两行都不宜随手改）。抓取与投递目标都是宿主，两容器都需 `extra_hosts: host.docker.internal` | ✅ |

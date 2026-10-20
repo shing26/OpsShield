@@ -53,7 +53,6 @@ import json
 import os
 import re
 import sys
-import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -61,6 +60,16 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "offline"))
 import localapi  # noqa: E402  # 单一 HTTP/token 事实源（含 assert_local SSRF 防线）
+from alert_delivery import (  # noqa: E402
+    AlertDelivery,
+    AlertSession,
+    BRIDGE_GATES,
+    DeliveryAttempt,
+    DeliveryPolicy,
+    HourAccounting,
+    LoginFailureMode,
+    TransportFailureHandling,
+)
 
 LEDGER = REPO / "logs" / "alert-bridge.jsonl"
 LOCK = REPO / "logs" / ".alert-bridge.lock"
@@ -86,13 +95,6 @@ TEXT_SAFE = re.compile(r"[^\w\s:.,;/()\[\]=@+\-]")
 SUMMARY_MAX = 200
 QUERY_MAX = 600
 ERROR_CODE_MAX = 64
-
-
-class LoginFailed(RuntimeError):
-    """登录面失败（凭据错 / 主体被锁 / 登录端点异常）。
-
-    与"网关不可达"必须分开：前者重试有害（加深锁定）且需人介入，后者是瞬时可自愈。
-    """
 
 
 def _clean(v, cap: int) -> str:
@@ -309,52 +311,24 @@ class Bridge:
         self.max_per_hour = args.max_per_hour
         self.quota_reserve = args.quota_reserve
         self.group_cap = args.group_cap
-        self.token = ""
-        self.emits: list[float] = []
         self.stats = {"received": 0, "forwarded": 0, "skipped": 0, "errors": 0}
-        # 单飞：Alertmanager 对同一 receiver 是串行投递，但 bridge 的 HTTP 面是多线程的
-        # （ThreadingHTTPServer），且人工 curl 也能打进来。串行化让"一小时上限"这个
-        # 进程内状态不被并发绕过——emits 的读-判-写必须原子。
-        self._lock = threading.Lock()
+        self.delivery = AlertDelivery(
+            AlertSession(
+                self.user,
+                api=localapi,
+                login_failure_mode=LoginFailureMode.AUTH_STATUSES,
+            ),
+            ledger_path=LEDGER,
+        )
 
     # ---- 与网关交互 -------------------------------------------------------
-    def login(self) -> None:
-        """登录失败归类为 LoginFailed（凭据/锁定，需人介入），其余异常才是瞬时不可达。"""
-        try:
-            self.token = localapi.login(self.user)
-        except Exception as e:  # noqa: BLE001 - 归类后再决定是致命还是瞬时
-            code = getattr(e, "code", None)
-            if code in (401, 403):
-                raise LoginFailed(f"HTTP {code}") from e
-            raise
+    @property
+    def token(self) -> str:
+        return self.delivery.session.token
 
-    def quota_remaining(self) -> int | None:
-        """读管理面的配额余量；**读不到返回 None**（不假装配额充足，也不据此阻断告警）。
-
-        口径：配额是闸门，不是健康判据。读失败时放行转发——告警的可用性优先于
-        "少发一条的风险"，而下游网关自己还有 429 兜底。
-
-        读法兼容两处：告警生产者是从 `state["metrics"]["limit"/"used"]` 取的（本机形态），
-        而 `runtime.quota` 是管理面快照里的另一种组织方式。**两处都读**是刻意的——
-        只认一处时，字段位置一变就会静默变成"配额永远充足"，那是这条防线最坏的失效方式。
-        """
-        try:
-            if not self.token:
-                self.login()
-            state = localapi.get_json("/api/v1/admin/state", self.token)
-        except Exception:  # noqa: BLE001
-            return None
-        q = (state.get("runtime") or {}).get("quota") or state.get("metrics") or {}
-        try:
-            limit, used = int(q.get("limit") or 0), int(q.get("used") or 0)
-        except (TypeError, ValueError):
-            return None
-        return None if limit <= 0 else limit - used
-
-    def budget_exhausted(self) -> bool:
-        now = time.time()
-        self.emits = [t for t in self.emits if now - t < 3600]
-        return len(self.emits) >= self.max_per_hour
+    @token.setter
+    def token(self, value: str) -> None:
+        self.delivery.session.token = value
 
     def forward(self, item: dict) -> dict:
         """发一条；台账记录带服务端权威事实（fingerprint/cache_hit/refs）。
@@ -368,44 +342,28 @@ class Bridge:
                 "error_code": item["error_code"], "query": req["query"],
                 "alert_id": item["alert_id"], "alert_id_basis": item["alert_id_basis"],
                 "incident_id": item["incident_id"], "incident_basis": item["incident_basis"]}
-        if not req["query"]:
-            return {**base, "emit": False, "skip": "empty_query"}
-        if self.dry_run:
-            return {**base, "emit": False, "skip": "dry_run"}
-        with self._lock:
-            if self.budget_exhausted():
-                return {**base, "emit": False, "skip": "hour_budget"}
-            remaining = self.quota_remaining()
-            if remaining is not None and remaining < self.quota_reserve:
-                return {**base, "emit": False, "skip": "quota_reserve"}
-            self.emits.append(time.time())
-        try:
-            if not self.token:
-                self.login()
-            r = localapi.stream_chat(req, self.token, collect_deltas=False,
-                                     trace_id=item["incident_id"])
-        except LoginFailed:
-            raise
-        except Exception as e:  # noqa: BLE001 - 网关不可达/超时：留痕后继续，不打死亡桥
+        policy = DeliveryPolicy(
+            gates=BRIDGE_GATES,
+            max_per_hour=self.max_per_hour,
+            quota_reserve=self.quota_reserve,
+            hour_accounting=HourAccounting.ATTEMPT,
+            login_before_send=True,
+            transport_failure_handling=TransportFailureHandling.CONTINUE,
+            response_code_key="error_code_resp",
+            dry_run=self.dry_run,
+        )
+        outcome = self.delivery.deliver(
+            DeliveryAttempt(
+                body=req,
+                ledger=base,
+                trace_id=item["incident_id"],
+                collect_deltas=False,
+            ),
+            policy,
+        )
+        if outcome.record.get("sent_ok") is False and "error" in outcome.record:
             self.stats["errors"] += 1
-            self.token = ""
-            return {**base, "emit": True, "sent_ok": False,
-                    "error": f"{type(e).__name__}: {e}", "refs": [], "ref_docs": []}
-        meta, done = r.get("meta") or {}, r.get("done") or {}
-        if r.get("status") == 401:
-            self.token = ""      # 凭证失效：下次转发重登（自愈路径）
-        refs = [x.get("chunkId") or "" for x in (done.get("refs") or [])]
-        return {
-            **base, "emit": True, "http": r.get("status"),
-            "sent_ok": 200 <= (r.get("status") or 0) < 300,
-            "error_code_resp": r.get("code"),
-            "fp": meta.get("fingerprint"), "cache_hit": meta.get("cache_hit"),
-            "deduplicated": meta.get("deduplicated"),
-            "degradation_level": meta.get("degradation_level"),
-            "refs": refs, "ref_docs": sorted({c.split("::")[0] for c in refs if c}),
-            "ttft_s": r.get("ttft_s"), "total_s": r.get("total_s"),
-            "server_error": r.get("error"),
-        }
+        return outcome.record
 
     def handle_payload(self, payload: dict) -> dict:
         """一次 webhook 投递的完整处置；返回给 Alertmanager 的响应体（永远 200 语义）。"""
@@ -425,33 +383,16 @@ class Bridge:
             self.ledger(rec)
             records.append(rec)
         for item in items:
-            try:
-                rec = self.forward(item)
-            except LoginFailed as e:
-                # 凭据错：不 5xx（Alertmanager 会重试，而重试会加深锁定），
-                # 落台账后继续处理同批其余条目，等人修凭据。
-                rec = {"group_key": item["group_key"], "status": item["status"],
-                       "alertname": item["alertname"], "job": item["job"],
-                       "error_code": item["error_code"], "query": item["request"]["query"],
-                       "alert_id": item["alert_id"], "alert_id_basis": item["alert_id_basis"],
-                       "incident_id": item["incident_id"], "incident_basis": item["incident_basis"],
-                       "emit": False, "skip": "login_failed", "note": str(e)}
+            rec = self.forward(item)
             if rec.get("emit"):
                 self.stats["forwarded"] += 1
             else:
                 self.stats["skipped"] += 1
-            self.ledger(rec)
             records.append(rec)
         return {"received": len(items) + dropped, "dropped": dropped, "records": len(records)}
 
     def ledger(self, rec: dict) -> None:
-        rec = {"ts": int(time.time() * 1000), "user": self.user, **rec}
-        try:
-            LEDGER.parent.mkdir(parents=True, exist_ok=True)
-            with open(LEDGER, "a", encoding="utf-8") as fh:
-                fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
-        except OSError as e:
-            print(f"[warn] 台账写入失败（不阻断告警）: {e}", file=sys.stderr)
+        self.delivery.ledger.append(rec)
 
     # ---- 单实例守卫 -------------------------------------------------------
     def _touch_lock(self) -> None:

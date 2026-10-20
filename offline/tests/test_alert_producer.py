@@ -15,6 +15,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
+import alert_delivery as ad  # noqa: E402
 import alert_producer as ap  # noqa: E402
 import localapi  # noqa: E402
 
@@ -31,6 +32,7 @@ def _no_real_network(monkeypatch):
         raise AssertionError("单元用例不得发起真实网络调用：请 monkeypatch localapi.stream_chat/_open/get_json/login")
 
     monkeypatch.setattr(ap.localapi, "_open", _boom)
+    monkeypatch.setattr(ad.AlertLedger, "append", lambda self, rec: rec)
 
 
 def _state(metrics=None, health=None, degradation=None, quota=None, inflight=0) -> dict:
@@ -122,7 +124,7 @@ def test_upstream_and_refusal_rules():
 
 def test_gate_order_budget_beats_quota_beats_cooldown(monkeypatch):
     p = _producer(max_per_hour=1)
-    p.emits = [__import__("time").time()]                    # 已用满小时预算
+    p.delivery.budget_events = [__import__("time").time()]   # 已用满小时预算
     low_q = _state(quota={"limit": 100, "used": 99})
     alert = {"rule": "dep_down", "service": "qdrant", "query": "q"}
     assert p.gate(alert, low_q, 0.0)["skip"] == "hour_budget"
@@ -130,15 +132,16 @@ def test_gate_order_budget_beats_quota_beats_cooldown(monkeypatch):
     p2 = _producer()
     assert p2.gate(alert, low_q, 0.0)["skip"] == "quota_reserve"
 
-    # 闸门全开时必须落到 emit——用桩替掉 emit，断言"委派"而不是真发请求：
-    # 这一条曾用真发请求断言（本机网关恰好在跑所以绿，CI 无网关即 Connection refused）。
-    sent = []
+    # 闸门全开时必须落到真实投递路径；底层 HTTP 由系统边界桩承接。
     p3 = _producer(cooldown=300)
-    monkeypatch.setattr(p3, "emit", lambda a: sent.append(a["service"]) or {"rule": a["rule"], "emit": True})
-    p3.last_emit[p3._key(alert)] = 1000.0
+    p3.token = "t"
+    monkeypatch.setattr(ap.localapi, "stream_chat",
+                        lambda body, token, timeout=120, collect_deltas=True:
+                        {"status": 200, "meta": {}, "done": {}, "deltas": [],
+                         "error": None, "ttft_s": None, "total_s": 0.01})
+    p3.delivery.last_delivery_at[p3._key(alert)] = 1000.0
     assert p3.gate(alert, _state(), 1200.0)["skip"] == "cooldown"
-    assert "skip" not in p3.gate(alert, _state(), 1400.0)   # 冷却以"真的发出去"计时
-    assert sent == ["qdrant"], "闸门全开时应委派给 emit"
+    assert p3.gate(alert, _state(), 1400.0).get("emit") is True
 
 
 def test_cooldown_is_per_component_not_per_rule(monkeypatch):
@@ -148,14 +151,32 @@ def test_cooldown_is_per_component_not_per_rule(monkeypatch):
     就是这么暴露的（2026-09-17 实测：candidates=2 但 emitted=1）。
     """
     p = _producer(cooldown=300)
-    sent = []
-    monkeypatch.setattr(p, "emit", lambda a: sent.append(a["service"]) or {"rule": a["rule"], "emit": True})
+    p.token = "t"
+    monkeypatch.setattr(ap.localapi, "stream_chat",
+                        lambda body, token, timeout=120, collect_deltas=True:
+                        {"status": 200, "meta": {}, "done": {}, "deltas": [],
+                         "error": None, "ttft_s": None, "total_s": 0.01})
     a_redis = {"rule": "dep_down", "service": "redis", "query": "q"}
     a_es = {"rule": "dep_down", "service": "es", "query": "q"}
     assert p.gate(a_redis, _state(), 1000.0).get("emit") is True
-    p.last_emit[p._key(a_redis)] = 1000.0
     assert p.gate(a_es, _state(), 1100.0).get("emit") is True, "另一组件的故障不得被冷却吞掉"
     assert p.gate(a_redis, _state(), 1100.0)["skip"] == "cooldown", "同一组件仍受冷却约束"
+
+
+def test_emit_bypass_does_not_consume_hour_budget_or_cooldown(monkeypatch):
+    p = _producer(max_per_hour=1, cooldown=300)
+    p.token = "t"
+    calls = []
+    monkeypatch.setattr(ap.localapi, "stream_chat",
+                        lambda body, token, timeout=120, collect_deltas=True:
+                        calls.append(token) or {
+                            "status": 200, "meta": {}, "done": {}, "deltas": [],
+                            "error": None, "ttft_s": None, "total_s": 0.01})
+    alert = {"rule": "dep_down", "service": "qdrant", "query": "q"}
+
+    assert p.emit(alert).get("emit") is True
+    assert p.gate(alert, _state(), 1000.0).get("emit") is True
+    assert len(calls) == 2
 
 
 def test_gate_skips_are_recorded_with_rule_and_query():
@@ -229,6 +250,24 @@ def test_login_failure_backs_off_then_exits(monkeypatch):
     assert rc == 2 and p.login_failures == ap.MAX_LOGIN_FAILURES
     assert all(w["skip"] == "login_failed" for w in writes), writes
     assert len(writes) == ap.MAX_LOGIN_FAILURES
+
+
+def test_login_http_500_uses_backoff_threshold(monkeypatch):
+    """Producer 旧语义把登录端点的任何 HTTPError 都归为登录失败，而不是网关不可达。"""
+    p = _producer()
+    writes = []
+    monkeypatch.setattr(p, "ledger", lambda rec: writes.append(rec))
+    monkeypatch.setattr(ap.time, "sleep", lambda s: None)
+    monkeypatch.setattr(
+        ap.localapi,
+        "login",
+        lambda username=None: (_ for _ in ()).throw(_http_error(500)),
+    )
+
+    assert p.run(interval=0) == 2
+    assert p.login_failures == ap.MAX_LOGIN_FAILURES
+    assert len(writes) == ap.MAX_LOGIN_FAILURES
+    assert all(w["skip"] == "login_failed" and "HTTP 500" in w["note"] for w in writes)
 
 
 def test_login_success_resets_failure_counter(monkeypatch):

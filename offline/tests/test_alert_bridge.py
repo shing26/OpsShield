@@ -34,6 +34,7 @@ REPO = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO / "scripts"))
 
 import alert_bridge as ab  # noqa: E402
+import alert_delivery as ad  # noqa: E402
 import localapi  # noqa: E402
 
 
@@ -46,6 +47,7 @@ def _no_real_network(monkeypatch):
     monkeypatch.setattr(ab.localapi, "_open", _boom)
     # 台账不落真实文件：用例不该往 logs/ 里添行
     monkeypatch.setattr(ab.Bridge, "ledger", lambda self, rec: None)
+    monkeypatch.setattr(ad.AlertLedger, "append", lambda self, rec: rec)
 
 
 def _bridge(**kw) -> ab.Bridge:
@@ -54,6 +56,10 @@ def _bridge(**kw) -> ab.Bridge:
     for k, v in kw.items():
         setattr(args, k, v)
     return ab.Bridge(args)
+
+
+def _allow_live_quota(monkeypatch, bridge: ab.Bridge, remaining: int | None = 1000) -> None:
+    monkeypatch.setattr(bridge.delivery, "_live_quota_remaining", lambda: remaining)
 
 
 # ---- .env 读取（桥要能独立起，不依赖 shell 方言）---------------------------
@@ -243,7 +249,7 @@ def test_forward_ledger_row_carries_alert_identity(monkeypatch):
     """台账每行带 alert_id 与哈希前四元组——本轮研究产出的对账主键。"""
     b = _bridge()
     b.token = "t"
-    monkeypatch.setattr(b, "quota_remaining", lambda: 1000)
+    _allow_live_quota(monkeypatch, b)
     monkeypatch.setattr(ab.localapi, "stream_chat", lambda *a, **k: {
         "status": 200, "meta": {}, "done": {}, "error": None, "ttft_s": 0.1, "total_s": 0.2})
     item = ab.flatten(_payload(_alert()), "local")[0][0]
@@ -326,7 +332,7 @@ def test_forward_sends_incident_id_as_trace_header(monkeypatch):
 
     b = _bridge()
     b.token = "t"
-    monkeypatch.setattr(b, "quota_remaining", lambda: 1000)
+    _allow_live_quota(monkeypatch, b)
     monkeypatch.setattr(ab.localapi, "stream_chat", _fake)
     item = ab.flatten(_payload(_alert()), "local")[0][0]
     rec = b.forward(item)
@@ -341,7 +347,8 @@ def test_ledger_rows_carry_incident_identity(monkeypatch):
     b = _bridge(group_cap=1)
     b.token = "t"
     monkeypatch.setattr(b, "ledger", lambda rec: rows.append(rec))
-    monkeypatch.setattr(b, "quota_remaining", lambda: 1000)
+    monkeypatch.setattr(b.delivery.ledger, "append", lambda rec: rows.append(rec))
+    _allow_live_quota(monkeypatch, b)
     monkeypatch.setattr(ab.localapi, "stream_chat", lambda *a, **k: {
         "status": 200, "meta": {}, "done": {}, "error": None, "ttft_s": 0.1, "total_s": 0.2})
     payload = _payload(_alert(), _alert(name="OpsPilotRetrievalTimeouts"))
@@ -402,7 +409,7 @@ def test_empty_query_is_skipped_before_any_network_call(monkeypatch):
 def test_hour_budget_blocks_after_limit(monkeypatch):
     b = _bridge(max_per_hour=1)
     b.token = "t"          # 有 token 才走"转发"路径；否则会先尝试登录（单测无凭据）
-    monkeypatch.setattr(b, "quota_remaining", lambda: 1000)
+    _allow_live_quota(monkeypatch, b)
     monkeypatch.setattr(ab.localapi, "stream_chat", lambda *a, **k: {
         "status": 200, "meta": {}, "done": {}, "error": None, "ttft_s": 0.1, "total_s": 0.2})
     item = ab.flatten(_payload(_alert()), "local")[0][0]
@@ -412,7 +419,7 @@ def test_hour_budget_blocks_after_limit(monkeypatch):
 
 def test_quota_reserve_blocks_forwarding(monkeypatch):
     b = _bridge(quota_reserve=50)
-    monkeypatch.setattr(b, "quota_remaining", lambda: 49)
+    _allow_live_quota(monkeypatch, b, 49)
     called = []
     monkeypatch.setattr(ab.localapi, "stream_chat", lambda *a, **k: called.append(a) or {})
     rec = b.forward(ab.flatten(_payload(_alert()), "local")[0][0])
@@ -423,7 +430,7 @@ def test_quota_read_failure_does_not_block_forwarding(monkeypatch):
     """配额面读不到 ≠ 配额不足：告警可用性优先（下游网关自己还有 429 兜底）。"""
     b = _bridge()
     b.token = "t"
-    monkeypatch.setattr(b, "quota_remaining", lambda: None)
+    _allow_live_quota(monkeypatch, b, None)
     monkeypatch.setattr(ab.localapi, "stream_chat", lambda *a, **k: {
         "status": 200, "meta": {"fingerprint": "abc", "cache_hit": "L1"}, "done": {},
         "error": None, "ttft_s": 0.01, "total_s": 0.02})
@@ -434,7 +441,7 @@ def test_quota_read_failure_does_not_block_forwarding(monkeypatch):
 def test_gateway_unreachable_records_failure_without_raising(monkeypatch):
     b = _bridge()
     b.token = "t"
-    monkeypatch.setattr(b, "quota_remaining", lambda: 1000)
+    _allow_live_quota(monkeypatch, b)
     monkeypatch.setattr(ab.localapi, "stream_chat",
                         lambda *a, **k: (_ for _ in ()).throw(ConnectionRefusedError("refused")))
     rec = b.forward(ab.flatten(_payload(_alert()), "local")[0][0])
@@ -442,10 +449,34 @@ def test_gateway_unreachable_records_failure_without_raising(monkeypatch):
     assert b.token == "", "不可达后凭证态未知，须置空以便下次重登"
 
 
+def test_transport_failure_does_not_stop_later_items_in_batch(monkeypatch):
+    b = _bridge()
+    b.token = "stale"
+    _allow_live_quota(monkeypatch, b)
+    monkeypatch.setattr(ab.localapi, "login", lambda user: "fresh")
+    calls = []
+
+    def _stream(*args, **kwargs):
+        calls.append(1)
+        if len(calls) == 1:
+            raise ConnectionRefusedError("refused")
+        return {
+            "status": 200, "meta": {}, "done": {},
+            "error": None, "ttft_s": 0.1, "total_s": 0.2,
+        }
+
+    monkeypatch.setattr(ab.localapi, "stream_chat", _stream)
+
+    out = b.handle_payload(_payload(_alert(), _alert(name="Other")))
+
+    assert out["records"] == 2
+    assert b.stats["errors"] == 1 and b.stats["forwarded"] == 2
+
+
 def test_401_clears_token_for_self_healing(monkeypatch):
     b = _bridge()
     b.token = "stale"
-    monkeypatch.setattr(b, "quota_remaining", lambda: 1000)
+    _allow_live_quota(monkeypatch, b)
     monkeypatch.setattr(ab.localapi, "stream_chat", lambda *a, **k: {
         "status": 401, "code": "HTTP_401", "meta": {}, "done": {},
         "error": None, "ttft_s": None, "total_s": 0.01})
@@ -457,7 +488,7 @@ def test_refs_are_derived_from_chunk_ids(monkeypatch):
     """ref_docs 是本轮观测的主要产出之一（指纹碎没碎之外，还得看命中了哪些文档）。"""
     b = _bridge()
     b.token = "t"
-    monkeypatch.setattr(b, "quota_remaining", lambda: 1000)
+    _allow_live_quota(monkeypatch, b)
     monkeypatch.setattr(ab.localapi, "stream_chat", lambda *a, **k: {
         "status": 200, "meta": {}, "done": {"refs": [
             {"chunkId": "rb-201::排查步骤 > 第一步"},
@@ -468,18 +499,20 @@ def test_refs_are_derived_from_chunk_ids(monkeypatch):
     assert rec["ref_docs"] == ["pm-101", "rb-201"]
 
 
-def test_login_failure_is_not_swallowed_as_transient(monkeypatch):
-    """凭据错必须原样上抛（进程级退出码 2 语义），不得被当成一次网络抖动咽掉。"""
+def test_login_failure_is_skipped_for_batch_and_leaves_token_empty(monkeypatch):
+    """凭据错落 login_failed 台账，不伪装成网络故障，也不阻断同批其余告警。"""
     b = _bridge()
-    monkeypatch.setattr(b, "quota_remaining", lambda: 1000)
-    b.token = "stale"      # 有 token 才会走到 stream_chat；token 为空走的是 login 分支
+    _allow_live_quota(monkeypatch, b)
 
     def _boom(*a, **k):
-        raise ab.LoginFailed("HTTP 401")
+        error = RuntimeError("locked")
+        error.code = 401
+        raise error
 
-    monkeypatch.setattr(ab.localapi, "stream_chat", _boom)
-    with pytest.raises(ab.LoginFailed):
-        b.forward(ab.flatten(_payload(_alert()), "local")[0][0])
+    monkeypatch.setattr(ab.localapi, "login", _boom)
+    rec = b.forward(ab.flatten(_payload(_alert()), "local")[0][0])
+    assert rec["emit"] is False and rec["skip"] == "login_failed"
+    assert b.token == ""
 
 
 # ---- HTTP 面（进程内临时服务，不出环回）----------------------------------
@@ -533,7 +566,8 @@ def test_healthz_reports_up_without_touching_gateway(server):
 def test_valid_payload_returns_200_even_when_forwarding_fails(server, monkeypatch):
     """转发失败不该回 5xx：Alertmanager 会重试，而重试不会让网关复活，只会放大压力。"""
     s, b = server
-    monkeypatch.setattr(b, "quota_remaining", lambda: 1000)
+    b.token = "t"
+    _allow_live_quota(monkeypatch, b)
     monkeypatch.setattr(ab.localapi, "stream_chat",
                         lambda *a, **k: (_ for _ in ()).throw(ConnectionRefusedError("refused")))
     status, body = s.post(json.dumps(_payload(_alert(summary="上游限流"))).encode("utf-8"))
@@ -578,7 +612,8 @@ def test_group_cap_records_a_skip_row(server, monkeypatch):
     b.group_cap = 1
     written = []
     monkeypatch.setattr(b, "ledger", lambda rec: written.append(rec))
-    monkeypatch.setattr(b, "quota_remaining", lambda: 1000)
+    b.token = "t"
+    _allow_live_quota(monkeypatch, b)
     monkeypatch.setattr(ab.localapi, "stream_chat", lambda *a, **k: {
         "status": 200, "meta": {}, "done": {}, "error": None, "ttft_s": 0.1, "total_s": 0.2})
     status, body = s.post(json.dumps(_payload(_alert(), _alert(name="Other"))).encode("utf-8"))
