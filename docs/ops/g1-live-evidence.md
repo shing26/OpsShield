@@ -142,6 +142,64 @@ alertmanager_notifications_failed_total{integration="webhook",reason="other"} 74
 只验证了 `aiops_disk_free_bytes` 指标与 `OpsPilotDiskLow` 规则已加载，**没有真的填满磁盘**；
 不宣称该场景已演练。
 
+## 2.6 失败证据 full（门禁 4）
+
+用临时网关（memory + live 真实 embedding/rerank、故意把 LLM model 配成不存在）制造一次真实失败：
+
+```text
+SSE status=200 event=error code=PIPELINE_ERROR
+refs=3（检索已成功，失败发生在 LLM）
+meta.degradation_level=L0 gate=none
+```
+
+三条证据能指到同一 request_id `a8cf4948`：
+
+| 面 | 证据 |
+|---|---|
+| 审计 | `ev=chat_failed, err_class=LlmHttpException, err_msg="LLM HTTP 404", delivered=false, request_id=a8cf4948` |
+| 应用日志 | `WARN [a8cf4948] ChatOrchestrator - stream error: LlmHttpException: LLM HTTP 404` |
+| 指标 | `aiops_requests_failed_total{reason="LlmHttpException"} 1.0` |
+
+说明：失败请求仍返回 HTTP 200 + SSE error 帧（协议口径），不是 5xx；审计与日志的
+`request_id` 是关联键。
+
+## 2.7 备份每日调度（门禁 1）
+
+Windows 本机非管理员，`install_windows_tasks.ps1` 的 `Register-ScheduledTask` 被拒绝；
+改用 `schtasks.exe /Create` 注册同名任务，任务动作指向稳定的
+`C:\Users\Shing\opspilot-backup.ps1`（调用 `scripts/backup.sh`）。
+
+实测：
+
+```text
+TaskName: OpsPilot-Backup
+Status: Ready
+Next Run Time: 2026/10/24 2:00:00
+Last Run Time: 2026/10/23 3:31:39
+Last Result: 0
+```
+
+由任务触发的产物（不是手工跑）：
+
+```json
+{"epoch":1792697508,"ts":"2026-10-22T19:31:48Z","sha256":"81f048f0...","size":11800,
+ "verified":true,"file":"backup/users-2026-10-23.zip","encrypted":false}
+```
+
+`python scripts/check_backup_age.py` → `BACKUP AGE: 0.0h / 26h, verified=True`，exit 0。
+边界：这是 Windows 计划任务形态；Linux 生产仍需 systemd timer。
+
+## 2.8 Runbook 演练（门禁 10）
+
+| 症状 | 本次动作 | 结果 |
+|---|---|---|
+| A 登录 500 / 账号库异常 | 用最新任务备份跑 `restore_drill.sh` 到演练库；核对账号数与 token_ver | **PASS**（4 账号；演练库已清理）；未真的制造一次在线登录 500，属 tabletop + 恢复验证 |
+| B 网关不可达 | 02:37:39 停 gateway，按 runbook 看端口/日志，02:43 重启 | readiness 恢复 UP；`OpsPilotDown` 告警已投递 |
+| C 降级常亮 | 临时网关把 LLM model 配成不存在，连续 3 次真实失败；查 `/admin/state` | 档位 L0→L0→L2，`failure=3`；换回有效模型重启后 L0、failure=0 |
+
+结论：B/C 是真实故障演练；A 只做到“备份可用性 + 恢复 tabletop”，没有在线登录 500 的故障注入，
+门禁 10 仍不判全绿。
+
 ## 3. 未完成/被环境阻塞
 
 | 项 | 结果 | 原因 |

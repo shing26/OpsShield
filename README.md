@@ -14,7 +14,7 @@
 
 [![CI Status](https://github.com/shing26/OpsShield/actions/workflows/ci.yml/badge.svg)](https://github.com/shing26/OpsShield/actions)
 [![Java](https://img.shields.io/badge/Java-21-ED8B00?style=flat&logo=openjdk&logoColor=white)](https://openjdk.org/)
-[![Spring Boot](https://img.shields.io/badge/Spring_Boot-3.5.7-6DB33F?style=flat&logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)
+[![Spring Boot](https://img.shields.io/badge/Spring_Boot-3.5.14-6DB33F?style=flat&logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)
 [![Metrics](https://img.shields.io/badge/Metrics-Micrometer_%7C_Prometheus-498BA3?style=flat&logo=prometheus&logoColor=white)](https://prometheus.io/)
 [![Java Tests](https://img.shields.io/badge/Java_Tests-385_Passed-4CAF50?style=flat&logo=openjdk&logoColor=white)](#-测试体系与安全回归测试)
 [![Python Probes](https://img.shields.io/badge/Probes-374_Passed-3776AB?style=flat&logo=python&logoColor=white)](#-测试体系与安全回归测试)
@@ -99,7 +99,7 @@ Java 21 虚拟线程 · ES 倒排 + Qdrant 向量双路召回（RRF 融合）· 
 >
 > **G0 收尾批次（2026-10-22）**已把其中一部分从「没有」推进到「有脚本与门禁、待部署接线/演练」：strict 启动校验、环回默认、占位凭据拒启、1MB 请求上限、面板转义、安全响应头、失败请求审计/堆栈/计数、备份校验与龄期指标、恢复演练脚本、告警人类出口、优雅停机配置、审计 2GB 上限/180 天/异步落盘。**这些仍不等于「可托付」**——下表只保留仍未闭环的部分，状态只认门禁文件的复核记录。
 >
-> **G1 首版（2026-10-22）**继续补上了：全局+租户准入与 429/Retry-After、客户端断开取消与优雅排空、L2 TTL/有界 LRU/reingest 清空、SOP TTL 与启动补灌、Redis volatile-lru、H2/backend 健康指示器与 liveness/readiness 分组、TTFT/请求耗时 Timer 与 SLO burn-rate 规则、Flyway schema 版本化、运行时 smoke 与 release/rollback/SBOM 脚本、Spring Boot 3.5.7 升版、按症状拆的 5 分钟 runbook、审计 SHA-256 哈希链与校验器、人类告警多渠道路由（Slack/飞书自定义机器人/企微/Telegram）。门禁 5/6/8/10（发布回滚演练、单人并发压测、SCA 实跑、runbook 演练）仍只有 fast/单测/静态证据。2026-10-22 另跑过一次 **`--full` 运行时冒烟**（memory/mock 真进程 + 真实手动备份）：PASS=68 / WARN=0 / FAIL=0，覆盖 readiness、全部 aiops 指标、审计链、面板身份；`soak.sh` 8 并发 5s：185 请求 / 181 成功 / 4×429 / 0×5xx，审计链正常；`fault_drill.sh` 验证 strict 配置启动即拒（exit 1）与审计链改一行必红（exit 3）。它们证明的是「运行时面与准入背压接线通了」，**不等于十条门禁全绿**；剩余真实环境动作逐项列在 [docs/ops/g1-remaining.md](docs/ops/g1-remaining.md)。
+> **G1 首版（2026-10-22）**继续补上了：全局+租户准入与 429/Retry-After、客户端断开取消与优雅排空、L2 TTL/有界 LRU/reingest 清空、SOP TTL 与启动补灌、Redis volatile-lru、H2/backend 健康指示器与 liveness/readiness 分组、TTFT/请求耗时 Timer 与 SLO burn-rate 规则、Flyway schema 版本化、运行时 smoke 与 release/rollback/SBOM 脚本、Spring Boot 3.5.14 升版、按症状拆的 5 分钟 runbook、审计 SHA-256 哈希链与校验器、人类告警多渠道路由（Slack/飞书自定义机器人/企微/Telegram）。门禁 5/6/8/10（发布回滚演练、单人并发压测、SCA 实跑、runbook 演练）仍只有 fast/单测/静态证据。2026-10-22 另跑过一次 **`--full` 运行时冒烟**（memory/mock 真进程 + 真实手动备份）：PASS=68 / WARN=0 / FAIL=0，覆盖 readiness、全部 aiops 指标、审计链、面板身份；`soak.sh` 8 并发 5s：185 请求 / 181 成功 / 4×429 / 0×5xx，审计链正常；`fault_drill.sh` 验证 strict 配置启动即拒（exit 1）与审计链改一行必红（exit 3）。它们证明的是「运行时面与准入背压接线通了」，**不等于十条门禁全绿**；剩余真实环境动作逐项列在 [docs/ops/g1-remaining.md](docs/ops/g1-remaining.md)。
 
 这个口径来自 2026-10-22 的运维审查（[docs/qa/2026-10-22-ops-readiness-review.md](docs/qa/2026-10-22-ops-readiness-review.md)）：四条线并行实测后的结论是**机制层可演示、可论证，运维交付层尚未可托付**。下面三张表是那份结论的可执行版本；表格与门禁文件冲突时，以门禁文件为准（它带日期与复核记录）。
 
@@ -119,16 +119,16 @@ Java 21 虚拟线程 · ES 倒排 + Qdrant 向量双路召回（RRF 融合）· 
 
 | 缺口 | 现状一句话 | 门禁 |
 | --- | --- | --- |
-| 备份调度与可验证恢复 | 脚本/校验/状态文件/演练脚本已就位（`restore_drill.sh` PASS）；**缺每日实际调度与一次告警送达回执**；恢复旧库仍会回退 token_ver，恢复后必须强制全员重登 | 1 |
+| 备份调度与可验证恢复 | **Windows 计划任务 `OpsPilot-Backup` 已注册并触发成功**（Last Result=0，age=0.0h，verified=true）；`restore_drill.sh` PASS；恢复旧库仍会回退 token_ver，恢复后必须强制全员重登 | 1 |
 | 告警到人 | `notify.py` 多通道 + up/备份龄/审计/在途 规则已就位；**飞书 webhook+secret 已配置，用户已确认群内收到；网关 down / Redis down 两场景已真实触发并投递**；磁盘满仅验规则/指标，未真填盘 | 2 |
 | 部署默认边界 | 已落地 strict 启动校验、环回默认、占位凭据拒启、1MB 请求上限、面板转义、安全响应头；容器加只读根/`cap_drop: ALL`/`no-new-privileges`；部署清单须显式 `OPSPILOT_STRICT=true` | 3 |
-| 失败请求的证据 | 审计 `ev=chat_failed` + 堆栈 + `aiops_requests_failed_total`、客户端断开 aborted、优雅收尾已落地；**缺一次真实失败请求的 full 演练对账** | 4 |
+| 失败请求的证据 | **已做真实失败对账**：request_id `a8cf4948` 的 `ev=chat_failed` 审计、`stream error` 日志、`aiops_requests_failed_total{reason="LlmHttpException"}` 三面对齐 | 4 |
 | 优雅停机与发布回滚 | 优雅停机配置、`release.sh`（jar+sha256+manifest+commit）、`smoke.sh`、`rollback.sh`（校验+操作提示）、`drill_release_rollback.sh`（产物哈希+回滚入口）、本机进程级 previous→current→rollback 已通过；**缺 systemd 测试机上的真实停服/切换** | 5 |
 | 准入控制 | 全局+租户两级许可、429+Retry-After、admission_rejected 计数已落地（[ADR-0026](docs/adr/0026-admission-control-and-degradation-scope.md)）；soak 8×5s 实测 4×429、0×5xx；**缺 live 单租户压测**（门禁 6） | 6 |
 | 延迟分位与 SLO 测量 | TTFT（P50/P95/P99+histogram）与请求耗时 Timer、SLO burn-rate 规则已落地；**缺 live 读数与月报**（门禁 7） | 7 |
-| 依赖支持窗口 | **Spring Boot 3.5.7（受支持线）、Flyway schema 版本化、CycloneDX SBOM 已落地；SCA（Trivy）已进 CI 但尚未在真实构建上出过结果** | 8 |
+| 依赖支持窗口 | Spring Boot 3.5.14、Flyway、CycloneDX SBOM 已落地；**CI Trivy 已真实跑出结果：44 个 HIGH/CRITICAL CVE（Tomcat/Jackson/Netty/Spring 等），security job 当前红**，待升级/逐条豁免 | 8 |
 | 审计留存与防篡改 | 2GB 上限 / 180 天 / 异步落盘 + SHA-256 哈希链 + `verify_audit_chain.py` 已落地；systemd 单元已加 `UMask=0027`/`ProtectSystem=strict` 等加固，`audit_offsite.sh` + 每日 timer 模板已提供；**尚未接真实远端/WORM**（链本身不能证尾部未删） | 9 |
-| 值班 5 分钟动作 | [docs/ops/runbook.md](docs/ops/runbook.md) 已按「登录 500 / 网关不可达 / 降级常亮」拆成 5 分钟动作；**缺一次按 runbook 的真实演练** | 10 |
+| 值班 5 分钟动作 | [docs/ops/runbook.md](docs/ops/runbook.md) 已拆三症状；**B/C 已真实演练**（网关重启、L2→L0），A 只做备份恢复 tabletop，**缺在线登录 500 注入** | 10 |
 
 ### G1 门禁表（十条；判据、演练步骤与复核记录见 [docs/ops/production-gate.md](docs/ops/production-gate.md)）
 

@@ -15,20 +15,11 @@
 
 ## 1. 备份每日调度（门禁 1）
 
-缺：实际注册的每日任务 + 一次由任务触发的成功备份（不是手动跑）。
+已完成（Windows 计划任务形态）：`OpsPilot-Backup` 已注册，Next Run 2026/10/24 02:00，
+Last Result=0；由任务触发备份 `backup/users-2026-10-23.zip`，`verified=true`，
+`check_backup_age.py` age=0.0h。证据见 [g1-live-evidence.md](g1-live-evidence.md) §2.7。
 
-```bash
-# Linux
-sudo cp ops/systemd/opspilot-backup.* /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now opspilot-backup.timer
-systemctl list-timers opspilot-backup.timer
-# 次日验收
-cat backup/.last-success.json
-python scripts/check_backup_age.py
-```
-
-Windows 开发形态：`powershell -File scripts/install_windows_tasks.ps1`，回读 `Get-ScheduledTask -TaskName "OpsPilot-Backup"`。
+边界：Linux 生产仍需把 `ops/systemd/opspilot-backup.timer` 注册到 systemd 并等一次真实触发。
 验收：`check_backup_age.py` 退出 0 且 `verified=true`，时间戳来自任务运行（`logs/backup.task.log` / journal）。
 
 ## 2. 告警到人（门禁 2）
@@ -42,15 +33,17 @@ Windows 开发形态：`powershell -File scripts/install_windows_tasks.ps1`，�
 - Alertmanager webhook 成功通知 +4（两条 firing + 两条 resolved），无新增失败。
 
 还缺：
-- 磁盘满场景：只验证 `aiops_disk_free_bytes` 指标与 `OpsPilotDiskLow` 规则已加载，**未真的填满磁盘**；
-- 飞书群内 2 条 firing + 2 条 resolved 的人工确认。
+- 磁盘满场景：只验证 `aiops_disk_free_bytes` 指标与 `OpsPilotDiskLow` 规则已加载，**未真的填满磁盘**。
 
 ## 3. 失败证据 full 演练（门禁 4）
 
-缺：一次真实失败请求的审计行 + 堆栈 + `aiops_requests_failed_total` 增量在同一时间窗对上。
+已完成：临时网关把 LLM model 配成不存在，制造一次真实失败（request_id `a8cf4948`）。
 
-- 用错误 key/断网/强制 4xx 制造一次失败（不要改生产 key 持久化）。
-- 验收：`ev=chat_failed` 审计行、`logs/app.log` 的 `stream error`、Prometheus 计数能指到同一 `request_id`。
+- 审计：`ev=chat_failed, err_class=LlmHttpException, err_msg="LLM HTTP 404", delivered=false`；
+- 日志：`WARN [a8cf4948] ChatOrchestrator - stream error: LlmHttpException: LLM HTTP 404`；
+- 指标：`aiops_requests_failed_total{reason="LlmHttpException"} 1.0`。
+
+证据见 [g1-live-evidence.md](g1-live-evidence.md) §2.6。
 
 ## 4. 发布/回滚真实演练（门禁 5）
 
@@ -86,12 +79,13 @@ Windows 开发形态：`powershell -File scripts/install_windows_tasks.ps1`，�
 
 ## 8. Runbook 演练（门禁 10）
 
-缺：按 [runbook.md](runbook.md) 的 A/B/C 三症状各走一次。
+已做本地演练（证据见 [g1-live-evidence.md](g1-live-evidence.md) §2.8）：
 
-- “登录 500”：停库/造坏库 → 按 runbook 恢复；
-- “网关不可达”：停进程 → 按 runbook 与回滚脚本恢复；
-- “降级常亮”：制造上游 429/断网 → 按 runbook 判断解除。
-- 记录每步耗时；目标 5 分钟内“先止损/先保现场”。
+- “网关不可达”：02:37:39 停 gateway → 按 runbook 看端口/日志 → 02:43 重启，readiness UP；
+- “降级常亮”：LLM model 配错，连续 3 次失败 → L2、failures=3；换回有效模型重启 → L0、failures=0；
+- “登录 500”：只做到备份可用性 + `restore_drill.sh` 恢复 tabletop（4 账号、token_ver 可读），**未做在线登录 500 故障注入**。
+
+还缺：在线制造一次登录 500（停库/坏库）并按 runbook 恢复，记录耗时。
 
 ## 9. 语料漂移（已知债务）
 
