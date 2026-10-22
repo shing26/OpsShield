@@ -193,12 +193,12 @@ Last Result: 0
 
 | 症状 | 本次动作 | 结果 |
 |---|---|---|
-| A 登录 500 / 账号库异常 | 用最新任务备份跑 `restore_drill.sh` 到演练库；核对账号数与 token_ver | **PASS**（4 账号；演练库已清理）；未真的制造一次在线登录 500，属 tabletop + 恢复验证 |
+| A 登录 500 / 账号库异常 | 临时网关用空库启动（Flyway off）→ 登录返回 500；按 runbook 换回有效库/备份后重启 | 登录 500（`Table "USERS" not found`），恢复后 `LOGIN_OK`；另跑 `restore_drill.sh` 验证任务备份可用（4 账号） |
 | B 网关不可达 | 02:37:39 停 gateway，按 runbook 看端口/日志，02:43 重启 | readiness 恢复 UP；`OpsPilotDown` 告警已投递 |
 | C 降级常亮 | 临时网关把 LLM model 配成不存在，连续 3 次真实失败；查 `/admin/state` | 档位 L0→L0→L2，`failure=3`；换回有效模型重启后 L0、failure=0 |
 
-结论：B/C 是真实故障演练；A 只做到“备份可用性 + 恢复 tabletop”，没有在线登录 500 的故障注入，
-门禁 10 仍不判全绿。
+结论：A/B/C 三症状均已实际操作；A 是在临时库上注入登录 500 并恢复，B/C 是真实停进程/模型错误。
+门禁 10 可判绿（本机形态；生产 systemd 形态仍需在目标机复跑）。
 
 ## 3. 未完成/被环境阻塞
 

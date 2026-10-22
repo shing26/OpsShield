@@ -81,11 +81,11 @@ Last Result=0；由任务触发备份 `backup/users-2026-10-23.zip`，`verified=
 
 已做本地演练（证据见 [g1-live-evidence.md](g1-live-evidence.md) §2.8）：
 
+- “登录 500”：空库启动 → 登录 500（`Table "USERS" not found`）→ 换回有效库重启 → `LOGIN_OK`；
 - “网关不可达”：02:37:39 停 gateway → 按 runbook 看端口/日志 → 02:43 重启，readiness UP；
-- “降级常亮”：LLM model 配错，连续 3 次失败 → L2、failures=3；换回有效模型重启 → L0、failures=0；
-- “登录 500”：只做到备份可用性 + `restore_drill.sh` 恢复 tabletop（4 账号、token_ver 可读），**未做在线登录 500 故障注入**。
+- “降级常亮”：LLM model 配错，连续 3 次失败 → L2、failures=3；换回有效模型重启 → L0、failures=0。
 
-还缺：在线制造一次登录 500（停库/坏库）并按 runbook 恢复，记录耗时。
+门禁 10 本机形态已满足；生产 systemd 形态仍需在目标机复跑一次。
 
 ## 9. 语料漂移（已知债务）
 

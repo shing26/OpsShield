@@ -128,7 +128,7 @@ Java 21 虚拟线程 · ES 倒排 + Qdrant 向量双路召回（RRF 融合）· 
 | 延迟分位与 SLO 测量 | TTFT（P50/P95/P99+histogram）与请求耗时 Timer、SLO burn-rate 规则已落地；**缺 live 读数与月报**（门禁 7） | 7 |
 | 依赖支持窗口 | Spring Boot 3.5.14、Flyway、CycloneDX SBOM 已落地；**CI Trivy 已真实跑出结果：44 个 HIGH/CRITICAL CVE（Tomcat/Jackson/Netty/Spring 等），security job 当前红**，待升级/逐条豁免 | 8 |
 | 审计留存与防篡改 | 2GB 上限 / 180 天 / 异步落盘 + SHA-256 哈希链 + `verify_audit_chain.py` 已落地；systemd 单元已加 `UMask=0027`/`ProtectSystem=strict` 等加固，`audit_offsite.sh` + 每日 timer 模板已提供；**尚未接真实远端/WORM**（链本身不能证尾部未删） | 9 |
-| 值班 5 分钟动作 | [docs/ops/runbook.md](docs/ops/runbook.md) 已拆三症状；**B/C 已真实演练**（网关重启、L2→L0），A 只做备份恢复 tabletop，**缺在线登录 500 注入** | 10 |
+| 值班 5 分钟动作 | [docs/ops/runbook.md](docs/ops/runbook.md) 已拆三症状；**A/B/C 均已本地实演**：登录 500→恢复、网关停→重启、L2→L0；生产 systemd 形态仍需目标机复跑 | 10 |
 
 ### G1 门禁表（十条；判据、演练步骤与复核记录见 [docs/ops/production-gate.md](docs/ops/production-gate.md)）
 
