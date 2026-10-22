@@ -64,10 +64,14 @@ Last Result=0；由任务触发备份 `backup/users-2026-10-23.zip`，`verified=
 
 ## 6. SCA 真实结果（门禁 8）
 
-缺：CI `security` job 的 Trivy 结果（本地 Docker Hub 拉取受限，未跑）。
+已完成“跑出结果”：CI run `39840772575` / `39845265817` 的 `security` job 用 Trivy SBOM 扫描，
+真实命中 **44 个 HIGH/CRITICAL CVE**（Tomcat、Jackson、Netty、Spring 等），`security` job exit 1；
+其余 job（java/smoke/sbom/static/panel/provenance/python/shell）均 green。
 
-- 首次 push/PR 后保存 `security` job 日志与 findings；命中 HIGH/CRITICAL 按修复/豁免记录处置。
-- Dependabot 的 PR 至少有一次实际合并/关闭记录。
+还缺处置：
+- 逐条升级依赖或登记豁免（需要兼容性验证）；
+- 修完后 CI 全绿；
+- Dependabot 的 PR 至少一次实际合并/关闭记录。
 
 ## 7. 审计异地 WORM（门禁 9）
 
