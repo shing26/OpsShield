@@ -89,10 +89,17 @@ jobs:
         with:
           scan-type: sbom
           scan-ref: target/bom.json
-          format: table
+          format: json
+          output: trivy-results.json
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: '1'
+      - name: Upload Trivy report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-sbom
+          path: trivy-results.json
 
   static-gate:
     runs-on: ubuntu-latest
