@@ -2,7 +2,8 @@
 
 > 数据源：GitHub Actions run `39871945612` 的 Trivy SBOM JSON artifact（Boot 3.5.14 初始状态）。
 > 修复前 37 个 HIGH/CRITICAL；本轮通过同主版本补丁覆盖修复 33 个，4 个因修复只在
-> Spring 7 / Spring Data 4 线而记录风险接受。最终 CI 结果以 `.trivyignore` 生效后的 run 为准。
+> Spring 7 / Spring Data 4 线而记录风险接受。最终 CI run **`39873876035` 全绿**
+> （security job success，artifact 中 Java vulns=0）。
 >
 > 处置原则：**能同主版本补丁升级的不豁免**；只有跨大版本且本服务无攻击面时才豁免，
 > 并写明复核触发条件。豁免文件：[`.trivyignore`](../../.trivyignore)。
@@ -14,7 +15,7 @@
 | 初始 HIGH/CRITICAL | 37 |
 | 同主版本补丁修复 | 33 |
 | 风险接受（写入 `.trivyignore`） | 4 |
-| 目标 CI 结果 | security job 通过（0 未处置 HIGH/CRITICAL） |
+| 最终 CI 结果（run 39873876035） | security job success；artifact `vulns=0` |
 
 ## 修复矩阵
 
@@ -81,4 +82,5 @@ CI security artifact               trivy-results.json（37 条初始）
 CI java/smoke/sbom/static/python    success
 ```
 
-修复后 CI 产物应为 0 条未处置 HIGH/CRITICAL（豁免项由 `.trivyignore` 过滤）。
+修复后 CI 产物为 0 条未处置 HIGH/CRITICAL（豁免项由 `.trivyignore` 过滤）；
+最终 run `39873876035` 的 security job 为 success，artifact 中 Java vulns=0。

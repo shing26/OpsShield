@@ -64,14 +64,13 @@ Last Result=0；由任务触发备份 `backup/users-2026-10-23.zip`，`verified=
 
 ## 6. SCA 真实结果（门禁 8）
 
-已完成“跑出结果”：CI run `39840772575` / `39845265817` 的 `security` job 用 Trivy SBOM 扫描，
-真实命中 **44 个 HIGH/CRITICAL CVE**（Tomcat、Jackson、Netty、Spring 等），`security` job exit 1；
-其余 job（java/smoke/sbom/static/panel/provenance/python/shell）均 green。
+已完成：CI run `39873876035` 全绿，`security` job success；Trivy artifact 中 Java vulns=0。
 
-还缺处置：
-- 逐条升级依赖或登记豁免（需要兼容性验证）；
-- 修完后 CI 全绿；
-- Dependabot 的 PR 至少一次实际合并/关闭记录。
+- 初始 37 个 HIGH/CRITICAL；同主版本补丁覆盖修复 33 个（Tomcat 10.1.59、Jackson 2.22.3、
+  Netty 4.1.137.Final、Spring 6.2.19、Micrometer 1.15.12、protobuf 3.25.5、gRPC 1.75.0）；
+- 4 个跨大版本修复的 CVE 登记在 [`.trivyignore`](../../.trivyignore) + [sca-findings.md](sca-findings.md)，
+  附补偿控制与 2027-10-23 复核到期；
+- 还缺：Dependabot 的 PR 至少一次实际合并/关闭记录。
 
 ## 7. 审计异地 WORM（门禁 9）
 
