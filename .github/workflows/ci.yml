@@ -28,6 +28,73 @@ jobs:
       - name: Coverage ratchet (0-token)
         run: python3 scripts/check_coverage.py
 
+  # G0（2026-10-22）：生产门禁静态档。把"备份龄/告警规则/绑定地址/审计上限/失败证据"
+  # 这些审查发现的硬伤钉成每次 CI 都跑的判据——它们不是功能测试，是"运维面没接线"的回归锁。
+  # 测试本身仍由 java/python job 跑；本 job 用 SKIP_TESTS=1 避免重复。
+  # G1（2026-10-22）：真进程 smoke。单测全 mock 证明不了"打出来的 fat jar 能不能起、
+  # Flyway 会不会在空库建表、SSE 与指标是否真的通"——这一层用 memory+mock 起 jar 跑最短链路。
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
+      - name: Build fat jar
+        run: mvn -B -DskipTests package
+      - name: Runtime smoke (memory/mock)
+        run: bash scripts/smoke.sh
+
+  # G1：依赖物料清单。不是漏洞扫描，但发布时"带了什么"必须可复核；
+  # CycloneDX JSON 由 release 归档/下游 SCA 消费。
+  # 真正的 SCA 在 security job（Trivy FS）；两者分工：SBOM 回答"有什么"，SCA 回答"有没有已知洞"。
+  sbom:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
+      - name: Generate CycloneDX SBOM
+        run: bash scripts/sbom.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: target/bom.json
+
+  # G1 门禁 8：SCA。Trivy 扫依赖 lock/BOM 与文件系统里的已知 CVE；只拦高危/严重且已有修复的项。
+  # 为什么不用 OWASP dependency-check：它依赖 NVD API key/长时下载，在 PR 上稳定性差；
+  # Trivy 的漏洞库随 action 镜像更新，CI 可复现。SBOM 仍由 sbom job 产出。
+  security:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Trivy filesystem scan (HIGH/CRITICAL)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+
+  static-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Production gate (static)
+        run: SKIP_TESTS=1 bash scripts/production_gate.sh --fast
+
   panel-contract:
     runs-on: ubuntu-latest
     steps:

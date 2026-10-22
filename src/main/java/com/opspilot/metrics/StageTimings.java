@@ -16,8 +16,10 @@ import java.util.Map;
  *   **不是四者之和**。
  * - `vectorMs` **包含该腿内部的 embedding 调用**（Qdrant 腿先 embed 再检索）。
  * - `rerankMs == 0` 表示**未调用**（快路径 / es_only / 降级），不是"很快"。
- * - `l2StoreMs` 是答案产出后的 L2 写入，它**内含第二次 embedding 调用**——同一次请求里
- *   embedding 被调了两次（检索腿一次、L2 写入一次），这正是本字段存在的意义之一。
+ * - `l2StoreMs` 在 G1（2026-10-22）后表示 **L2 写入的入队开销**，不是真实写入耗时：
+ *   答案下发后异步写（embedding+Qdrant upsert 在虚拟线程），本字段只测"把任务交给执行器"的
+ *   那一段，仍可发现执行器饱和/拒绝；真实写入耗时看 `aiops.cache.write.fail` 与 Qdrant 侧指标。
+ *   历史含义（内含第二次 embedding 调用）已随本次异步化失效，引用旧数据时必须带时间口径。
  *
  * 非 chat 路径（/search、鉴权、管理面）传 `null`，审计行不落 `stage_ms` 字段——与既有
  * `src_tenant` / `verbatim_masked` 的"null 即不落"约定一致，避免全量噪音。

@@ -216,4 +216,65 @@ class AuditServiceTest {
         assertFalse(r.events().get(1).containsKey("note"), "无 note 不落字段");
         assertFalse(r.events().get(2).containsKey("note"), "空白 note 归一为不落字段");
     }
+
+    /**
+     * G0（2026-10-22）：失败请求必须有审计行。
+     *
+     * 为什么锁：审计此前只在成功/拒答/澄清路径写，"欠费、超时、后段异常"是证据黑洞。
+     * 本用例锁 schema 的最小可归因集：ev/身份/来源/query 截断/异常类/截断后的 message/档位；
+     * 并锁"空白 source 归一 manual"（与 chat 行同口径，防止失败行出现空来源）。
+     */
+    @Test
+    void chatFailedEventCarriesIdentityErrorAndTruncation() {
+        AuditService svc = new AuditService();
+        String longQuery = "q".repeat(500);
+        String longMessage = "m".repeat(500);
+        svc.logChatFailed(U, "sse", "   ", longQuery, "fp-x",
+                new IllegalStateException(longMessage), "L2");
+
+        var ev = svc.recentSince(0, 10).events().get(0);
+        assertEquals("chat_failed", ev.get("ev"));
+        assertEquals("sse", ev.get("via"));
+        assertEquals("manual", ev.get("source"), "空白 source 归一 manual（与 chat 行同口径）");
+        assertEquals("sre-x", ev.get("sub"));
+        assertEquals("tenant-demo", ev.get("tenant"));
+        assertEquals(1, ev.get("level"));
+        assertEquals(200, ((String) ev.get("q")).length(), "query 必须截断（禁止 10MB 审计行）");
+        assertEquals("IllegalStateException", ev.get("err_class"));
+        assertEquals(200, ((String) ev.get("err_msg")).length(), "异常 message 必须截断");
+        assertEquals("L2", ev.get("degrade_level"));
+        assertFalse(ev.containsKey("cache_hit"), "失败行没有缓存语义，不得塞默认值");
+    }
+
+    /**
+     * G1 门禁 9：每行必须带 prev_hash/hash，且后一行 prev_hash = 前一行 hash。
+     * 这不是"日志里多两个字段"——它是 scripts/verify_audit_chain.py 能证明"内容未被改"的唯一锚点。
+     */
+    @Test
+    void auditRowsFormHashChain() {
+        AuditService svc = new AuditService();
+        writeN(svc, 2);
+        var rows = svc.recentSince(0, 10).events();
+        String firstHash = (String) rows.get(0).get("hash");
+        assertEquals("GENESIS", rows.get(0).get("prev_hash"), "首行从 GENESIS 起链");
+        assertNotNull(firstHash);
+        assertEquals(64, firstHash.length(), "SHA-256 十六进制长度");
+        assertEquals(firstHash, rows.get(1).get("prev_hash"), "后一行必须指向前一行 hash");
+        assertNotEquals(firstHash, rows.get(1).get("hash"));
+    }
+
+    /** G0：所有入审计的身份/路径字段统一截断——此前 sub 不截断，未认证请求可写巨型审计行。 */
+    @Test
+    void longIdentityFieldsAreTruncatedAtSingleHelper() {
+        AuditService svc = new AuditService();
+        UserContext longUser = new UserContext("s".repeat(500), "sre", 1, "tenant-demo");
+        svc.log(longUser, "chat", "sse", "manual", "q".repeat(500), "fp", "none", "hybrid",
+                false, 1, 1, null, null, null, null);
+        svc.logAuthDenied("x".repeat(500), "/api/v1/auth/login", "login_failed", "bad_credentials");
+
+        var rows = svc.recentSince(0, 10).events();
+        assertEquals(64, ((String) rows.get(0).get("sub")).length(), "chat 行 sub 截 64");
+        assertEquals(200, ((String) rows.get(0).get("q")).length(), "chat 行 q 截 200");
+        assertEquals(64, ((String) rows.get(1).get("sub")).length(), "auth 行 sub 截 64");
+    }
 }

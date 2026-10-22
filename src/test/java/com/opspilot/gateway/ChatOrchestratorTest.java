@@ -88,6 +88,7 @@ class ChatOrchestratorTest {
     private DegradationState degrade;
     private SopFallbackService sopFallback;
     private com.opspilot.metrics.OpsMetrics metrics;   // 生成质量包：真计数对象，verbatim_masked 可断言
+    private SimpleMeterRegistry meterRegistry;         // G0：失败请求计数断言用
     private ChatOrchestrator orchestrator;
     private ExecutorService vt;
 
@@ -136,7 +137,8 @@ class ChatOrchestratorTest {
         when(degrade.current()).thenReturn(Level.L0);
         sopFallback = mock(SopFallbackService.class);
         audit = mock(AuditService.class);
-        metrics = new OpsMetrics(new SimpleMeterRegistry());
+        meterRegistry = new SimpleMeterRegistry();
+        metrics = new OpsMetrics(meterRegistry);
         vt = Executors.newVirtualThreadPerTaskExecutor();
         orchestrator = new ChatOrchestrator(l1, l2, fps, sw, new SingleFlightRegistry(),
                 searchService, embedding, llm, pa, degrade, sopFallback,
@@ -197,12 +199,17 @@ class ChatOrchestratorTest {
         volatile Boolean deduplicated;
         /** meta 帧上的 refused（ADR-0020 起随帧下发）——拒答/澄清/回放三条路各自的取值在此断言。 */
         volatile Boolean refused;
+        /** G1：模拟客户端已断开（生产置位来自 SseEmitter 的 onError/onTimeout/onCompletion）。 */
+        volatile boolean aborted;
         /** meta 帧上的 gate（ADR-0023）：none|clarify|refuse——把"没答"细分成"哪道闸拦下的"。 */
         volatile Gate gate;
         /** done 帧上的 near_miss（ADR-0023）：拒答时的候选标识符，非拒答路径恒空表。 */
         volatile List<AnswerPayload.NearMiss> nearMiss = List.of();
         volatile Throwable error;
 
+        @Override public boolean aborted() {
+            return aborted;
+        }
         @Override public void meta(Meta meta) {
             this.meta = meta;
             this.cacheHit = meta.cacheHit();
@@ -678,5 +685,45 @@ class ChatOrchestratorTest {
         assertTrue(sink.answer.toString().contains("老答案"), "回放文本不受影响");
         assertEquals(1, sink.refs.size(), "老载荷的 refs 原样回放");
         assertEquals(List.of(), sink.actions, "老载荷没有行动契约：回放为空表而非 NPE");
+    }
+
+    /**
+     * G0（2026-10-22）：失败路径必须留痕。
+     *
+     * 为什么锁：此前 submit 的两个 catch 只 logWarn + 发 error 帧，审计里没有"谁在何时问了什么、
+     * 为什么没拿到答案"；而欠费/超时/后段异常恰好是最需要证据的时刻。本用例同时锁三件事：
+     * ① audit.logChatFailed 被调用且带身份/来源/degrade_level；② Prometheus-only 失败计数进账；
+     * ③ 失败仍以协议终态收尾（不吞掉客户端）。
+     */
+    /**
+     * G1：客户端已断开的请求不得进入检索/LLM。没有这条检查时，断连发生在首字节前
+     * （等待检索/上游时）仍会跑完整个成本链路，并把 inflight 留在降级阈值附近。
+     */
+    @Test
+    void abortedSinkStopsBeforeRetrievalAndLlm() throws Exception {
+        RecordingSink sink = new RecordingSink();
+        sink.aborted = true;
+        orchestrator.submit(req(q()), INTERNAL, sink, "sse");
+        awaitFailure(sink);
+
+        verifyNoInteractions(searchService);
+        verify(llm, never()).streamChat(any(), any());
+        verify(audit, AUDIT_WAIT).logChatFailed(eq(INTERNAL), eq("sse"), eq("manual"), eq(q()),
+                isNull(), any(Throwable.class), eq("L0"));
+    }
+
+    @Test
+    void failedPipelineWritesChatFailedAuditAndFailureCounter() throws Exception {
+        org.mockito.Mockito.doThrow(new RuntimeException("upstream boom"))
+                .when(llm).streamChat(any(), any());
+        RecordingSink sink = new RecordingSink();
+        orchestrator.submit(req(q()), INTERNAL, sink, "sse");
+        awaitFailure(sink);
+
+        verify(audit, AUDIT_WAIT).logChatFailed(eq(INTERNAL), eq("sse"), eq("manual"), eq(q()),
+                isNull(), any(Throwable.class), eq("L0"));
+        assertEquals(1.0, meterRegistry.get("aiops.requests.failed")
+                        .tag("reason", "RuntimeException").counter().count(),
+                "失败计数必须按异常类进 Prometheus（reason 有限词表，消息不进标签）");
     }
 }

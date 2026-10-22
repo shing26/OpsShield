@@ -1,9 +1,22 @@
 server:
   port: ${SERVER_PORT:8081}   # 8080 被本机 nexus-web 占用，OpsPilot 用 8081
+  # G0-W0.1（2026-10-22 运维审查）：默认只绑环回。此前用 Boot 默认（0.0.0.0），
+  # 同网段任何人都能直达面板与 /v1 面——鉴权是 JWT，但它不是网络边界。
+  # 容器（compose 端口映射）/反代形态由 SERVER_ADDRESS=0.0.0.0 显式放开。
+  address: ${SERVER_ADDRESS:127.0.0.1}
+  # 优雅停机：给在途 SSE 流与进行中的编排任务一个收敛窗口，重启不再直接切断客户端。
+  shutdown: graceful
+  tomcat:
+    # 请求体上限的第二道（第一道是 RequestSizeLimitFilter：/api/** /v1/** 超 1MB 直接 413）。
+    # 这里是"拒绝之后最多再吞多少就断开"，防止已拒绝的请求仍把大包读完。
+    max-swallow-size: 1MB
 
 spring:
   application:
     name: opspilot-gateway
+  # 与 server.shutdown=graceful 配对：30s 内等在途请求收敛完再退出，超时才强杀。
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
   web:
     resources:
       # 面板是"部署形态"的一部分，不是可缓存的静态库：改完版重新部署后拿到旧 HTML，
@@ -15,15 +28,27 @@ spring:
         cachecontrol:
           no-cache: true
           must-revalidate: true
-  # P2 账号体系主库：H2 文件模式，AUTO_SERVER 允许 CLI 与服务并存时同库读写；
-  # 口令只从环境注入（H2_DB_PASSWORD），源码/示例零凭据字面量
+  # P2 账号体系主库：H2 文件模式；口令只从环境注入（H2_DB_PASSWORD），源码/示例零凭据字面量。
+  # G0-W0.1：去掉 AUTO_SERVER=TRUE——它会在同目录额外开一个 TCP 服务（随机端口、
+  # 仅凭文件路径即可连库），等于多一个"本机任意进程都能试口令"的入口。
+  # CLI 维护请短暂停服后同文件访问（user_admin.sh 的 H2_DB_URL 可覆盖）。
   datasource:
-    url: ${H2_DB_URL:jdbc:h2:file:./data/users;AUTO_SERVER=TRUE}
+    url: ${H2_DB_URL:jdbc:h2:file:./data/users}
     username: ${H2_DB_USER:opspilot}
     password: ${H2_DB_PASSWORD:}
+  # G1（2026-10-22）：schema 由 Flyway 版本化，sql.init 关闭——两者都开会在空库上重复建表，
+  # 且"哪个先跑"取决于自动装配顺序，是不可见的事实。空库由 V1 建表；已有库会幂等执行 V1
+  # （DDL 是 CREATE TABLE IF NOT EXISTS，不丢数据）并留下版本记录，后续 V2+ 才有可预期基线。
+  # 升级/加列/演练库对账从此有 flyway_schema_history 可查。
   sql:
     init:
-      mode: always
+      mode: never
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    baseline-version: 1
+    validate-on-migrate: true
   threads:
     virtual:
       enabled: true
@@ -52,6 +77,13 @@ opspilot:
     # **不自动回退**：探不到中间件只打印一条可执行的提示，然后照常失败——配置期事实不该
     # 跟着运行期抖动走（理由见 OpsPilotProperties.Storage 注释）。
     mode: ${STORAGE_MODE:live}
+  # G0-W0.1 部署安全开关（DeploymentGuard 读取）。strict=true 是生产形态声明：
+  # JWT 密钥强度、H2 口令、真实模型、live 存储、监听地址任一项不达标即启动失败并点名变量。
+  # 默认 false 只为保持本机演示路径不回归——生产必须显式置 true。
+  deploy:
+    strict: ${OPSPILOT_STRICT:false}
+    # 容器/反代形态才置 true：strict 下允许 SERVER_ADDRESS=0.0.0.0/::（裸机生产保持 false）
+    allow-public-bind: ${OPSPILOT_ALLOW_PUBLIC_BIND:false}
   dashscope:
     base-url: https://dashscope.aliyuncs.com
     api-key: ${DASHSCOPE_API_KEY:}
@@ -83,9 +115,20 @@ opspilot:
   jwt:
     secret: ${JWT_SECRET:}
     ttl-seconds: ${JWT_TTL_SECONDS:86400}   # P2：短时凭证 24h（吊销靠每请求查库，不靠短 TTL 兜底）
+  # G1 准入（ADR-0026）：全局/租户两级并发上限；429 带 Retry-After，不排队。
+  admission:
+    global-permits: ${ADMISSION_GLOBAL_PERMITS:32}
+    tenant-permits: ${ADMISSION_TENANT_PERMITS:4}
+    retry-after-seconds: ${ADMISSION_RETRY_AFTER_SECONDS:1}
   cache:
     l1-ttl-hours: 2
     l2-threshold: 0.95
+    # G1：L2 语义缓存的生命周期与容量上限（见 ADR / W1.3）。
+    l2-ttl-hours: ${L2_TTL_HOURS:72}
+    l2-max-entries: ${L2_MAX_ENTRIES:5000}
+    # 过期清理节流：每小时扫一次；首启延迟 1 分钟，避开重灌/预热窗口。
+    l2-cleanup-interval-ms: ${L2_CLEANUP_INTERVAL_MS:3600000}
+    l2-cleanup-initial-delay-ms: ${L2_CLEANUP_INITIAL_DELAY_MS:60000}
   storm:
     window-seconds: 30
     alert-window-seconds: 60
@@ -116,10 +159,14 @@ logging:
 # 第五层把这一条钉成 CI 红）。
 management:
   health:
+    # G1（2026-10-22）：db 组件由 HealthCheckConfig.dbHealthIndicator 接管（SELECT 1，失败摘要可读）；
+    # 不关掉 Boot 的 dbHealthContributor 会与本 bean 映射同一个组件键，谁赢取决于注册顺序。
+    db:
+      enabled: false
     # ADR-0022 落地实测：Boot 的 ElasticsearchRestClientHealthIndicator 是**按 classpath**注册的
     # （不是按 RestClient bean），所以"memory 模式不建 ES 客户端"挡不住它——它照样 ping
     # localhost:9200 并把 /actuator/health 拖成 DOWN。
-    # 关掉它**不损失任何能力**：本项目自己的 elasticsearchClusterHealth（HealthCheckConfig）
+    # 关掉它**不损失任何能力**：本项目自己的 esHealthIndicator（HealthCheckConfig，组件键 es）
     # 做的是同一件事且更准（走别名、带 opspilot.es.* 的 socket 超时、能报 docs 计数），
     # 而 demo.sh / liveness.py / compose healthcheck 读的正是聚合状态。
     elasticsearch:
@@ -132,3 +179,13 @@ management:
     health:
       show-details: never
       show-components: never
+      # G1：分组属于 endpoint（不是 management.health）。liveness 不依赖外部资源；
+      # readiness 含外部依赖 + 模型后端形态。probes.enabled=true 才会注册 livenessState/readinessState
+      # 并暴露 /actuator/health/liveness|readiness（3.5.7 的自动装配对这两个状态没有 matchIfMissing）。
+      probes:
+        enabled: true
+      group:
+        liveness:
+          include: livenessState,ping
+        readiness:
+          include: readinessState,db,redis,es,qdrant,backend

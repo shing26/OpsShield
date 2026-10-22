@@ -73,4 +73,29 @@ class ChatRequestTest {
         assertNull(snake.alertIdOrNull(),
                 "snake_case 不是线格式（会被静默忽略）；若要加兼容别名，必须先改这条锁");
     }
+
+    /**
+     * G0-W0.1：query/service/env 的长度上限（8192/128/32）。
+     *
+     * <p>这三项会进缓存键、审计行与面板元数据——无上限时一条超长 query 就能把审计行撑爆，
+     * 并且 1MB 的请求体过滤器只会在"整包"层面拒绝，没法告诉客户端是哪个字段超了。
+     * 边界值按"含等号"测：8192 合法、8193 拒绝，避免把上限实现成"小于"。
+     */
+    @Test
+    void oversizedQueryServiceEnvAreRejectedAs400() {
+        assertTrue(validator.validate(new ChatRequest("q".repeat(8192), "manual",
+                "s".repeat(128), "e".repeat(32), null)).isEmpty(), "边界值（8192/128/32）必须合法");
+        assertFalse(validator.validate(new ChatRequest("q".repeat(8193), "manual", null, null, null)).isEmpty(),
+                "query 超 8192 应拒");
+        assertFalse(validator.validate(new ChatRequest("q", "manual", "s".repeat(129), null, null)).isEmpty(),
+                "service 超 128 应拒");
+        assertFalse(validator.validate(new ChatRequest("q", "manual", null, "e".repeat(33), null)).isEmpty(),
+                "env 超 32 应拒");
+    }
+
+    /** 空值仍合法：上限不改变"可选字段"语义（@Size 对 null 通过）。 */
+    @Test
+    void lengthCapsDoNotMakeOptionalFieldsRequired() {
+        assertTrue(validator.validate(new ChatRequest("q", null, null, null, null)).isEmpty());
+    }
 }

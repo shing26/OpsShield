@@ -19,20 +19,34 @@
     </appender>
 
     <!-- 合规审计面：每请求一行 JSON（谁、何租户、何密级、查了什么、命中来源、是否拒答、结果最高密级）
-         logs/ 已 gitignore；14 天滚动。字段设计见 ADR-0005。 -->
+         logs/ 已 gitignore。G0（2026-10-22）：原 14 天 TimeBased 无容量上限——
+         满负荷 88 req/s 约 3.4GB/日，先写满盘再伤及同盘 H2（唯一不可再生数据）。
+         改为 SizeAndTime + 2GB 总上限 + 180 天（对齐常见 6 个月留存要求），并用
+         AsyncAppender 把磁盘 I/O 移出请求尾段。字段设计见 ADR-0005。 -->
     <appender name="AUDIT_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
         <file>logs/audit.jsonl</file>
         <encoder>
             <pattern>%msg%n</pattern>
         </encoder>
-        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-            <fileNamePattern>logs/audit.%d{yyyy-MM-dd}.jsonl</fileNamePattern>
-            <maxHistory>14</maxHistory>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>logs/audit.%d{yyyy-MM-dd}.%i.jsonl</fileNamePattern>
+            <maxFileSize>200MB</maxFileSize>
+            <maxHistory>180</maxHistory>
+            <totalSizeCap>2GB</totalSizeCap>
         </rollingPolicy>
     </appender>
 
-    <logger name="opspilot.audit" level="INFO" additivity="false">
+    <!-- discardingThreshold=0：队列满时阻塞而非静默丢事件（审计优先于吞吐）；neverBlock=false 同义。 -->
+    <appender name="AUDIT_ASYNC" class="ch.qos.logback.classic.AsyncAppender">
+        <queueSize>8192</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <neverBlock>false</neverBlock>
+        <includeCallerData>false</includeCallerData>
         <appender-ref ref="AUDIT_FILE"/>
+    </appender>
+
+    <logger name="opspilot.audit" level="INFO" additivity="false">
+        <appender-ref ref="AUDIT_ASYNC"/>
     </logger>
 
     <root level="INFO">

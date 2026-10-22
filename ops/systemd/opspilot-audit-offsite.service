@@ -1,0 +1,31 @@
+# OpsShield 审计异地副本（Linux 模板，G1 2026-10-22）
+#
+# 由 opspilot-audit-offsite.timer 每日触发；把 logs/audit*.jsonl 复制到仓库外目录并校验链。
+# 真正的 WORM/远端存储由 /mnt/audit-offsite 的挂载方式决定（S3 FUSE/NFS/只追加卷），
+# 本单元只负责"复制 + 校验 + 落地只读"，不承诺对象锁。
+[Unit]
+Description=OpsShield audit offsite copy (append-only evidence)
+Documentation=file:/opt/opspilot/OPS.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=opspilot
+Group=opspilot
+WorkingDirectory=/opt/opspilot
+EnvironmentFile=-/etc/opspilot/audit-offsite.env
+ExecStart=/bin/bash /opt/opspilot/scripts/audit_offsite.sh
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+ReadWritePaths=/opt/opspilot/logs
+ReadWritePaths=-/mnt/audit-offsite
+TimeoutStartSec=10min

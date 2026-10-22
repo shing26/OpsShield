@@ -1,0 +1,28 @@
+# OpsShield 人类告警出口（Linux 模板，G1 2026-10-22）
+#
+# 独立于网关运行：网关/桥挂掉时，OpsPilotDown 仍要能到人。
+# 由 /etc/opspilot/notify.env 注入 OPSPILOT_HUMAN_WEBHOOK；未配置时落 logs/human-alerts.jsonl。
+[Unit]
+Description=OpsShield human alert notifier (Alertmanager -> IM webhook)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=opspilot
+Group=opspilot
+WorkingDirectory=/opt/opspilot
+EnvironmentFile=-/etc/opspilot/notify.env
+ExecStart=/usr/bin/python3 /opt/opspilot/scripts/notify.py
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=10
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/opspilot/logs
+
+[Install]
+WantedBy=multi-user.target

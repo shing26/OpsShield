@@ -2,6 +2,13 @@ package com.opspilot.metrics;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.opspilot.auth.UserContext;
+import jakarta.annotation.PostConstruct;
+import java.io.BufferedReader;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.slf4j.Logger;
@@ -30,6 +37,23 @@ public class AuditService {
     private static final int RING_CAP = 200;
     private final java.util.ArrayDeque<Map<String, Object>> ring = new java.util.ArrayDeque<>();
     private long seq;
+
+    /**
+     * 审计哈希链（G1，2026-10-22；门禁 9）：每条行带 {@code prev_hash} 与 {@code hash}。
+     *
+     * <p>为什么需要：审计文件是**可编辑文本**——攻击者或误操作改一行、删一行，单看内容
+     * 无法发现。哈希链把"改一行"变成"从该行起所有 hash 都对不上"，配合 {@code scripts/verify_audit_chain.py}
+     * 可在事后（或发布前）证明未被篡改。它不阻止删除**尾部**（没有外部锚点时无法自证），
+     * 故仍需异地/只追加存储；这里只解决"内容是否被改"。
+     *
+     * <p>hash 覆盖范围：{@code prev_hash + "\n" + 去掉 hash 字段后的整行 JSON}。
+     * 用"原始前缀"而不是重新序列化对象，避免 Python/Java 对 Unicode/浮点格式的差异导致假红。
+     */
+    private static final String GENESIS = "GENESIS";
+    private volatile String prevHash = GENESIS;
+    private boolean persistChain;
+    private Path chainHead = Path.of("logs", ".audit-head");
+    private Path auditFile = Path.of("logs", "audit.jsonl");
 
     /** 自 lastSeq 以来的增量事件；truncated=有丢失（轮转或重启）。 */
     public synchronized RecentResult recentSince(long lastSeq, int limit) {
@@ -85,14 +109,14 @@ public class AuditService {
         ev.put("ts", System.currentTimeMillis());
         ev.put("ev", kind);
         ev.put("via", via);
-        ev.put("source", source == null || source.isBlank() ? "manual" : source);
-        ev.put("sub", user == null ? "" : user.sub());
-        ev.put("tenant", user == null ? "" : user.tenantId());
+        ev.put("source", source == null || source.isBlank() ? "manual" : trunc(source, 32));
+        ev.put("sub", user == null ? "" : trunc(user.sub(), 64));
+        ev.put("tenant", user == null ? "" : trunc(user.tenantId(), 64));
         ev.put("level", user == null ? 0 : user.authLevel());
-        ev.put("q", query == null ? "" : query.substring(0, Math.min(200, query.length())));
-        ev.put("fp", fingerprint);
-        ev.put("cache_hit", cacheHit);
-        ev.put("mode", mode);
+        ev.put("q", trunc(query, 200));
+        ev.put("fp", trunc(fingerprint, 64));
+        ev.put("cache_hit", trunc(cacheHit, 16));
+        ev.put("mode", trunc(mode, 16));
         if (degradeLevel != null) ev.put("degrade_level", degradeLevel);
         ev.put("refused", refused);
         ev.put("max_level", maxResultAuthLevel);
@@ -114,9 +138,9 @@ public class AuditService {
         ev.put("ts", System.currentTimeMillis());
         ev.put("ev", "auth");
         ev.put("outcome", outcome);
-        if (sub != null && !sub.isBlank()) ev.put("sub", sub);
-        ev.put("path", path);
-        ev.put("reason", reason);
+        if (sub != null && !sub.isBlank()) ev.put("sub", trunc(sub, 64));
+        ev.put("path", trunc(path, 128));
+        ev.put("reason", trunc(reason, 64));
         writeEvent(ev);
     }
 
@@ -131,7 +155,7 @@ public class AuditService {
         ev.put("role", user == null ? "" : user.role());
         ev.put("action", action);
         ev.put("outcome", outcome);
-        if (detail != null) ev.put("detail", detail.substring(0, Math.min(200, detail.length())));
+        if (detail != null) ev.put("detail", trunc(detail, 200));
         writeEvent(ev);
     }
 
@@ -144,7 +168,7 @@ public class AuditService {
         ev.put("tenant", user == null ? "" : user.tenantId());
         ev.put("level", user == null ? 0 : user.authLevel());
         ev.put("path", path);
-        if (message != null) ev.put("msg", message.substring(0, Math.min(200, message.length())));
+        if (message != null) ev.put("msg", trunc(message, 200));
         writeEvent(ev);
     }
 
@@ -172,7 +196,7 @@ public class AuditService {
         ev.put("fp", fingerprint);
         ev.put("verdict", verdict);
         if (note != null && !note.isBlank()) {
-            ev.put("note", note.substring(0, Math.min(200, note.length())));
+            ev.put("note", trunc(note, 200));
         }
         writeEvent(ev);
     }
@@ -203,6 +227,82 @@ public class AuditService {
         writeEvent(ev);
     }
 
+    /**
+     * 失败请求留痕（2026-10-22，G0）：此前只有成功/拒答/澄清路径写审计——
+     * "欠费、超时、后段异常"这些最需要证据的时刻恰好是黑洞（审计 only-on-success 的副作用）。
+     * 本事件与 chat 行共享同一 writeEvent 出口（request_id/trace_id/seq/ring 自动继承），
+     * 但 schema 独立：失败没有 cache_hit/mode/max_level 可言，硬塞一排默认值会污染可读性。
+     *
+     * <p>为什么带 err_class 与截断后的 err_msg：值班要区分"上游 4xx/429/超时/本地 NPE"，
+     * 而完整堆栈已由编排层 logWarn 落到 app.log；审计行只留可聚合的摘要，不复制长文本。
+     *
+     * @param error 编排层捕获的异常；调用方保证非 null
+     * @param degradeLevel 失败时观察到的档位（L0/L1/L2），可为 null（未观察）
+     */
+    public void logChatFailed(UserContext user, String via, String source, String query, String fingerprint,
+                              Throwable error, String degradeLevel) {
+        Map<String, Object> ev = new LinkedHashMap<>();
+        ev.put("ts", System.currentTimeMillis());
+        ev.put("ev", "chat_failed");
+        ev.put("via", trunc(via, 32));
+        ev.put("source", source == null || source.isBlank() ? "manual" : trunc(source, 32));
+        ev.put("sub", user == null ? "" : trunc(user.sub(), 64));
+        ev.put("tenant", user == null ? "" : trunc(user.tenantId(), 64));
+        ev.put("level", user == null ? 0 : user.authLevel());
+        ev.put("q", trunc(query, 200));
+        if (fingerprint != null && !fingerprint.isBlank()) ev.put("fp", trunc(fingerprint, 64));
+        ev.put("err_class", error == null ? "unknown" : trunc(error.getClass().getSimpleName(), 64));
+        ev.put("err_msg", error == null ? "" : trunc(error.getMessage(), 200));
+        // G1：失败/中断路径明确标注"没有完整交付"——回放与审计对账时不必靠 err_class 猜。
+        ev.put("delivered", false);
+        if (degradeLevel != null) ev.put("degrade_level", degradeLevel);
+        writeEvent(ev);
+    }
+
+    /** 所有入审计的字符串统一收口：字段级截断只在这里定义，避免"某个字段忘了截"再次出现。 */
+    static String trunc(String s, int max) {
+        if (s == null) return "";
+        return s.length() <= max ? s : s.substring(0, max);
+    }
+
+    /** Spring 启动时接续上一次的链头；单测直接 new 时不做文件 I/O（避免污染仓库 logs/）。 */
+    @PostConstruct
+    void initChain() {
+        persistChain = true;
+        chainHead = Path.of(System.getProperty("opspilot.audit.head", "logs/.audit-head"));
+        auditFile = Path.of(System.getProperty("opspilot.audit.file", "logs/audit.jsonl"));
+        try {
+            String headHash = null;
+            if (Files.exists(chainHead)) {
+                String head = Files.readString(chainHead, StandardCharsets.UTF_8).trim();
+                if (!head.isBlank()) headHash = head;
+            }
+            // 以**审计文件最后一行**为准，head 只作补充：异步 appender 可能让 head 比已落盘行新，
+            // 若盲目接 head，重启后的新行会指向一个不存在的行（校验器必然报断链）。旧格式行没有
+            // hash，无法接续，明确从 GENESIS 开新链——不假装旧行已被链覆盖。
+            String last = lastLine(auditFile);
+            String lastHash = null;
+            if (last != null) {
+                Object parsed = mapper.readValue(last, Map.class);
+                Object h = parsed instanceof Map<?, ?> m ? m.get("hash") : null;
+                if (h instanceof String s && !s.isBlank()) lastHash = s;
+            }
+            if (lastHash != null) {
+                prevHash = lastHash;
+                if (headHash != null && !headHash.equals(lastHash)) {
+                    LoggerFactory.getLogger(AuditService.class).warn(
+                            "audit chain head {} != last line {}, continue from last line",
+                            headHash, lastHash);
+                }
+            } else if (headHash != null) {
+                prevHash = headHash;
+            }
+        } catch (Exception e) {
+            LoggerFactory.getLogger(AuditService.class)
+                    .warn("audit chain init failed, start from GENESIS: {}", e.toString());
+        }
+    }
+
     private void writeEvent(Map<String, Object> ev) {
         try {
             // H2 + OP-A7：请求级关联 id 来自 MDC（同步面=filter 注入；编排面=虚拟线程任务内重挂）。
@@ -216,13 +316,48 @@ public class AuditService {
             if (trace != null) ev.put("trace_id", trace);
             synchronized (this) {
                 ev.put("seq", ++seq);
+                ev.put("prev_hash", prevHash);
+                String prefix = mapper.writeValueAsString(ev);
+                String hash = sha256(prevHash + "\n" + prefix);
+                ev.put("hash", hash);
+                prevHash = hash;
                 ring.addLast(ev);
                 while (ring.size() > RING_CAP) ring.removeFirst();
+                AUDIT.info(mapper.writeValueAsString(ev));
+                // 链头单独落盘：轮转后新文件仍能接续；写入失败只降级为"重启后需从最后一行恢复"，
+                // 不影响审计行本身（审计失败计数只由外层 catch 负责）。
+                if (persistChain) {
+                    try {
+                        Files.createDirectories(chainHead.getParent());
+                        Files.writeString(chainHead, hash, StandardCharsets.UTF_8);
+                    } catch (Exception ignored) {
+                        // 不阻断、不计失败：链头是可重建的派生状态，审计行才是事实。
+                    }
+                }
             }
-            AUDIT.info(mapper.writeValueAsString(ev));
         } catch (Exception e) {
-            // 审计失败不阻断业务链路，但必须留痕可排障
+            // 审计失败不阻断业务链路，但必须留痕可排障；同时进 aiops_audit_write_failures_total
+            // （G0：静默丢合规证据是"业务越正常越没人发现"的故障，必须能告警）。
+            AuditWriteFailures.markFailure();
             LoggerFactory.getLogger(AuditService.class).warn("audit log failed: {}", e.toString());
         }
+    }
+
+    private static String sha256(String s) throws Exception {
+        MessageDigest md = MessageDigest.getInstance("SHA-256");
+        return HexFormat.of().formatHex(md.digest(s.getBytes(StandardCharsets.UTF_8)));
+    }
+
+    private static String lastLine(Path file) {
+        String last = null;
+        try (BufferedReader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (!line.isBlank()) last = line;
+            }
+        } catch (Exception ignored) {
+            return null;
+        }
+        return last;
     }
 }

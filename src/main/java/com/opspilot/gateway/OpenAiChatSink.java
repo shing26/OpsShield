@@ -49,11 +49,23 @@ public class OpenAiChatSink implements ChatSink {
     private final ObjectMapper mapper = new ObjectMapper();
     private final AtomicBoolean roleSent = new AtomicBoolean(false);
     private final AtomicBoolean finished = new AtomicBoolean(false);
+    /** G1：客户端断开/超时——编排层停止生成，避免继续烧上游 token。 */
+    private final AtomicBoolean aborted = new AtomicBoolean(false);
 
     public OpenAiChatSink(SseEmitter emitter, String model) {
         this.emitter = emitter;
         this.model = model;
         this.requestId = "chatcmpl-" + java.util.UUID.randomUUID().toString().replace("-", "");
+        emitter.onError(t -> aborted.set(true));
+        emitter.onTimeout(() -> aborted.set(true));
+        emitter.onCompletion(() -> {
+            if (!finished.get()) aborted.set(true);
+        });
+    }
+
+    @Override
+    public boolean aborted() {
+        return aborted.get();
     }
 
     @Override
@@ -63,12 +75,20 @@ public class OpenAiChatSink implements ChatSink {
 
     @Override
     public void delta(String token) {
+        if (aborted.get()) return;
         boolean first = roleSent.compareAndSet(false, true);
         send(Chunk.delta(requestId, model, first ? "assistant" : null, token));
     }
 
     @Override
     public void deliver(DeliveryOutcome outcome) {
+        if (aborted.get()) {
+            // 客户端已断：不再发任何帧，只把连接收掉（onCompletion 会因 !finished 置 abort，
+            // 编排层据此跳过缓存写与"成功"语义）。
+            finished.set(true);
+            emitter.complete();
+            return;
+        }
         if (outcome instanceof DeliveryOutcome.Failed failed) {
             deliverFailure(failed.refs(), failed.actions());
             return;

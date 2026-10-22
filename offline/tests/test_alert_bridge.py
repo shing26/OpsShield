@@ -11,7 +11,10 @@
   3. **不可信载荷**——注解与标签是外部输入，进 query 前必须过白名单与限长。
      与控制流字符一起被洗掉的还有 < > ` $ 与引号（拼接/注入类写法的原料）。
   4. **HTTP 面**——畸形载荷回 400 而不是 5xx（5xx 会让 Alertmanager 重试，
-     畸形载荷重试一万次还是畸形）；正常载荷即使内部转发失败也回 200 并留痕。
+     畸形载荷重试一万次还是畸形）；**全部**转发失败回 503 让 Alertmanager 重试，
+     **部分**失败回 200 + failed 计数（整组重发会把已送达的再打一遍）；
+     全被策略跳过也回 200（重试不会让策略闸门放行）。这是 2026-10-22 G0 改的口径：
+     此前"一律 200"会让网关挂掉期间的告警永久静默丢失。
 
 不触网：`_open` 被替换为断言失败，需要网络语义的用例显式 monkeypatch `stream_chat`/`get_json`。
 第四组的 HTTP 用例只打本进程起的临时服务（127.0.0.1:0），不出环回。
@@ -563,16 +566,51 @@ def test_healthz_reports_up_without_touching_gateway(server):
     assert r.status == 200 and body["status"] == "UP" and body["service"] == "alert-bridge"
 
 
-def test_valid_payload_returns_200_even_when_forwarding_fails(server, monkeypatch):
-    """转发失败不该回 5xx：Alertmanager 会重试，而重试不会让网关复活，只会放大压力。"""
+def test_all_forward_failures_return_503_so_alertmanager_retries(server, monkeypatch):
+    """全部都送不出去才回 503：网关不可达时，重试是唯一可能奏效的动作。
+
+    此前"一律 200"让网关挂掉期间的告警只落进台账，Alertmanager 从此不再重投——
+    故障窗口里的告警**永久丢失**，而这恰好是最需要它们的时刻（2026-10-22 G0）。
+    """
     s, b = server
     b.token = "t"
     _allow_live_quota(monkeypatch, b)
     monkeypatch.setattr(ab.localapi, "stream_chat",
                         lambda *a, **k: (_ for _ in ()).throw(ConnectionRefusedError("refused")))
     status, body = s.post(json.dumps(_payload(_alert(summary="上游限流"))).encode("utf-8"))
-    assert status == 200 and body["received"] == 1
+    assert status == 503 and body["received"] == 1
+    assert body["delivered"] == 0 and body["failed"] == 1
     assert b.stats["forwarded"] == 1 and b.stats["errors"] == 1
+
+
+def test_partial_failure_returns_200_with_failed_count(server, monkeypatch):
+    """部分失败回 200 且带 failed 计数：Alertmanager 的重试是**整组**重发，
+    已送达的那几条会被再打一遍（重复答案 + 重复烧配额），代价高于剩下几条等下次组更新。"""
+    s, b = server
+    b.token = "t"
+    _allow_live_quota(monkeypatch, b)
+
+    def _stream(body, token, **kwargs):
+        if body["query"].startswith("坏"):
+            return {"status": 500, "code": "HTTP_500", "meta": {}, "done": {},
+                    "error": "upstream boom", "ttft_s": None, "total_s": 0.01}
+        return {"status": 200, "meta": {}, "done": {}, "error": None,
+                "ttft_s": 0.1, "total_s": 0.2}
+
+    monkeypatch.setattr(ab.localapi, "stream_chat", _stream)
+    payload = _payload(_alert(name="Bad", summary="坏的告警"),
+                       _alert(name="Good", summary="好的告警"))
+    status, body = s.post(json.dumps(payload).encode("utf-8"))
+    assert status == 200
+    assert (body["delivered"], body["failed"], body["records"]) == (1, 1, 2), body
+
+
+def test_all_skipped_payload_returns_200_not_503(server):
+    """全被策略跳过（空 query）不算失败：重试不会让闸门放行，回 503 只会制造重试风暴。"""
+    s, _ = server
+    status, body = s.post(json.dumps(_payload(_alert(name="NoText", summary=None))).encode("utf-8"))
+    assert status == 200
+    assert (body["delivered"], body["failed"], body["records"]) == (0, 0, 1), body
 
 
 def test_malformed_payload_returns_400_not_5xx(server):

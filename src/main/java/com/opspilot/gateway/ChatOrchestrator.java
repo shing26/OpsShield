@@ -2,6 +2,7 @@ package com.opspilot.gateway;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.opspilot.auth.UserContext;
+import com.opspilot.common.ClientAbortedException;
 import com.opspilot.action.Action;
 import com.opspilot.action.ReadOnlyActionExtractor;
 import com.opspilot.cache.L1CacheService;
@@ -17,6 +18,7 @@ import com.opspilot.llm.VerbatimStreamFilter;
 import com.opspilot.metrics.AuditService;
 import com.opspilot.metrics.OpsMetrics;
 import com.opspilot.metrics.StageTimings;
+import com.opspilot.resilience.AdmissionGate;
 import com.opspilot.resilience.DegradationState;
 import com.opspilot.resilience.DegradationState.Level;
 import com.opspilot.resilience.QuotaService;
@@ -30,8 +32,11 @@ import com.opspilot.storm.SlidingWindow;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -67,6 +72,11 @@ public class ChatOrchestrator {
     private final ReadOnlyActionExtractor actionExtractor;
     private final ObjectMapper mapper = new ObjectMapper();
 
+    /** G1：在途编排数（@PreDestroy 优雅排空用；与降级状态机的 inflight 口径不同——后者含等待中的 leader/follower 语义）。 */
+    private final AtomicInteger inFlight = new AtomicInteger();
+    /** G1：收到 SIGTERM 后不再接新编排；在途请求最多再等 30s。 */
+    private volatile boolean shuttingDown = false;
+
     public ChatOrchestrator(L1CacheService l1, L2SemanticCacheService l2,
                             FingerprintService fingerprintService, SlidingWindow slidingWindow,
                             SingleFlight singleFlight, HybridSearchService searchService,
@@ -89,37 +99,113 @@ public class ChatOrchestrator {
         metrics.request();
     }
 
+    /** 准入拒绝计数（Controller 在 429 前调用；Gate 本身不依赖注册表，保持可单测）。 */
+    public void recordAdmissionRejected() {
+        metrics.admissionRejected();
+    }
+
+    /** 兼容旧调用（单测/内部工具）：不占准入许可。 */
+    public void submit(ChatRequest req, UserContext user, ChatSink sink, String via) {
+        submit(req, user, sink, via, null);
+    }
+
     /** 异步编排：错误经 Failed 终态收尾（协议各自决定呈现），degrade.enter/exit 维护在飞计数。
      *  H2 + OP-A7：MDC 是 thread-local，编排切到虚拟线程后必须显式重挂 request_id 与 trace_id——
-     *  异步段日志与审计行才能与 servlet 线程的请求日志用同一组 id 关联。 */
-    public void submit(ChatRequest req, UserContext user, ChatSink sink, String via) {
+     *  异步段日志与审计行才能与 servlet 线程的请求日志用同一组 id 关联。
+     *
+     *  <p><b>G1 准入/排空</b>：permit 由 Controller 在 servlet 线程非阻塞获取（拿不到直接 429，
+     *  不能等到 SSE 已返回才拒绝）；本方法保证**任何出口**（成功/失败/异常/拒绝执行）都释放一次。
+     *  shutdown 后不再接新编排：给在途请求 30s 收敛，超出由 JVM 退出收尾。
+     */
+    public void submit(ChatRequest req, UserContext user, ChatSink sink, String via,
+                       AdmissionGate.Permit permit) {
+        if (shuttingDown) {
+            if (permit != null) permit.release();
+            sink.deliver(new DeliveryOutcome.Failed(
+                    new IllegalStateException("gateway is shutting down"), List.of(), List.of()));
+            return;
+        }
+        inFlight.incrementAndGet();
         String requestId = org.slf4j.MDC.get(com.opspilot.metrics.RequestIdFilter.KEY);
         String traceId = org.slf4j.MDC.get(com.opspilot.metrics.RequestIdFilter.TRACE_KEY);
-        vt.execute(() -> {
-            if (requestId != null) {
-                org.slf4j.MDC.put(com.opspilot.metrics.RequestIdFilter.KEY, requestId);
-            }
-            if (traceId != null) {
-                org.slf4j.MDC.put(com.opspilot.metrics.RequestIdFilter.TRACE_KEY, traceId);
-            }
-            degrade.enter();
+        try {
+            vt.execute(() -> {
+                if (requestId != null) {
+                    org.slf4j.MDC.put(com.opspilot.metrics.RequestIdFilter.KEY, requestId);
+                }
+                if (traceId != null) {
+                    org.slf4j.MDC.put(com.opspilot.metrics.RequestIdFilter.TRACE_KEY, traceId);
+                }
+                degrade.enter();
+                long startedNano = System.nanoTime();
+                try {
+                    handle(req, user, sink, via);
+                    metrics.requestDuration((System.nanoTime() - startedNano) / 1_000_000, true);
+                } catch (ClientAbortedException aborted) {
+                    // 客户端已断：不计 LLM 失败（不是上游的错），不写缓存；审计由 chat_failed 的
+                    // err_class=ClientAbortedException 表达，delivered=false 由 logChatFailed 固定带上。
+                    log.info("client aborted: tenant={} via={}", user.tenantId(), via);
+                    auditAborted(req, user, via, aborted);
+                    metrics.requestAborted();
+                    metrics.requestDuration((System.nanoTime() - startedNano) / 1_000_000, false);
+                    sink.deliver(new DeliveryOutcome.Failed(aborted, List.of(), List.of()));
+                } catch (FailedWithContract fc) {
+                    logWarn(fc.getCause());
+                    auditFailed(req, user, via, fc.getCause());
+                    metrics.requestDuration((System.nanoTime() - startedNano) / 1_000_000, false);
+                    sink.deliver(new DeliveryOutcome.Failed(fc.getCause(), fc.refs(), fc.actions()));
+                } catch (Exception e) {
+                    logWarn(e);
+                    auditFailed(req, user, via, e);
+                    metrics.requestDuration((System.nanoTime() - startedNano) / 1_000_000, false);
+                    sink.deliver(new DeliveryOutcome.Failed(e, List.of(), List.of()));
+                } finally {
+                    degrade.exit();
+                    inFlight.decrementAndGet();
+                    if (permit != null) permit.release();
+                    org.slf4j.MDC.remove(com.opspilot.metrics.RequestIdFilter.KEY);
+                    org.slf4j.MDC.remove(com.opspilot.metrics.RequestIdFilter.TRACE_KEY);
+                }
+            });
+        } catch (RuntimeException rejected) {
+            // 执行器已 shutdown/拒绝：必须把计数与许可还回去，否则排空永远等不到 0。
+            inFlight.decrementAndGet();
+            if (permit != null) permit.release();
+            throw rejected;
+        }
+    }
+
+    /**
+     * 优雅停机（G1）：Tomcat 收到 SIGTERM 后先停接新请求，本方法等在途编排收敛。
+     * 30s 是 application.yml 的 lifecycle timeout 与 compose stop_grace_period 的内层预算；
+     * 超时后由容器/JVM 收尾，audit 可能丢最后一段——这是已登记的边界，不假装能等无限久。
+     */
+    @PreDestroy
+    public void drainOnShutdown() {
+        shuttingDown = true;
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
+        while (inFlight.get() > 0 && System.nanoTime() < deadline) {
             try {
-                handle(req, user, sink, via);
-            } catch (FailedWithContract fc) {
-                logWarn(fc.getCause());
-                sink.deliver(new DeliveryOutcome.Failed(fc.getCause(), fc.refs(), fc.actions()));
-            } catch (Exception e) {
-                logWarn(e);
-                sink.deliver(new DeliveryOutcome.Failed(e, List.of(), List.of()));
-            } finally {
-                degrade.exit();
-                org.slf4j.MDC.remove(com.opspilot.metrics.RequestIdFilter.KEY);
-                org.slf4j.MDC.remove(com.opspilot.metrics.RequestIdFilter.TRACE_KEY);
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
             }
-        });
+        }
+        int left = inFlight.get();
+        if (left > 0) {
+            log.warn("shutdown drain timeout: {} request(s) still in flight after 30s", left);
+        } else {
+            log.info("shutdown drain complete");
+        }
     }
 
     private void handle(ChatRequest req, UserContext user, ChatSink sink, String via) throws Exception {
+        // G1：SSE 客户端可能在首字节前就断开（等待检索/上游时最常见）。入口先判一次，
+        // 避免为一个已死的连接跑完检索、精排、LLM 与缓存写。
+        if (sink.aborted()) {
+            throw new ClientAbortedException("client disconnected before pipeline");
+        }
         String query = req.query();
         String source = req.sourceOrDefault();
         // 身份拆分（2026-10-17，台账 §3.1）：调用方给了稳定 alertId 就用它当不透明身份，
@@ -190,7 +276,11 @@ public class ChatOrchestrator {
                 replay(sink, cached, "L1", false, fp, t0, user, query, via, source);
                 return;
             }
-            L2SemanticCacheService.CacheHit l2hit = l2.lookup(query, user.tenantId(), user.authLevel());
+            // G1：L2 档位直出 SOP，语义检索/缓存写入都没有意义——先查 L2 只会多等一次 embedding
+            // 超时（上游整体挂掉时首字节从 0 变成 15s）。L2 档位跳过 lookup/store。
+            L2SemanticCacheService.CacheHit l2hit = level == Level.L2
+                    ? null
+                    : l2.lookup(query, user.tenantId(), user.authLevel());
             if (l2hit != null) {
                 metrics.l2Hit();
                 String json = l2hit.payloadJson();   // 含 refs，回放溯源完整
@@ -221,6 +311,7 @@ public class ChatOrchestrator {
         if (level == Level.L2) {
             metrics.sopFallback();
             String sop = sopFallback.lookup(query, req.service(), user.tenantId());
+            if (sop == null) metrics.sopMiss();
             String answer = sop != null ? sop : "系统高负载，已触发熔断降级，暂无可用止损清单，请联系值班 SRE。";
             AnswerPayload p = new AnswerPayload(answer, List.of(), List.of(), "sop_fallback", false,
                     user.authLevel(), user.tenantId(), false, List.of());
@@ -239,6 +330,10 @@ public class ChatOrchestrator {
         // 检索（L1 降级走 es_only；tenant+authLevel 双硬过滤在引擎层）
         String mode = level == Level.L1 ? "es_only" : "hybrid";
         SearchOutcome outcome = searchService.search(query, user.tenantId(), user.authLevel(), mode);
+        // 检索可能耗时数秒：回来后再判一次，断连请求不该继续花 LLM 配额。
+        if (sink.aborted()) {
+            throw new ClientAbortedException("client disconnected during retrieval");
+        }
         List<ScoredChunk> chunks = outcome.chunks();
 
         // 置信度空态门控：零召回，或非快路径且 Top-1 相关度低于阈值 → 显式拒答，不调 LLM。
@@ -303,6 +398,11 @@ public class ChatOrchestrator {
         VerbatimStreamFilter guard = new VerbatimStreamFilter(
                 chunks.stream().map(ScoredChunk::text).toList(),
                 text -> {
+                    // G1：客户端断开后立即停止消费上游流——继续跑到 done 是纯成本，
+                    // 且会把无人接收的请求留在 inflight 里推高降级档。
+                    if (sink.aborted()) {
+                        throw new ClientAbortedException("client disconnected");
+                    }
                     firstTokenNano.compareAndSet(0, System.nanoTime());
                     sink.delta(text);
                 });
@@ -317,23 +417,29 @@ public class ChatOrchestrator {
                     maxAuth, user.tenantId(), false, List.of());
             String json = mapper.writeValueAsString(p);
             l1.put(user.tenantId(), user.authLevel(), fp, json);
-            // L2 写入：存完整 payload（含 refs）。**注意这里是第二次 embedding 调用**——
-            // 检索腿里那次算出的向量没有被回传复用（腿的返回面只有 chunk 列表），故同一次请求
-            // 会 embed 两次。G2 的 stage_ms.l2_store 把这段成本显式化，供后续决定是否值得回传复用。
-            long l2StartNano = System.nanoTime();
-            float[] qv = embedding.embedOne(query);
-            l2.store(query, qv, json, maxAuth, user.tenantId());
-            long l2StoreMs = (System.nanoTime() - l2StartNano) / 1_000_000;
             long ftNano = firstTokenNano.get();
             long llmMs = (System.nanoTime() - llmStartNano) / 1_000_000;
             long llmTtftMs = ftNano == 0 ? llmMs : (ftNano - llmStartNano) / 1_000_000;
+            // G1 交付顺序：先给客户端 done，再写审计，最后异步写 L2。
+            // 此前 L2 写入（内含一次同步 embedding，读超时 15s）夹在 LLM 与 deliver 之间：
+            // 缓存写失败会把"已生成的答案"变成 error 帧，还会被 catch 记成 LLM 失败并误开全局熔断。
+            // TTFT 从请求进入（t0）到首个下发 token；ftNano==0 时用当前时刻（非流式收尾仍算一次可测值）。
+            metrics.ttft(ftNano == 0 ? 0 : (ftNano - t0) / 1_000_000);
             sink.deliver(new DeliveryOutcome.Completed(
                     new TtftTiming(t0, ftNano == 0 ? System.nanoTime() : ftNano), p,
                     AnswerDelivery.STREAMED));
+            // 口径变更（G1）：L2 写入已异步，stage_ms.l2_store 记录的是"入队开销"而不是磁盘/网络写入耗时。
+            // 仍要测：入队也可能因执行器拒绝/队列慢而变慢；把它留成 0 会违反本仓"0=测了且为 0"的纪律。
+            long l2EnqueueNano = System.nanoTime();
+            asyncStoreL2(query, json, maxAuth, user.tenantId());
+            long l2EnqueueMs = (System.nanoTime() - l2EnqueueNano) / 1_000_000;
             audit.log(user, "chat", via, source, query, fp, "none", outcome.mode(), false, maxAuth,
                     (System.nanoTime() - t0) / 1_000_000, null, masked > 0 ? masked : null,
-                    stageTimings(outcome, llmTtftMs, llmMs, l2StoreMs), level.name());
+                    stageTimings(outcome, llmTtftMs, llmMs, l2EnqueueMs), level.name());
             return json;
+        } catch (ClientAbortedException aborted) {
+            // 不是上游失败：不推进熔断计数，直接把控制流交给 submit 的 aborted 分支。
+            throw aborted;
         } catch (LlmClient.LlmRateLimitedException e) {
             metrics.llmRateLimited();
             degrade.llmFailure();
@@ -344,13 +450,60 @@ public class ChatOrchestrator {
         }
     }
 
+    /**
+     * L2 写入移出请求路径（G1）：embedding 是外部调用（读超时 15s），缓存写失败不应把
+     * 已交付的答案变成 error 帧，更不应计入 LLM 熔断。失败只影响"下次能否命中"，降级为
+     * debug + 指标（M1 接线 cache_write_fail）；绝不回抛给客户端。
+     *
+     * <p>用同一个虚拟线程执行器（而非新线程池）：它已有 shutdown 生命周期，随进程一起收；
+     * 写缓存任务短暂且不占用请求线程。执行器已 shutdown 时静默跳过——进程正在退出，
+     * 缓存写没有"持久化"义务（Qdrant 是派生数据，L1 有 TTL）。
+     */
+    private void asyncStoreL2(String query, String json, int maxAuth, String tenant) {
+        try {
+            vt.execute(() -> {
+                try {
+                    float[] qv = embedding.embedOne(query);
+                    l2.store(query, qv, json, maxAuth, tenant);
+                } catch (Exception e) {
+                    metrics.cacheWriteFailed();
+                    log.debug("L2 async store failed (non-fatal): {}", e.toString());
+                }
+            });
+        } catch (RejectedExecutionException e) {
+            log.debug("L2 async store skipped (executor shutting down)");
+        }
+    }
+
+    /** 客户端中断的审计收口：与失败同 schema，但 err_class 明确是 ClientAborted（不是上游故障）。 */
+    private void auditAborted(ChatRequest req, UserContext user, String via, Throwable e) {
+        try {
+            audit.logChatFailed(user, via, req.sourceOrDefault(), req.query(), null, e,
+                    degrade.current().name());
+        } catch (Exception auditError) {
+            log.warn("chat_aborted audit failed: {}", auditError.toString());
+        }
+    }
+
+    /** 失败请求的审计收口：审计行只留可聚合摘要，异常对象交给 logWarn 落堆栈。 */
+    private void auditFailed(ChatRequest req, UserContext user, String via, Throwable e) {
+        try {
+            audit.logChatFailed(user, via, req.sourceOrDefault(), req.query(), null, e,
+                    degrade.current().name());
+            metrics.requestFailed(e.getClass().getSimpleName());
+        } catch (Exception auditError) {
+            // 审计失败不阻断 error 帧（与 AuditService 同纪律）：业务收尾优先。
+            log.warn("chat_failed audit failed: {}", auditError.toString());
+        }
+    }
+
     /** 服务端日志带异常 message 供运维归因（LlmClient 的 message 自拼：状态码/网络错类，
      *  不含凭据；对外 error 帧仍是脱敏固定话术，SLO 面零泄露）。控制符压平成空格再截断：
      *  上游 message 里若带换行，落日志就是可伪造的行（2026-10-11 评审批）。 */
     private static void logWarn(Throwable e) {
         String m = String.valueOf(e.getMessage()).replaceAll("[\\r\\n\\t]+", " ");
         log.warn("stream error: {}: {}", e.getClass().getSimpleName(),
-                m.substring(0, Math.min(300, m.length())));
+                m.substring(0, Math.min(300, m.length())), e);
     }
 
     /**

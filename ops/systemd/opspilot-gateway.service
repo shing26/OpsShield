@@ -1,0 +1,49 @@
+# OpsShield 网关（Linux 模板，G0 2026-10-22）
+#
+# 安装（路径/账号按部署改）：
+#   sudo cp ops/systemd/*.service ops/systemd/*.timer /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now opspilot-gateway.service
+#
+# 为什么用 start_gateway.sh --foreground 而不是直接 java -jar：
+#   端口占用预检 / jar 截断拒绝 / "Started" 成功判据都长在那个脚本里（OPS §7 三条纪律）。
+#   --foreground 走 exec java，PID 1 语义正确，systemd 的 stop/restart 才有意义。
+# 凭据只从 EnvironmentFile 注入（H2_DB_PASSWORD / JWT_SECRET 等），不要把值写进本文件。
+[Unit]
+Description=OpsShield gateway (Spring Boot jar, foreground)
+Documentation=file:/opt/opspilot/OPS.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=opspilot
+Group=opspilot
+WorkingDirectory=/opt/opspilot
+# G1（2026-10-22）审计/凭据面加固：默认 umask 让新文件组可读、其他不可读；
+# 只读系统面 + 显式可写目录，防止进程被利用后改二进制/配置；禁止提权与换用户。
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+ReadWritePaths=/opt/opspilot/data /opt/opspilot/logs /opt/opspilot/backup
+# "-" 前缀 = 文件不存在也继续（memory 模式可以零依赖启动，ADR-0022）
+EnvironmentFile=-/etc/opspilot/gateway.env
+Environment=JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
+ExecStart=/bin/bash /opt/opspilot/scripts/start_gateway.sh --foreground
+Restart=on-failure
+RestartSec=5
+# 优雅停机：SIGTERM 后要收尾 SSE 与在途请求，给足时间再 SIGKILL（否则审计行可能丢尾巴）
+KillSignal=SIGTERM
+TimeoutStopSec=60
+# 单实例约束：H2 文件锁 + user_admin.sh 的网关守卫是同一件事的不同表达，不要起两份
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target

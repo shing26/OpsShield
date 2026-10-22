@@ -1,0 +1,103 @@
+# OpsPilot 的 SLO 记录规则与 burn-rate 告警（G1-W1.4，2026-10-22 运维审查）。
+#
+# 口径先写死，避免"SLO 到底是多少"每次评审都要重新吵一遍：
+#   目标：可用性 99.5%（30 天滚动窗口）→ 错误预算 0.5%。
+#   分子：**应用失败计数** aiops_requests_failed_total（ChatOrchestrator 的失败出口）。
+#         为什么不用 HTTP 5xx 当唯一分子：SSE 一旦开始推流，HTTP 状态码已经发出（200），
+#         之后上游/生成失败只能由应用计数记录——只看 5xx 会**系统性漏掉**流式失败，
+#         而流式正是本系统的主路径。故本文件同时保留 5xx 比率作为第二个来源（见下）。
+#   分母：http_server_requests_seconds_count{job="opspilot",uri!~"/actuator.*"}。
+#         排除 /actuator.* 是刻意的：健康探针与 Prometheus 抓取不是用户流量，
+#         把它们算进分母会让比率被稀释（探针打得越勤，SLO 看起来越"健康"）。
+#   不计入分子：4xx（401/403/404/413/429）。它们是客户端/鉴权/配额行为，不是可用性损失；
+#         准入拒绝另有 aiops_admission_rejected_total 单独观测。上游 429 导致编排失败时
+#         走的是 requestFailed（应用失败），**仍计入**——用户确实没拿到答案。
+#
+# burn rate 换算（30 天窗口）：BR = 错误率 / 0.005；预算消耗比例 = BR × 窗口 / 720h。
+#   快烧：1h 烧掉 2% 预算  → BR = 0.02 × 720 / 1  = 14.4 → 错误率阈值 0.072（7.2%）
+#   慢烧：6h 烧掉 10% 预算 → BR = 0.10 × 720 / 6  = 12   → 错误率阈值 0.06 （6%）
+#   两条都用双窗：长窗（1h/6h）确认"确实在烧"，短窗（5m/1h）保证**恢复即停报**——
+#   只看长窗时，故障停了还要等窗口滑出才恢复，值班会对着已恢复的告警做无用动作。
+#
+# 为什么两个来源用 OR 连接而不是相加：同一次失败可能既计 requestFailed、又是 5xx，
+# 相加会双计并把比率抬高（假警报）；OR 是"任一来源越线即报"——既不双计，
+# 也不漏掉没进编排层的 5xx（例如过滤器/容器层的失败）。
+#
+# 为什么单独一个文件：SLO 是**可调参数**（目标值/窗口/预算策略会变），而 opspilot.yml
+# 描述的是系统语义（哪条规则代表哪种故障）。混在一起会让"调 SLO"看起来像"改故障判定"。
+groups:
+  - name: opspilot-slo
+    rules:
+      # ---- 记录规则：先把"失败比"算成可复用序列，告警表达式只做阈值比较 --------------
+      - record: opspilot:slo_app_failure_ratio:5m
+        expr: |
+          sum(rate(aiops_requests_failed_total[5m]))
+            /
+          sum(rate(http_server_requests_seconds_count{job="opspilot",uri!~"/actuator.*"}[5m]))
+      - record: opspilot:slo_app_failure_ratio:1h
+        expr: |
+          sum(rate(aiops_requests_failed_total[1h]))
+            /
+          sum(rate(http_server_requests_seconds_count{job="opspilot",uri!~"/actuator.*"}[1h]))
+      - record: opspilot:slo_app_failure_ratio:6h
+        expr: |
+          sum(rate(aiops_requests_failed_total[6h]))
+            /
+          sum(rate(http_server_requests_seconds_count{job="opspilot",uri!~"/actuator.*"}[6h]))
+      - record: opspilot:slo_http5xx_ratio:5m
+        expr: |
+          sum(rate(http_server_requests_seconds_count{job="opspilot",uri!~"/actuator.*",status=~"5.."}[5m]))
+            /
+          sum(rate(http_server_requests_seconds_count{job="opspilot",uri!~"/actuator.*"}[5m]))
+      - record: opspilot:slo_http5xx_ratio:1h
+        expr: |
+          sum(rate(http_server_requests_seconds_count{job="opspilot",uri!~"/actuator.*",status=~"5.."}[1h]))
+            /
+          sum(rate(http_server_requests_seconds_count{job="opspilot",uri!~"/actuator.*"}[1h]))
+      - record: opspilot:slo_http5xx_ratio:6h
+        expr: |
+          sum(rate(http_server_requests_seconds_count{job="opspilot",uri!~"/actuator.*",status=~"5.."}[6h]))
+            /
+          sum(rate(http_server_requests_seconds_count{job="opspilot",uri!~"/actuator.*"}[6h]))
+
+      # ---- 快烧：1h 烧 2% 预算（BR 14.4）→ 立即叫人 --------------------------------
+      - alert: OpsPilotSloFastBurn
+        expr: |
+          (
+            opspilot:slo_app_failure_ratio:1h > 0.072
+            or
+            opspilot:slo_http5xx_ratio:1h > 0.072
+          )
+          and
+          (
+            opspilot:slo_app_failure_ratio:5m > 0.072
+            or
+            opspilot:slo_http5xx_ratio:5m > 0.072
+          )
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "OpsPilot SLO 快烧：1h 内已烧掉约 2% 错误预算（错误率 > 7.2%，目标 99.5%）。照此速率约 50 小时耗尽全部预算，请立即定位失败来源（应用失败与 5xx 两个口径都在规则里）。"
+          description: "应用失败比或 HTTP 5xx 比在 1h 与 5m 双窗同时越线（BR > 14.4）。"
+
+      # ---- 慢烧：6h 烧 10% 预算（BR 12）→ 工作日窗口内排查，不叫醒人 -----------------
+      - alert: OpsPilotSloSlowBurn
+        expr: |
+          (
+            opspilot:slo_app_failure_ratio:6h > 0.06
+            or
+            opspilot:slo_http5xx_ratio:6h > 0.06
+          )
+          and
+          (
+            opspilot:slo_app_failure_ratio:1h > 0.06
+            or
+            opspilot:slo_http5xx_ratio:1h > 0.06
+          )
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "OpsPilot SLO 慢烧：6h 内已烧掉约 10% 错误预算（错误率 > 6%）。这是持续劣化而非瞬时抖动（照此速率约 60 小时耗尽预算），请排查缓存命中率、精排失败与上游超时。"
+          description: "应用失败比或 HTTP 5xx 比在 6h 与 1h 双窗同时越线（BR > 12）。"

@@ -1,0 +1,12 @@
+# OpsShield 审计异地副本定时器（Linux 模板，G1 2026-10-22）
+#
+# 02:30 跑，避开 02:00 的备份；Persistent=true 补跑错过的那次。
+[Unit]
+Description=Daily OpsShield audit offsite copy at 02:30
+[Timer]
+OnCalendar=*-*-* 02:30:00
+Persistent=true
+RandomizedDelaySec=0
+Unit=opspilot-audit-offsite.service
+[Install]
+WantedBy=timers.target

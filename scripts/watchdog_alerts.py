@@ -58,6 +58,9 @@ def _load_dotenv() -> None:
             os.environ[k] = v
 
 DEFAULT_INTERVAL = 10
+# 连续失败退避的上限（5 分钟）：docker/中间件抖动时，每秒重试只会把日志与 CPU 也拖垮；
+# 封顶保证恢复后最多 5 分钟内重新开始观测（观测延迟有界，不会拖成永久沉默）。
+CRASH_BACKOFF_MAX = 300
 STATE_FILE = REPO / "logs" / "watchdog_state.json"
 
 # 容器名前缀 → 告警的 service 维度（指纹用 service|env|normalized_error 拼摘要，
@@ -75,6 +78,15 @@ EXIT_HINTS = {
     143: "exit 143 = SIGTERM，多为 docker stop / compose down 的正常收尾",
     0: "exit 0：正常退出，但容器不该停——查是不是单进程容器跑完了",
 }
+
+
+def backoff_delay(interval: float, crashes: int) -> float:
+    """第 crashes 次连续失败后的等待秒数：指数退避、封顶 CRASH_BACKOFF_MAX。
+
+    抽成纯函数是为了能被用例锁住：退避写错（漏了封顶 / 忘了按次数翻倍）会让看门狗在
+    共享中间件抖动时退化成 1s 一次的忙轮询，而那种现场事后很难复现——判据必须可测。
+    """
+    return min(interval * (2 ** min(max(crashes - 1, 0), 6)), CRASH_BACKOFF_MAX)
 
 
 def service_of(container: str) -> str:
@@ -158,10 +170,14 @@ def diff_alerts(prev: dict, curr: dict, recent_s: int = 300) -> list[str]:
 
 
 def send_alert(text: str, env: str, timeout: int) -> dict:
-    """以 source=alert 走完整编排链路（指纹/收敛/检索/生成）。非 2xx 不抛——告警链路
-    绝不能因一次限流崩掉（与 console_client 同一口径）。"""
-    token = localapi.login("sre-watcher")
+    """以 source=alert 走完整编排链路（指纹/收敛/检索/生成）。任何异常都不抛——告警链路
+    绝不能因一次限流或一次登录失败崩掉（与 console_client 同一口径）。
+
+    **login 必须在 try 内**（2026-10-22 G0）：口令错 / 主体被锁 / 登录面不可达时 login 会抛
+    异常，漏在 try 外它就是常驻进程的**进程级**退出路径——告警会因为这个脚本自己登不上而
+    全停，且恰好发生在"最需要告警"的时刻（网关重启、口令轮换之后）。"""
     try:
+        token = localapi.login("sre-watcher")
         r = localapi.stream_chat(
             {"query": text, "source": "alert", "service": service_of(text), "env": env},
             token, timeout=timeout, collect_deltas=False)
@@ -217,7 +233,11 @@ def main(argv: list[str] | None = None) -> int:
 
     only = {c.strip() for c in args.containers.split(",") if c.strip()}
     if args.once:
-        alerts = scan_once(only, args.env, args.timeout)
+        try:
+            alerts = scan_once(only, args.env, args.timeout)
+        except Exception as e:  # noqa: BLE001 - 计划任务形态：失败用退出码表达，不甩堆栈
+            print(f"FAIL: 单轮扫描失败：{type(e).__name__}: {e}", flush=True)
+            return 1
         for a in alerts:
             meta = a["result"].get("meta", {})
             print(f"告警已发：{a['text']}")
@@ -228,15 +248,25 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     print(f"监视 Docker 每 {args.interval}s（仅白名单 {sorted(only) if only else '全部'}）；Ctrl-C 停")
+    crashes = 0
     while True:
         try:
             for a in scan_once(only, args.env, args.timeout):
                 meta = a["result"].get("meta", {})
                 print(f"[{time.strftime('%H:%M:%S')}] 告警已发：{a['text']}")
                 print(f"  → 指纹 {meta.get('fingerprint', '—')} · 检索档 {meta.get('degradation_level', '—')}")
-        except RuntimeError as e:
-            print(f"[{time.strftime('%H:%M:%S')}] {e}（下轮重试）", flush=True)
-        time.sleep(args.interval)
+            if crashes:
+                print(f"[{time.strftime('%H:%M:%S')}] 已恢复（此前连续失败 {crashes} 轮）", flush=True)
+            crashes = 0
+            delay = args.interval
+        except Exception as e:  # noqa: BLE001 - 常驻进程任何单轮异常都不得让它退出（G0）
+            # 此前只捕 RuntimeError（docker 不可用）：login/磁盘/状态文件任一异常都会让
+            # 看门狗**永久停摆**，而停摆本身没有任何告警——最深的静默失效就在这里。
+            crashes += 1
+            delay = backoff_delay(args.interval, crashes)
+            print(f"[{time.strftime('%H:%M:%S')}] 第 {crashes} 次连续失败："
+                  f"{type(e).__name__}: {e}；{delay:.0f}s 后重试", flush=True)
+        time.sleep(delay)
 
 
 if __name__ == "__main__":

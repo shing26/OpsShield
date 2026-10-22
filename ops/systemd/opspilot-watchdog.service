@@ -1,0 +1,31 @@
+# OpsShield Docker 告警看门狗（Linux 模板，G0 2026-10-22）
+#
+# 监视本机容器状态翻转（running→exited / healthy→unhealthy），翻转即以 source=alert 走完整编排链。
+# 只观测、不重启（重启是人的决策，OPS §7）。
+# 需要读 docker.sock：把运行账号加入 docker 组（等价 root，部署侧自行权衡），或用 root 运行。
+[Unit]
+Description=OpsShield Docker alert watchdog
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+User=opspilot
+Group=opspilot
+WorkingDirectory=/opt/opspilot
+# G1：看门狗只读 docker.sock + 写 logs；不写仓库其余目录。
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/opspilot/logs
+EnvironmentFile=-/etc/opspilot/watchdog.env
+ExecStart=/usr/bin/python3 /opt/opspilot/scripts/watchdog_alerts.py --interval 10
+# 常驻观测：异常退出必须拉起（漏掉一次翻转=漏一次真实告警）
+Restart=always
+RestartSec=10
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

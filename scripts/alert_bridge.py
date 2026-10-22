@@ -31,6 +31,12 @@
 "读的时候能不能一次读出来"。为什么拿 `min(startsAt)` 补时间维：`groupKey` 是**路由桶 id**、
 不含时间——同一条规则下周再 fire 会拿到同一个桶，没有这层锚点，两次事故会被并成一次。
 
+**HTTP 状态契约（2026-10-22 G0）**：畸形载荷回 400（重试不会让畸形变好）；**全部**转发失败回
+503——网关不可达 / 全 429 时，重试是唯一可能奏效的动作，此前"一律 200"让这段故障只落进台账、
+Alertmanager 永远不知道需要重投；**部分**失败回 200 且响应体带 failed 计数——Alertmanager 的重试
+是整组重发，已送达的几条会被再打一遍（重复答案 + 重复烧配额），代价高于剩下几条等下次重发；
+被策略跳过的（dry_run/hour_budget/quota_reserve/empty_query/login_failed）不计作失败，也不触发重试。
+
 **规则作者契约**：`labels.error_code` 是可选的精确符号。注解（summary/description）写自然语言，
 错误码写在标签里——本脚本**只拼接、不发明**。标签缺失就转发没有错误码的文本，让系统走语义路；
 那是被设计的分支（规则 opspilot.yml 里签核阈值那条就是故意的），不是错误。
@@ -311,7 +317,9 @@ class Bridge:
         self.max_per_hour = args.max_per_hour
         self.quota_reserve = args.quota_reserve
         self.group_cap = args.group_cap
-        self.stats = {"received": 0, "forwarded": 0, "skipped": 0, "errors": 0}
+        # failed 与 errors 不同：errors 只数"传输异常"，failed 还包含上游非 2xx（如 429/500）。
+        # 两个数并存是因为它们回答不同问题——前者看链路，后者看"这次投递有没有送成"。
+        self.stats = {"received": 0, "forwarded": 0, "skipped": 0, "errors": 0, "failed": 0}
         self.delivery = AlertDelivery(
             AlertSession(
                 self.user,
@@ -366,7 +374,18 @@ class Bridge:
         return outcome.record
 
     def handle_payload(self, payload: dict) -> dict:
-        """一次 webhook 投递的完整处置；返回给 Alertmanager 的响应体（永远 200 语义）。"""
+        """一次 webhook 投递的完整处置 → 响应体 + **投递统计**（HTTP 状态由调用方按它定）。
+
+        为什么 delivered/failed 在这里算、由 handler 照抄而不是 handler 自己数 records：
+        "全败回 503、部分失败回 200"是**交付契约**的一部分（见文件头），判据只该有一处定义；
+        两层各数一次，改动时必有一层漏改，而漏改的表现是"重试风暴"或"告警静默丢"，都是静默的。
+
+        计数口径：
+          attempted = emit=True 的转发尝试（含上游非 2xx）；
+          delivered = 其中 sent_ok=True；
+          failed    = attempted - delivered。
+        被策略跳过的记录 emit=False，不计入任何一方——重试不会让 hour_budget/quota_reserve 放行。
+        """
         items, dropped = flatten(payload, self.env, self.group_cap)
         self.stats["received"] += len(items) + dropped
         incident_id, incident_basis = incident_of(payload)
@@ -389,7 +408,12 @@ class Bridge:
             else:
                 self.stats["skipped"] += 1
             records.append(rec)
-        return {"received": len(items) + dropped, "dropped": dropped, "records": len(records)}
+        attempted = sum(1 for r in records if r.get("emit") is True)
+        delivered = sum(1 for r in records if r.get("emit") is True and r.get("sent_ok") is True)
+        failed = attempted - delivered
+        self.stats["failed"] += failed
+        return {"received": len(items) + dropped, "dropped": dropped, "records": len(records),
+                "delivered": delivered, "failed": failed}
 
     def ledger(self, rec: dict) -> None:
         self.delivery.ledger.append(rec)
@@ -452,7 +476,10 @@ def _handler_for(bridge: Bridge):
                 print(f"[warn] 处置失败: {type(e).__name__}: {e}", file=sys.stderr)
                 self._json(500, {"code": "INTERNAL", "message": str(e)[:200]})
                 return
-            self._json(200, out)
+            # 交付契约（2026-10-22 G0）：全败回 503 让 Alertmanager 重试；有任一送达即 200，
+            # 避免整组重发把已送达的告警再打一遍；全被策略跳过（attempted=0）也回 200——
+            # 重试不会让 hour_budget/quota_reserve 变成放行。
+            self._json(503 if out["failed"] and not out["delivered"] else 200, out)
 
         def log_message(self, fmt, *args):  # 静音缺省逐请求日志（台账才是记录面）
             pass

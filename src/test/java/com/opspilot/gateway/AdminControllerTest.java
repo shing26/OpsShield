@@ -4,6 +4,7 @@ import com.opspilot.auth.UserContext;
 import com.opspilot.auth.UserStore;
 import com.opspilot.cache.L1CacheService;
 import com.opspilot.cache.L2SemanticCacheService;
+import com.opspilot.config.BackupStatusService;
 import com.opspilot.config.OpsPilotProperties;
 import com.opspilot.health.HealthProbe;
 import com.opspilot.ingest.IngestionRunner;
@@ -39,6 +40,10 @@ class AdminControllerTest {
     private AdminController controller;
     private com.opspilot.metrics.AuditService audit;
     private UserStore users;
+    private BackupStatusService backupStatus;
+
+    @org.junit.jupiter.api.io.TempDir
+    java.nio.file.Path tmp;
 
     @BeforeEach
     void setUp() {
@@ -61,9 +66,13 @@ class AdminControllerTest {
         audit = mock(com.opspilot.metrics.AuditService.class);
         when(audit.recentSince(anyLong(), anyInt())).thenReturn(
                 new com.opspilot.metrics.AuditService.RecentResult(List.of(), 0, false));
+        // 备份状态在单测里用 mock：真实实现会读工作目录的 backup/.last-success.json，
+        // 那会让 /state 断言依赖本机是否刚跑过备份（环境相关的假红/假绿）。
+        backupStatus = mock(BackupStatusService.class);
+        when(backupStatus.snapshot()).thenReturn(new BackupStatusService.Status(0L, -1.0, false));
         controller = new AdminController(metrics, degrade, l1, l2, props, ingestion, users, probe, audit,
                 new com.opspilot.storm.SingleFlightRegistry(),
-                mock(com.opspilot.resilience.QuotaService.class), null);
+                mock(com.opspilot.resilience.QuotaService.class), backupStatus, null);
     }
 
     private static MockHttpServletRequest withUser(UserContext u) {
@@ -140,10 +149,18 @@ class AdminControllerTest {
         var s = controller.state(withUser(PLATFORM));
         assertThatKeysPresent(s, "ts", "build", "metrics", "health", "runtime");
         var build = (Map<String, Object>) s.get("build");
-        assertThatKeysPresent(build, "version", "time", "jvm", "uptime_s", "pid");
+        assertThatKeysPresent(build, "version", "time", "jvm", "uptime_s", "pid", "commit");
         assertEquals("dev", build.get("version"), "无 build-info 时回退 dev（CI test 阶段路径）");
+        // G1-W1.4：commit 来自环境注入（OPSPILOT_BUILD_COMMIT / GIT_COMMIT），缺省 unknown
+        assertEquals(AdminController.buildCommit(System.getenv()), build.get("commit"));
         var rt = (Map<String, Object>) s.get("runtime");
-        assertThatKeysPresent(rt, "inflight", "sf_groups", "sf_keys_top", "degradation", "quota", "reingest");
+        assertThatKeysPresent(rt, "inflight", "sf_groups", "sf_keys_top", "degradation", "quota", "reingest", "backup");
+        // 备份可信度与 gauge 同源：面板与告警算出的"备份龄"必须是同一个数
+        var bk = (Map<String, Object>) rt.get("backup");
+        assertThatKeysPresent(bk, "last_success", "age_hours", "verified");
+        assertEquals(0L, bk.get("last_success"));
+        assertEquals(-1.0, bk.get("age_hours"), "无记录用 -1 与『刚备份过』区分");
+        assertEquals(Boolean.FALSE, bk.get("verified"));
         var deg = (Map<String, Object>) rt.get("degradation");
         // 两个阈值必须**成对**暴露：只给一个笼统的 threshold，会让外部把 L2 的阈值误当 L1 触发线
         assertThatKeysPresent(deg, "level", "manual", "failures", "cooldown_s",
@@ -164,6 +181,53 @@ class AdminControllerTest {
         assertEquals(42L, r.get("max_seq"));
         assertEquals(Boolean.TRUE, r.get("truncated"));
         assertEquals(1, ((java.util.List<?>) r.get("events")).size());
+    }
+
+    /** G0：POST /admin/backup 的响应必须能自证产物（sha256 + verified），而不是只说"写好了"。 */
+    @Test
+    void backupResponseCarriesDigestAndVerification() throws Exception {
+        java.nio.file.Path zip = tmp.resolve("users-test.zip");
+        try (var out = java.nio.file.Files.newOutputStream(zip);
+             var zos = new java.util.zip.ZipOutputStream(out)) {
+            zos.putNextEntry(new java.util.zip.ZipEntry("users.mv.db"));
+            zos.write(new byte[]{1, 2, 3});
+            zos.closeEntry();
+        }
+        when(users.backup(any())).thenReturn(zip.toString());
+
+        var r = controller.backup(Map.of("to", "backup/users-test.zip"), withUser(PLATFORM));
+        assertEquals(zip.toString(), r.get("backup"));
+        String sha = (String) r.get("sha256");
+        assertEquals(64, sha.length(), "sha256 是 32 字节的十六进制");
+        assertEquals(BackupStatusService.sha256(zip), sha, "摘要必须与落盘字节一致");
+        assertEquals(Boolean.TRUE, r.get("verified"));
+    }
+
+    /** 宿主看不到产物（容器卷未映射）时：不 500，但必须如实给 verified=false，不能假绿。 */
+    @Test
+    void backupResponseDoesNotLieWhenArtifactMissing() {
+        when(users.backup(any())).thenReturn(tmp.resolve("missing.zip").toString());
+        var r = controller.backup(Map.of("to", "backup/missing.zip"), withUser(PLATFORM));
+        assertEquals("", r.get("sha256"));
+        assertEquals(Boolean.FALSE, r.get("verified"));
+    }
+
+    /**
+     * G1-W1.4：build commit 的来源优先级与缺省值。
+     * 用 Map 直测纯函数而不是改环境变量：环境在测试进程里是全局且不可靠的，
+     * 而"哪个键优先、空白怎么办"正是要锁住的判据。
+     */
+    @Test
+    void buildCommitPrefersExplicitEnvAndDefaultsToUnknown() {
+        assertEquals("unknown", AdminController.buildCommit(Map.of()));
+        assertEquals("unknown", AdminController.buildCommit(Map.of("OPSPILOT_BUILD_COMMIT", "  ")),
+                "空白等于没注入：面板要能区分没注入与注入了空值");
+        assertEquals("abc123", AdminController.buildCommit(Map.of("GIT_COMMIT", "abc123")));
+        assertEquals("explicit", AdminController.buildCommit(
+                        Map.of("GIT_COMMIT", "ci", "OPSPILOT_BUILD_COMMIT", "explicit")),
+                "两个都设时显式键优先");
+        assertEquals(64, AdminController.buildCommit(Map.of("GIT_COMMIT", "x".repeat(80))).length(),
+                "畸形长值截断，不让 /state 被撑大");
     }
 
     private static void assertThatKeysPresent(Map<String, Object> m, String... keys) {

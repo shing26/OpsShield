@@ -13,8 +13,10 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -26,7 +28,10 @@ import org.springframework.beans.factory.InitializingBean;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
+import com.opspilot.cache.L2SemanticCacheService;
 import com.opspilot.chunk.Chunk;
 import com.opspilot.config.OpsPilotProperties;
 import com.opspilot.llm.EmbeddingClient;
@@ -45,6 +50,9 @@ import static io.qdrant.client.VectorsFactory.vectors;
  * 任何验收不通过都保留旧别名指向，失败只影响 staging。
  */
 @Component
+// 排序（G1-W1.3）：比默认的 LOWEST_PRECEDENCE 略早，保证 SopWarmupRunner 的"缺失才补灌"检查
+// 看到的是本次启动装载/首灌完成后的 SOP 状态，而不是上一轮遗留状态。
+@Order(Ordered.LOWEST_PRECEDENCE - 100)
 public class IngestionRunner implements ApplicationRunner, InitializingBean {
 
     private static final Logger log = LoggerFactory.getLogger(IngestionRunner.class);
@@ -65,6 +73,7 @@ public class IngestionRunner implements ApplicationRunner, InitializingBean {
     private final ObjectProvider<InMemoryIndex> memoryIndex;
     private final EmbeddingClient embedding;
     private final OpsPilotProperties props;
+    private final L2SemanticCacheService l2;
     private final ObjectMapper mapper = new ObjectMapper()
             .setPropertyNamingStrategy(com.fasterxml.jackson.databind.PropertyNamingStrategies.SNAKE_CASE);
     private final String chunksPath;
@@ -75,6 +84,7 @@ public class IngestionRunner implements ApplicationRunner, InitializingBean {
                            ObjectProvider<QdrantClient> qdrantProvider, KvStore store,
                            ObjectProvider<InMemoryIndex> memoryIndex,
                            EmbeddingClient embedding, OpsPilotProperties props,
+                           L2SemanticCacheService l2,
                            @Value("${opspilot.chunks-path:offline/corpus/chunks.jsonl}") String chunksPath) {
         this.esProvider = esProvider;
         this.qdrantProvider = qdrantProvider;
@@ -82,6 +92,7 @@ public class IngestionRunner implements ApplicationRunner, InitializingBean {
         this.memoryIndex = memoryIndex;
         this.embedding = embedding;
         this.props = props;
+        this.l2 = l2;
         this.chunksPath = chunksPath;
     }
 
@@ -177,6 +188,12 @@ public class IngestionRunner implements ApplicationRunner, InitializingBean {
         swapEsAlias(esAlias, esPhys);
         swapQdrantAlias(qdrAlias, qdrPhys);
 
+        // G1-W1.3：语料蓝绿切换成功 ⇒ 旧 L2 条目里的 refs 指向已删除的 chunk，必须清空。
+        // 位置刻意在 warmSop 之前：别名已换、语料已是新的，即使后面 SOP 预热失败，也不该让
+        // 指向旧 chunk 的缓存答案继续被回放（"新语料 + 旧答案"比缓存未命中危险得多）。
+        // 失败路径（前面任一验收/切换抛异常）走不到这里，旧语料与旧缓存保持配套。
+        l2.flush();
+
         warmSop(chunks);
         lastResult.set("ok @ " + LocalDateTime.now() + " (trigger=" + trigger + ")");
         log.info("[{}] 入库完成: {} chunks, 别名已原子切换, 耗时 {}ms", trigger, chunks.size(),
@@ -200,6 +217,9 @@ public class IngestionRunner implements ApplicationRunner, InitializingBean {
         List<float[]> vectors = embedding.embed(chunks.stream().map(Chunk::text).toList());
         EmbeddingSanity.check(vectors, chunks.size(), props.dashscope().embeddingDim());
         idx.load(chunks, vectors);
+        // memory 模式同样换了一整份语料：旧 L2 条目的 refs 同样失效。放在 load 之后，
+        // 保证装载失败时缓存不动（失败路径不清）。
+        l2.flush();
         warmSop(chunks);
         lastResult.set("ok @ " + LocalDateTime.now() + " (trigger=" + trigger + ", backend=memory)");
         log.info("[{}] 内存索引装载完成: {} chunks, 耗时 {}ms", trigger, chunks.size(),
@@ -264,22 +284,31 @@ public class IngestionRunner implements ApplicationRunner, InitializingBean {
         log.info("Qdrant staging 集合已建: {}", name);
     }
 
-    /** L2 缓存集合是运行时数据（非语料派生）：只 ensure 不清建——reingest 不得清空在线缓存。 */
+    /**
+     * L2 缓存集合是运行时数据（非语料派生）：只 ensure、不清建——是否清空由调用方决定
+     * （reingest 成功切流后由 {@code ingest()} 显式 {@code l2.flush()}；失败路径不清）。
+     */
     private void ensureCacheCollection() throws Exception {
         String cache = props.qdrant().cacheCollection();
+        boolean reusable = false;
         if (Boolean.TRUE.equals(qdrant.collectionExistsAsync(cache).get(10, TimeUnit.SECONDS))) {
             try {
                 qdrant.getCollectionInfoAsync(cache).get(10, TimeUnit.SECONDS);
-                return;
+                reusable = true;
             } catch (Exception ignore) { /* 落入重建分支 */ }
         }
-        qdrant.createCollectionAsync(cache, Collections.VectorParams.newBuilder()
-                .setSize(props.dashscope().embeddingDim())
-                .setDistance(Collections.Distance.Cosine)
-                .build(), Duration.ofSeconds(20)).get(20, TimeUnit.SECONDS);
-        createIndex(cache, "tenant", Collections.PayloadSchemaType.Keyword);
-        createIndex(cache, "max_auth_level", Collections.PayloadSchemaType.Integer);
-        log.info("Qdrant 缓存集合已建: {}", cache);
+        if (!reusable) {
+            qdrant.createCollectionAsync(cache, Collections.VectorParams.newBuilder()
+                    .setSize(props.dashscope().embeddingDim())
+                    .setDistance(Collections.Distance.Cosine)
+                    .build(), Duration.ofSeconds(20)).get(20, TimeUnit.SECONDS);
+            createIndex(cache, "tenant", Collections.PayloadSchemaType.Keyword);
+            createIndex(cache, "max_auth_level", Collections.PayloadSchemaType.Integer);
+            log.info("Qdrant 缓存集合已建: {}", cache);
+        }
+        // G1-W1.3：TTL 清理按 created_at 范围删除，需要 payload index。已有集合也补一次：
+        // createIndex 内部把"索引已存在"吞成一条 info，重复调用无副作用（否则老部署永远没索引）。
+        createIndex(cache, "created_at", Collections.PayloadSchemaType.Integer);
     }
 
     private void createIndex(String collection, String field, Collections.PayloadSchemaType type)
@@ -425,24 +454,85 @@ public class IngestionRunner implements ApplicationRunner, InitializingBean {
 
     private static String str(String s) { return s == null ? "" : s; }
 
+    /**
+     * SOP 清单键 TTL（G1-W1.3）：7 天。
+     *
+     * <p>为什么必须带 TTL：① 语料删除/改名后，旧清单键会永久驻留，L2 档位继续直出已下线的操作步骤；
+     * ② Redis 改成 {@code volatile-lru} 后，**没有 TTL 的键连被淘汰的资格都没有**——缓存压力下它们
+     * 只会把 Redis 撑到 OOM。7 天覆盖"一周至少一次 reingest/重启"的部署节奏，过期后由
+     * {@link #ensureSopWarm()} 在下次启动补灌。
+     */
+    static final Duration SOP_TTL = Duration.ofDays(7);
+
     /** Level 2 兜底：止损步骤按 doc 与 error_code 双维度预热进 Redis（P1：键按租户分片）。 */
     private void warmSop(List<Chunk> chunks) {
-        java.util.Set<String> tenants = chunks.stream()
-                .map(c -> c.metadata().tenant()).collect(java.util.stream.Collectors.toSet());
+        warmSop(chunks, null);
+    }
+
+    /**
+     * @param onlyTenants 非 null 时只重灌这些租户（启动补灌只补缺失的，不动仍在 TTL 内的租户）；
+     *                    null = 全量重灌（reingest 路径）。
+     */
+    private void warmSop(List<Chunk> chunks, Set<String> onlyTenants) {
+        Set<String> tenants = onlyTenants != null ? onlyTenants : chunks.stream()
+                .map(c -> c.metadata().tenant())
+                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
         for (String t : tenants) {
             store.deleteByPrefix("sop:" + t + ":");
         }
+        // 先收集所有被写到的键，最后统一打 TTL：写入过程中反复 expire 没意义，
+        // 而"先 expire 再写"在内存实现里会被下一次写入覆盖（TTL 属于 key，不是 value）。
+        Set<String> touched = new LinkedHashSet<>();
         for (Chunk c : chunks) {
+            String tenant = c.metadata().tenant();
+            if (!tenants.contains(tenant)) continue;
             if (c.breadcrumb() != null && c.breadcrumb().contains("止损操作")) {
-                String tenant = c.metadata().tenant();
                 String stepsKey = "sop:" + tenant + ":steps";
                 store.mapPut(stepsKey, c.docId(), c.text());
+                touched.add(stepsKey);
                 for (String code : c.metadata().errorCodes()) {
-                    store.setAdd("sop:" + tenant + ":code:" + code, c.docId());
+                    String codeKey = "sop:" + tenant + ":code:" + code;
+                    store.setAdd(codeKey, c.docId());
+                    touched.add(codeKey);
                 }
-                store.setAdd("sop:" + tenant + ":service:" + c.metadata().service(), c.docId());
+                String serviceKey = "sop:" + tenant + ":service:" + c.metadata().service();
+                store.setAdd(serviceKey, c.docId());
+                touched.add(serviceKey);
             }
         }
-        log.info("SOP 预热完成（按租户分片）");
+        for (String key : touched) {
+            store.expire(key, SOP_TTL);
+        }
+        log.info("SOP 预热完成（按租户分片）: 租户 {} 个, 键 {} 个, ttl={}d",
+                tenants.size(), touched.size(), SOP_TTL.toDays());
+    }
+
+    /**
+     * 启动期补灌（G1-W1.3，供 {@code SopWarmupRunner} 调用）：SOP 键有 7 天 TTL，长跑或停机超过
+     * TTL 后清单会自然过期，而 L2 档位直出没有第二份数据来源。这里只补"steps 缺失"的租户，
+     * 未过期的租户一个键都不动。
+     *
+     * <p><b>所有异常都吞成 warn</b>：补灌不是主链路，chunks 文件/存储不可达不能把启动拖死。
+     * "SOP 缺失"最坏是 L2 档位回退到通用话术；"起不来"是整机不可用，两者代价不对等。
+     * 本方法不依赖 ES（chunks 来自本地离线文件），ES 不可达时补灌照样能成。
+     */
+    public void ensureSopWarm() {
+        if (props.storage().inMemory()) return;   // memory 启动装载在 afterPropertiesSet 里必 warm
+        try {
+            List<Chunk> chunks = readChunks();
+            Set<String> missing = chunks.stream()
+                    .map(c -> c.metadata().tenant())
+                    .distinct()
+                    .filter(t -> store.mapIsEmpty("sop:" + t + ":steps"))
+                    .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+            if (missing.isEmpty()) {
+                log.info("SOP 启动校验：全部租户的止损清单均在 TTL 内，无需补灌");
+                return;
+            }
+            warmSop(chunks, missing);
+            log.info("SOP 启动补灌完成: 缺失租户 {}", missing);
+        } catch (Exception e) {
+            log.warn("SOP 启动补灌失败（不影响启动；下次重灌/重启会重试）: {}", e.toString());
+        }
     }
 }

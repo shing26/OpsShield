@@ -3,6 +3,7 @@ package com.opspilot.gateway;
 import com.opspilot.auth.JwtAuthFilter;
 import com.opspilot.auth.UserContext;
 import com.opspilot.gateway.dto.ChatRequest;
+import com.opspilot.resilience.AdmissionGate;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.List;
@@ -40,11 +41,14 @@ public class OpenAiController {
 
     private final ChatOrchestrator orchestrator;
     private final BuildProperties build; // /v1/models 的 created 字段源（无 build-info 时 0）
+    private final AdmissionGate admission;
 
     public OpenAiController(ChatOrchestrator orchestrator,
-                            @Nullable BuildProperties build) {
+                            @Nullable BuildProperties build,
+                            AdmissionGate admission) {
         this.orchestrator = orchestrator;
         this.build = build;
+        this.admission = admission;
     }
 
     @PostMapping(value = "/chat/completions", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
@@ -57,6 +61,13 @@ public class OpenAiController {
         }
         String query = lastUserMessage(req.messages());
         orchestrator.precheck(user);
+        AdmissionGate.Permit permit = admission.tryAcquire(user.tenantId());
+        if (permit == null) {
+            orchestrator.recordAdmissionRejected();
+            resp.setHeader("Retry-After", String.valueOf(admission.retryAfterSeconds()));
+            throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,
+                    "too many concurrent requests for this tenant / 当前租户并发已满，请稍后重试");
+        }
         // Cache-Control/X-Accel-Buffering：防中间代理缓冲破坏打字机（QA 第五轮 P3 线卫生）
         resp.setHeader("Cache-Control", "no-cache");
         resp.setHeader("X-Accel-Buffering", "no");
@@ -66,7 +77,7 @@ public class OpenAiController {
         // （自举告警源经那条入口，ADR-0011）。若将来有人把生产者指到本面，审计会把告警静默
         // 标成 manual，且 service="" / env="prod" 会与 SSE 面算出不同指纹——两处都是坑。
         orchestrator.submit(new ChatRequest(query, "manual", "", "prod", null),
-                user, new OpenAiChatSink(emitter, DEFAULT_MODEL), "openai");
+                user, new OpenAiChatSink(emitter, DEFAULT_MODEL), "openai", permit);
         return emitter;
     }
 

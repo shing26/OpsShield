@@ -2,6 +2,8 @@ package com.opspilot.gateway;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.validation.Validation;
+import jakarta.validation.Validator;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletResponse;
 
@@ -45,5 +47,25 @@ class AuthControllerTest {
         JsonNode body = mapper.readTree(resp.getContentAsString());
         assertEquals("TOO_MANY_REQUESTS", body.get("code").asText());
         assertEquals("temporarily locked", body.get("message").asText());
+    }
+
+    /**
+     * G0-W0.1：登录面是**未鉴权**面，字段长度必须有上限（请求体 1MB 过滤器是整包兜底，
+     * 字段级契约才能让客户端拿到点名字段的 400）。边界取 128：正常账号/口令远小于它，
+     * 又不是任意长——超长只可能是畸形/攻击输入。
+     */
+    @Test
+    void loginRequestFieldsAreCappedAt128() {
+        Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
+
+        assertTrue(validator.validate(new AuthController.LoginReq("u".repeat(128), "p".repeat(128))).isEmpty(),
+                "128 字符是合法边界（含等号）");
+        assertFalse(validator.validate(new AuthController.LoginReq("u".repeat(129), "p")).isEmpty(),
+                "username 超 128 应拒");
+        assertFalse(validator.validate(new AuthController.LoginReq("u", "p".repeat(129))).isEmpty(),
+                "password 超 128 应拒");
+        // @NotBlank 的既有语义不能被 @Size 的加入破坏
+        assertFalse(validator.validate(new AuthController.LoginReq(" ", "p")).isEmpty());
+        assertFalse(validator.validate(new AuthController.LoginReq("u", "")).isEmpty());
     }
 }

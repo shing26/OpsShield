@@ -1,5 +1,6 @@
 package com.opspilot.llm;
 
+import com.opspilot.common.ClientAbortedException;
 import com.opspilot.config.OpsPilotProperties;
 import com.opspilot.metrics.OpsMetrics;
 import java.util.List;
@@ -104,6 +105,20 @@ class LlmClientTest {
         doThrow(new RuntimeException("LLM HTTP 503（普通异常，非类型化）"))
                 .when(spy).attemptOnce(any(), any());
         assertThrows(RuntimeException.class,
+                () -> spy.streamChat(List.of(Map.of("content", "q")), t -> {}));
+        verify(metrics, never()).llmRetry();
+        verify(metrics, never()).llmNetworkError();
+    }
+
+    /**
+     * G1：客户端断开必须原样穿透，不能落入 LLM 失败分类——否则一次"用户关页面"会被记成
+     * 网络错并推进全局熔断，把取消误判成上游故障。也不允许重试（连接已经没人接收）。
+     */
+    @Test
+    void clientAbortPropagatesWithoutRetryOrNetworkClassification() {
+        var spy = spy(client);
+        doThrow(new ClientAbortedException("client disconnected")).when(spy).attemptOnce(any(), any());
+        assertThrows(ClientAbortedException.class,
                 () -> spy.streamChat(List.of(Map.of("content", "q")), t -> {}));
         verify(metrics, never()).llmRetry();
         verify(metrics, never()).llmNetworkError();

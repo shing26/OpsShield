@@ -1,5 +1,7 @@
--- P2 账号体系主用户表（H2 文件库，ADR-0005）。
--- 密码只存 bcrypt 散列；token_ver 为吊销版本号：token claim 的 tver ≠ 表值 → 该用户全部存量 token 即时失效。
+-- G1（2026-10-22）：账号库基线。原 schema.sql 由 spring.sql.init 每次启动执行；
+-- 改为 Flyway V1 后，"表在"之外还多了一条可查的版本事实（flyway_schema_history）。
+-- 对空库：本文件负责建表；对已有库：Flyway 会幂等执行本文件（IF NOT EXISTS，不丢数据）
+-- 并留下版本记录。DDL 与原 schema.sql 逐字保持一致，避免两套口径。
 CREATE TABLE IF NOT EXISTS users (
     sub          VARCHAR(64)  PRIMARY KEY,
     pass_bcrypt  VARCHAR(100) NOT NULL,

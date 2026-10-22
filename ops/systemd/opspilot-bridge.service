@@ -1,0 +1,32 @@
+# OpsShield Alertmanager webhook 桥（Linux 模板，G0 2026-10-22）
+#
+# 形态：宿主进程（与网关同机），监听 127.0.0.1:8089，把 Alertmanager 的 webhook 逐条摊平后
+# 打回网关的编排入口。为什么不做成网关端点：见 OPS §13（不开新的鉴权维度）。
+# 凭据/.env：alert_bridge.py 自己会读仓库根 .env；EnvironmentFile 用于覆盖 ALERT_BRIDGE_PORT 等。
+[Unit]
+Description=OpsShield Alertmanager webhook bridge (host form)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=opspilot
+Group=opspilot
+WorkingDirectory=/opt/opspilot
+# G1：审计/凭据面加固；桥只写 logs，其余系统面只读。
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/opspilot/logs
+EnvironmentFile=-/etc/opspilot/bridge.env
+ExecStart=/usr/bin/python3 /opt/opspilot/scripts/alert_bridge.py
+Restart=on-failure
+RestartSec=10
+# 桥退出码 3 = 已有实例在跑（单实例锁）：重启不会解决，别无限重试
+RestartPreventExitStatus=3
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

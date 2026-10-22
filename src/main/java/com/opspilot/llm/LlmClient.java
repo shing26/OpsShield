@@ -2,6 +2,7 @@ package com.opspilot.llm;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.opspilot.common.ClientAbortedException;
 import com.opspilot.metrics.OpsMetrics;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -148,6 +149,10 @@ public class LlmClient {
             throw e;
         } catch (LlmHttpException e) {
             throw e;   // 类型化异常直传：一旦被包裹就丢 status 字段，分类会退化回读文案
+        } catch (ClientAbortedException e) {
+            // 客户端取消是控制流，不是上游失败：必须原样穿透，否则 ChatOrchestrator 会把它
+            // 当成 LLM 故障（开熔断/记网络错），"用户走了"被误判成"模型挂了"。
+            throw e;
         } catch (Exception e) {
             throw new RuntimeException("LLM 调用失败: " + e.getMessage(), e);
         }

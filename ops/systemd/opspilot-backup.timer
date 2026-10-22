@@ -1,0 +1,18 @@
+# OpsShield 备份定时器（Linux 模板，G0 2026-10-22）
+#
+# 与 OPS §8 的 cron 行同口径（0 2 * * *），换成 timer 的理由：
+#   Persistent=true 会在关机/休眠错过 02:00 后于下次开机补跑——"备份断档一周"的旧事故
+#   正是错过一次后再没人发现。cron 没有这个语义（除非另装 anacron）。
+[Unit]
+Description=Daily OpsShield backup at 02:00 (Persistent catches up missed runs)
+
+[Timer]
+OnCalendar=*-*-* 02:00:00
+# 补跑：错过的那次在下次启动后执行一次（不是补跑全部历史）
+Persistent=true
+# 不随机抖动：备份时间要可预测，便于与保留策略/告警窗口对账
+RandomizedDelaySec=0
+Unit=opspilot-backup.service
+
+[Install]
+WantedBy=timers.target

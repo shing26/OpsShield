@@ -120,7 +120,9 @@ public class HybridSearchService {
             }
             return new RerankResult(out, true);
         } catch (Exception e) {
-            // Rerank 失败不致命：回退 RRF 顺序，标记未应用（不触发置信度门控）
+            // Rerank 失败不致命：回退 RRF 顺序，标记未应用（不触发置信度门控）。
+            // G1：必须计数——否则"门控被静默关闭"这件事在指标上不可见（ADR-0012 未登记这条代价）。
+            metrics.rerankFailed();
             return new RerankResult(candidates.subList(0, Math.min(cfg.finalTopK(), candidates.size())), false);
         }
     }

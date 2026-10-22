@@ -92,7 +92,7 @@ ADR-0009（只读可观测面与诚实性红线）、ADR-0012（降级代价语�
 1. **Boot 的 `ElasticsearchRestClientHealthIndicator` 是"按 classpath"注册的**（不是按 `RestClient`
    bean）——"memory 模式不建 ES 客户端"挡不住它，它照样 ping `localhost:9200` 把 `/actuator/health`
    拖成 **DOWN**。**处置**：`management.health.elasticsearch.enabled: false`。关掉它不损失任何能力：
-   本项目自己的 `elasticsearchClusterHealth` 做同一件事且更准（走别名、带 socket 超时、报 docs 计数），
+   本项目自己的 `esHealthIndicator`（组件键 `es`）做同一件事且更准（走别名、带 socket 超时、报 docs 计数），
    而 `demo.sh` / `liveness.py` / compose healthcheck 读的正是聚合状态。
 2. **`RedisAutoConfiguration`（Lettuce）同族问题**——它按 `spring.data.redis.*` 建 `RedisConnectionFactory`，
    Boot 据此注册 `RedisHealthIndicator`，**无条件 ping Redis**，memory 模式下同样把 health 拖成 DOWN。

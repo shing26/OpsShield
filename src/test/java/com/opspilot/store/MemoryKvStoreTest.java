@@ -114,4 +114,41 @@ class MemoryKvStoreTest {
         assertEquals("memory", kv.backend(),
                 "后端自报是启动摘要/健康面/页面标注的唯一来源，不许含糊");
     }
+
+    /**
+     * G1-W1.3：{@code expire} 必须对**任意类型**的键生效（SOP 清单是 map/set 键，不是 string）。
+     * 旧实现里 maps/sets 根本没有过期概念，只给 strings/counters 加 TTL 会让"expire 对哪类键有效"
+     * 变成一张要背的表——所以本条同时验 map 键与 set 键。
+     */
+    @Test
+    void expireAppliesTtlToMapAndSetKeys() throws Exception {
+        kv.mapPut("sop:t1:steps", "doc-1", "步骤一");
+        kv.setAdd("sop:t1:code:E1", "doc-1");
+
+        assertTrue(kv.expire("sop:t1:steps", Duration.ofMillis(50)));
+        assertTrue(kv.expire("sop:t1:code:E1", Duration.ofMillis(50)));
+        assertFalse(kv.mapIsEmpty("sop:t1:steps"), "TTL 内仍可读");
+
+        Thread.sleep(80);
+        assertTrue(kv.mapIsEmpty("sop:t1:steps"), "过期后 map 键必须读不到");
+        assertEquals(Set.of(), kv.setMembers("sop:t1:code:E1"), "过期后 set 键必须读不到");
+        assertFalse(kv.exists("sop:t1:steps"), "exists 也必须认 TTL");
+    }
+
+    /** 与 Redis EXPIRE 一致：键不存在返回 false 且不凭空创建键。 */
+    @Test
+    void expireOnMissingKeyReturnsFalseAndDoesNotCreateIt() {
+        assertFalse(kv.expire("nope", Duration.ofMinutes(1)));
+        assertFalse(kv.exists("nope"), "expire 不得创建键");
+    }
+
+    /** TTL 可以被覆盖（预热重灌会重新给同一批键续期）。 */
+    @Test
+    void expireOverridesPreviousTtl() throws Exception {
+        kv.mapPut("sop:t1:steps", "doc-1", "步骤一");
+        assertTrue(kv.expire("sop:t1:steps", Duration.ofMillis(30)));
+        assertTrue(kv.expire("sop:t1:steps", Duration.ofMinutes(1)), "续期应成功");
+        Thread.sleep(60);
+        assertFalse(kv.mapIsEmpty("sop:t1:steps"), "旧 TTL 不得把已续期的键判死");
+    }
 }

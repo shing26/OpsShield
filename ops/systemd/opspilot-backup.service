@@ -1,0 +1,32 @@
+# OpsShield 每日备份（Linux 模板，G0 2026-10-22）
+#
+# 由 opspilot-backup.timer 触发（OnCalendar=02:00，Persistent=true 补跑错过的那次）。
+# backup.sh 自己决定走 HTTP 还是 CLI（探测 /actuator/health），并按 G0 纪律：
+# 产物 unzip -t + sha256 校验通过才写 backup/.last-success.json，清理只在成功之后。
+# 凭据（H2_DB_PASSWORD / BACKUP_PASSPHRASE）只从 EnvironmentFile 注入，不要写进本文件。
+[Unit]
+Description=OpsShield daily backup (H2 users + audit log)
+Documentation=file:/opt/opspilot/OPS.md
+
+[Service]
+Type=oneshot
+User=opspilot
+Group=opspilot
+WorkingDirectory=/opt/opspilot
+# G1（2026-10-22）审计/凭据面加固：默认 umask 让新文件组可读、其他不可读；
+# 只读系统面 + 显式可写目录，防止进程被利用后改二进制/配置；禁止提权与换用户。
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+ReadWritePaths=/opt/opspilot/data /opt/opspilot/logs /opt/opspilot/backup
+EnvironmentFile=-/etc/opspilot/backup.env
+ExecStart=/bin/bash /opt/opspilot/scripts/backup.sh
+# 卡死必须失败可见（NFS/磁盘挂起），不能永远 running 让 timer 静默叠任务
+TimeoutStartSec=30min

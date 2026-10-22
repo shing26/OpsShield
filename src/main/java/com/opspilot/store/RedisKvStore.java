@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import org.redisson.api.RAtomicLong;
 import org.redisson.api.RBucket;
 import org.redisson.api.RMap;
@@ -60,6 +61,20 @@ public class RedisKvStore implements KvStore {
     @Override
     public void delete(String key) {
         redisson.getKeys().delete(key);
+    }
+
+    /**
+     * TTL 交给 Redis 的 {@code PEXPIRE}（毫秒精度，与内存侧同口径；秒级精度会让短 TTL 用例失真）。
+     * 键不存在时 Redisson 返回 false 且不创建键，与 {@link KvStore#expire} 的契约一致。
+     */
+    @Override
+    public boolean expire(String key, Duration ttl) {
+        long ms = ttl == null ? 0L : ttl.toMillis();
+        if (ms <= 0) {
+            // 0/负 TTL 在 Redis 语义里等价于立即删除：显式转成 delete，避免"永不过期"的静默歧义
+            return redisson.getKeys().delete(key) > 0;
+        }
+        return redisson.getKeys().expire(key, ms, TimeUnit.MILLISECONDS);
     }
 
     @Override

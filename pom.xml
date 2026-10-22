@@ -7,7 +7,7 @@
   <parent>
     <groupId>org.springframework.boot</groupId>
     <artifactId>spring-boot-starter-parent</artifactId>
-    <version>3.3.5</version>
+    <version>3.5.7</version>
     <relativePath/>
   </parent>
 
@@ -58,6 +58,14 @@
       <artifactId>h2</artifactId>
       <!-- compile：UserAdminCli 的 Restore 工具与网关 JDBC 都需要；fat jar 照常携带 -->
     </dependency>
+    <!-- G1（2026-10-22）：schema 版本化。此前 CREATE TABLE IF NOT EXISTS 只能保证"表在"，
+         无法回答"这库是哪一版"；加列/回滚/演练库对账都没有事实源。Flyway 10 的 H2 支持
+         仍在 flyway-core 内（已从 jar 的 internal/database/h2 核实），无需额外拆件。 -->
+    <dependency>
+      <groupId>org.flywaydb</groupId>
+      <artifactId>flyway-core</artifactId>
+    </dependency>
+
     <dependency>
       <groupId>org.springframework.security</groupId>
       <artifactId>spring-security-crypto</artifactId>

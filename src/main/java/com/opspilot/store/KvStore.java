@@ -42,6 +42,19 @@ public interface KvStore {
     void delete(String key);
 
     /**
+     * 给已存在的键设置/覆盖 TTL（G1-W1.3：SOP 清单键需要过期，避免语料删除后旧清单永久驻留）。
+     *
+     * <p><b>为什么是"给已有键打 TTL"而不是在 mapPut/setAdd 上加 ttl 参数</b>：本接缝的既有纪律是
+     * "TTL 一律由调用方显式给"，而 SOP 预热写的是复合键（steps 一张表 + 每错误码/服务名若干集合），
+     * 只有调用方知道哪些键属于同一份清单、该用同一个过期时间。也不让 mapPut 多一个"可空 TTL"参数——
+     * 那会让"这个键到底会不会过期"取决于调用点写没写参数，而 Redis 的 {@code volatile-lru} 策略下
+     * 无 TTL 的键是**永不淘汰**的，这种分叉一旦出现就是 OOM。
+     *
+     * <p>语义对齐 Redis 的 {@code EXPIRE}：键不存在返回 false 且不创建；返回 true 表示 TTL 已生效。
+     */
+    boolean expire(String key, Duration ttl);
+
+    /**
      * 窗口计数：先修剪窗口外成员，再返回**加入本条之前**的窗口内条数，最后把本条登记进去。
      *
      * <p>三步顺序与返回值都是语义的一部分，不是实现细节——{@code SlidingWindowService} 用

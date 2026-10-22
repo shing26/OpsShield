@@ -2,6 +2,7 @@ package com.opspilot.gateway.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 
 /**
  * 排障请求（单链路，source 区分告警/人工，ADR-0004）。
@@ -24,12 +25,20 @@ import jakarta.validation.constraints.Pattern;
  *   <li>服务端视其为**不透明身份**——不解析、不校验含义，只 {@code SHA256("alert-id|" + alertId)}。
  *       谁组装（当前是 alert_bridge）谁负责语义；这样服务端不必知道 Alertmanager 的标签体系。</li>
  * </ul>
+ *
+ * <p><b>G0-W0.1（2026-10-22 审查）加字段长度上限</b>：query ≤8192、service ≤128、env ≤32。
+ * 此前这几个字段无上限，而它们会进三处：L1 缓存键（超长 query 让键体积与哈希成本失控）、
+ * 审计行（{@code AuditService} 落 JSONL，长字段会把单行撑大，轮转/检索都变慢）、
+ * 以及回显给面板的答案元数据。1MB 的请求体过滤器是整包兜底；字段级契约才是让客户端在
+ * 400 里看到"哪个字段超了"的那道（错误由 {@code GlobalExceptionHandler} 转成
+ * {@code {code,message}} 并点名字段，与 alertId 同范式）。
  */
 public record ChatRequest(
-        @NotBlank(message = "query 不能为空") String query,
+        @NotBlank(message = "query 不能为空")
+        @Size(max = 8192, message = "query 超长（上限 8192 字符）") String query,
         @Pattern(regexp = "manual|alert", message = "source 仅允许 manual|alert") String source,
-        String service,
-        String env,
+        @Size(max = 128, message = "service 超长（上限 128 字符）") String service,
+        @Size(max = 32, message = "env 超长（上限 32 字符）") String env,
         @Pattern(regexp = "\\s*|[A-Za-z0-9_.=\\-|]{8,128}",
                 message = "alertId 应为 8–128 位 [A-Za-z0-9_.=|\\-]；它进缓存键组分，故形状必须受限")
         String alertId

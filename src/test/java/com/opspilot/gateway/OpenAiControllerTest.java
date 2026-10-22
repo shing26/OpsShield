@@ -1,6 +1,8 @@
 package com.opspilot.gateway;
 
 import com.opspilot.auth.UserContext;
+import com.opspilot.config.AdmissionProperties;
+import com.opspilot.resilience.AdmissionGate;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -21,7 +23,8 @@ import static org.mockito.Mockito.*;
 class OpenAiControllerTest {
 
     private final ChatOrchestrator orchestrator = mock(ChatOrchestrator.class);
-    private final OpenAiController controller = new OpenAiController(orchestrator, null);
+    private final AdmissionGate admission = new AdmissionGate(new AdmissionProperties(32, 4, 1));
+    private final OpenAiController controller = new OpenAiController(orchestrator, null, admission);
 
     private static MockHttpServletRequest withUser() {
         MockHttpServletRequest req = new MockHttpServletRequest();
@@ -40,7 +43,7 @@ class OpenAiControllerTest {
                 withUser(), new MockHttpServletResponse());
 
         var captor = ArgumentCaptor.forClass(com.opspilot.gateway.dto.ChatRequest.class);
-        verify(orchestrator).submit(captor.capture(), any(), any(), eq("openai"));
+        verify(orchestrator).submit(captor.capture(), any(), any(), eq("openai"), any());
         assertEquals("50012_DB_TIMEOUT 怎么查", captor.getValue().query());
     }
 
@@ -54,7 +57,7 @@ class OpenAiControllerTest {
                 withUser(), new MockHttpServletResponse());
 
         var captor = ArgumentCaptor.forClass(com.opspilot.gateway.dto.ChatRequest.class);
-        verify(orchestrator).submit(captor.capture(), any(), any(), eq("openai"));
+        verify(orchestrator).submit(captor.capture(), any(), any(), eq("openai"), any());
         assertEquals("how to fix 50012_DB_TIMEOUT", captor.getValue().query());
     }
 
@@ -95,7 +98,24 @@ class OpenAiControllerTest {
                 List.of(new OpenAiController.Msg("user", "q")), true), withUser(), new MockHttpServletResponse());
         var inOrder = inOrder(orchestrator);
         inOrder.verify(orchestrator).precheck(any());
-        inOrder.verify(orchestrator).submit(any(), any(), any(), anyString());
+        inOrder.verify(orchestrator).submit(any(), any(), any(), anyString(), any());
+    }
+
+    /** G1：租户许可耗尽必须 429 + Retry-After（不能等 SSE 已返回才拒绝）。 */
+    @Test
+    void admissionExhaustionReturns429WithRetryAfter() {
+        AdmissionGate oneSlot = new AdmissionGate(new AdmissionProperties(4, 1, 2));
+        OpenAiController c = new OpenAiController(orchestrator, null, oneSlot);
+        MockHttpServletResponse first = new MockHttpServletResponse();
+        c.chatCompletions(new OpenAiController.ChatCompletionsReq("opspilot",
+                List.of(new OpenAiController.Msg("user", "q1")), true), withUser(), first);
+
+        MockHttpServletResponse second = new MockHttpServletResponse();
+        var ex = assertThrows(ResponseStatusException.class, () -> c.chatCompletions(
+                new OpenAiController.ChatCompletionsReq("opspilot",
+                        List.of(new OpenAiController.Msg("user", "q2")), true), withUser(), second));
+        assertEquals(HttpStatus.TOO_MANY_REQUESTS, ex.getStatusCode());
+        assertEquals("2", second.getHeader("Retry-After"), "429 必须告诉客户端多久后可重试");
     }
 
     private static BuildProperties buildProps(String version, String time) {
@@ -109,7 +129,7 @@ class OpenAiControllerTest {
     @Test
     @SuppressWarnings("unchecked")
     void modelsAdvertiseOpspilotWithCreated() {
-        var withBuild = new OpenAiController(orchestrator, buildProps("1.0.0", "2026-09-12T00:00:00Z"));
+        var withBuild = new OpenAiController(orchestrator, buildProps("1.0.0", "2026-09-12T00:00:00Z"), admission);
         var data1 = (List<Map<String, Object>>) withBuild.models().get("data");
         assertEquals("opspilot", data1.get(0).get("id"));
         assertEquals(Instant.parse("2026-09-12T00:00:00Z").getEpochSecond(), data1.get(0).get("created"));

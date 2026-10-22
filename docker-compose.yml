@@ -9,7 +9,9 @@ services:
     container_name: opspilot-redis
     # QA P3 排查（2026-09-11）：96mb 下风暴测试的窗口 ZSET+L1 载荷触发 allkeys-lru 淘汰，
     # L1 观测寿命 <3min 与配置 2h 矛盾即此。全部键均带 TTL、皆为可再生数据，扩容量而非换策略。
-    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru --save "" --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD 未设置（.env）}
+    # G1：allkeys-lru 会把"没有 TTL 的 SOP 兜底键"也当成淘汰候选；volatile-lru 只淘汰带 TTL 的键，
+    # 避免 L2 期需要的静态 SOP 最先被内存压力清掉。所有写入键必须设 TTL（SOP/配额/锁定/缓存已设）。
+    command: redis-server --maxmemory 256mb --maxmemory-policy volatile-lru --save "" --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD 未设置（.env）}
     ports:
       - "127.0.0.1:6379:6379"
     mem_limit: 320m
@@ -51,6 +53,9 @@ services:
     env_file: .env
     environment:
       SERVER_PORT: "8081"
+      # 容器内必须监听所有接口（宿主机端口映射已限 127.0.0.1）；宿主裸进程形态由
+      # scripts/start_gateway.sh 默认绑 127.0.0.1——两种形态的安全边界不能靠默认值碰运气。
+      SERVER_ADDRESS: "0.0.0.0"
       REDIS_HOST: redis
       QDRANT_HOST: qdrant
       ES_HOST: elasticsearch
@@ -63,7 +68,18 @@ services:
       # 随重建蒸发且 cron 假绿。账号库是唯一不可再生数据，必须落宿主卷。
       - ./backup:/app/backup
     mem_limit: 768m
+    # G1：优雅停机预算要大于应用内 drain（30s）与 SSE 收尾，否则 SIGKILL 会截断审计尾行。
+    stop_grace_period: 90s
     restart: unless-stopped
+    # G1 容器面加固：根文件系统只读（可写路径只有 data/logs/backup 三个卷与 /tmp tmpfs），
+    # 丢掉全部 capability 并禁止提权。镜像仍是 JRE 默认用户（非 root 迁移需先解决 bind mount UID）。
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
 
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.14.3
@@ -107,12 +123,16 @@ services:
     volumes:
       - ./ops/alerting/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./ops/alerting/rules:/etc/prometheus/rules:ro
+      # G0：此前只挂配置，Docker Desktop 重启/重建即丢历史与静默状态——
+      # "那 20 分钟有没有告警"复盘时无法回答。
+      - prometheus-data:/prometheus
     ports:
       - "127.0.0.1:9090:9090"
     mem_limit: 256m
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --web.enable-lifecycle
+      - --storage.tsdb.retention.time=30d
     healthcheck:
       # prom/prometheus 是 busybox 底，wget 可用。/-/ready 只在配置与规则文件都加载成功时回 200，
       # 规则语法写错会让它一直不 ready——这正是我们要的判据（否则表现为 target 面空白而容器"健康"）。
@@ -130,6 +150,8 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - ./ops/alerting/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      # G0：静默/通知状态必须跨容器重建存活，否则重启后告警会重新打扰一遍。
+      - alertmanager-data:/alertmanager
     ports:
       - "127.0.0.1:9093:9093"
     mem_limit: 96m
@@ -145,3 +167,5 @@ services:
 volumes:
   qdrant-data:
   es-data:
+  prometheus-data:
+  alertmanager-data:

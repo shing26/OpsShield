@@ -31,4 +31,13 @@ public interface ChatSink {
 
     /** 唯一终态：成功完成或失败。sink 负责按协议呈现并完成流。 */
     void deliver(DeliveryOutcome outcome);
+
+    /**
+     * 客户端是否已断开（G1，2026-10-22）。默认 false：历史 sink（测试桩、未来协议面）
+     * 不需要感知取消。SSE 实现由 emitter 的 onError/onTimeout/onCompletion 置位——
+     * **正常 complete 不算 abort**，否则成功收尾后编排会把 "client gone" 误记成失败。
+     */
+    default boolean aborted() {
+        return false;
+    }
 }

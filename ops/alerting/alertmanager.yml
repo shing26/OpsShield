@@ -1,10 +1,24 @@
 # Alertmanager 配置（alerting profile）。
 #
-# 投递目标是**宿主上的 bridge**（scripts/alert_bridge.py，监听 127.0.0.1:8089）。
+# 投递目标现在是**两条并列出口**（2026-10-22 G0 审查：此前只有 bridge 一条，
+# 网关自己挂掉时告警没有任何人类可见的落点，告警系统本身成了单点）：
+#   ① opspilot-bridge（宿主 scripts/alert_bridge.py，127.0.0.1:8089）——
+#      机器出口：翻译成排障请求打回 OpsPilot；链路终点就是被监控的网关本身。
+#   ② human-notify（宿主 scripts/notify.py，127.0.0.1:8090）——
+#      人类出口：把原始 webhook 转给 OPSPILOT_HUMAN_WEBHOOK（IM / 值班平台）；
+#      未配置时落 logs/human-alerts.jsonl 并 WARN，配置了则 HTTP 转发（5s 超时）；
+#      它**不经过网关**，故网关或桥任意一侧挂掉，人仍能收到 OpsPilotDown。
+#
 # 为什么经 host.docker.internal 而不是容器内地址：bridge 必须跑在宿主——它复用
 # offline/localapi.py 的 assert_local 环回白名单（只允许 http + 环回，且校验解析后的 IP），
 # 容器里的 localhost 指向容器自己，够不到宿主网关。为部署整齐去松那条 SSRF 防线
-# 不划算，故桥留在宿主、由容器回连。
+# 不划算，故桥留在宿主、由容器回连。notify 默认与 bridge 对齐（同为宿主进程，共用
+# "容器回连宿主环回端口"这一条既有形态）；若改由 compose 服务承担，只要把 8090 发布到
+# 宿主回环，投递路径与本文档其余部分都不变——notify 不依赖网关，故不继承 bridge 的宿主约束。
+#
+# 每条告警会被**两个 receiver 各收一份**（见 route.routes 的 continue: true）。
+# 这不是重复投递事故：两条通道的语义不同——一份要机器答案，一份要人看见；
+# 少了任何一条，"告警是否真的被人看到"就答不上来。
 #
 # 时间参数就是本轮"重复告警"的闸门：
 #   repeat_interval 4h —— 一条不恢复的告警每 4 小时才重发一次。这是**规则参数层面的防重**，
@@ -25,12 +39,23 @@ global:
 
 route:
   receiver: opspilot-bridge
-  # 不加 severity 子路由：三条规则现在走同一条链路，加分层只会把"哪条规则真的 fire 过"
+  # 不加 severity 子路由：三条业务规则现在走同一条链路，加分层只会把"哪条规则真的 fire 过"
   # 这件事藏进配置里。要分派时再说。
   group_by: ["job"]
   group_wait: 30s
   group_interval: 1m
   repeat_interval: 4h
+  routes:
+    # 人类出口与机器出口**并列**，故子路由一律 continue: true。
+    # continue 的语义坑值得写死：子路由匹配后会默认**终止**同层后续路由的匹配；
+    # 现在只有一条子路由时看不出差别，但以后加第二条（比如按 severity 分派）时，
+    # 先匹配的那条会把后面的全挡住——而"人被少叫一次"是静默的，事后没人发现。
+    # continue: true 让"新增子路由不吞告警"成为默认，而不是靠下一个人记得。
+    - receiver: human-notify
+      continue: true
+      # 不设 matchers：每条规则都要有人看见。severity=info 的 SOP 兜底也发——
+      # 漏一条的代价（故障无人知）高于烦一次的代价，而抑制规则已挡掉噪声源。
+      # 也不按 status 过滤：resolved 同样要人看到（"好了"和"坏了"都是事实）。
 
 receivers:
   - name: opspilot-bridge
@@ -38,7 +63,17 @@ receivers:
       - url: http://host.docker.internal:8089/api/v2/alerts
         send_resolved: true      # resolved 也是真实输入，照转（见 alert_bridge.py 的摊平口径）
         # Alertmanager 默认对 5xx 重试；bridge 对畸形载荷回 400（不诱发重试风暴），
-        # 对正常载荷一律 200，即使内部转发失败也只在台账里记 sent_ok=false。
+        # 对**全部转发失败**回 503（网关不可达时重试才有意义），对**部分失败**回 200
+        # 并在响应体带 failed 计数——整组重发会把已送达的告警重复打一遍（重复答案、烧配额），
+        # 故只有全败才重试。口径见 alert_bridge.handle_payload。
+
+  - name: human-notify
+    webhook_configs:
+      - url: http://host.docker.internal:8090/api/v2/alerts
+        send_resolved: true      # 人类通道也要看到"好了"，否则值班无法判断是否还在事故中
+        # notify.py 未配置 OPSPILOT_HUMAN_WEBHOOK 时回 200（已落 JSONL 兜底，重试无意义）；
+        # 上游转发失败回 503 → Alertmanager 重试，符合"通知没送到就该再送"的直觉。
+        # 载荷超过 1MB 回 413（4xx 不重试）：Alertmanager 的载荷远小于此，超了说明调用方坏了。
 
 inhibit_rules:
   # 上游限流是"根"，SOP 兜底是它的下游表现——抑制掉后者，避免一次上游抖动

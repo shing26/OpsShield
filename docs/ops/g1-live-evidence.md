@@ -1,0 +1,176 @@
+# G1 live 栈实测记录（2026-10-22）
+
+> 本页只记录**实际执行过**的 live 验证，不代替十条门禁的完整验收。
+> 环境：本机 Windows + Docker Desktop；Redis/Qdrant/ES 容器；DashScope 真实 key 从 `.env` 注入（未打印）。
+> 验证后已停止 gateway 与三个中间件容器；prometheus/alertmanager 保持原状态。
+
+## 1. 启动
+
+```bash
+docker compose up -d redis qdrant elasticsearch
+# 等 ES healthy / Redis healthy 后：
+# 以 .env 为环境源启动 jar；另一次以 OPSPILOT_STRICT=true 启动
+```
+
+实测：
+- 非 strict：`Started OpsPilotApplication in 16.564 seconds`；
+- strict：`OPSPILOT_STRICT=true 部署校验通过：JWT 密钥强度 / H2 口令 / live 模型 / live 存储 / 监听地址均达标`，
+  `Started ... in 11.346 seconds`。
+- `GET /actuator/health/readiness`：**200**，`{"status":"UP"}`。
+
+## 2. 一次真实 chat（DashScope live）
+
+调用 `offline.localapi.login("sre-full")` + `stream_chat`，未打印 token/答案全文。结果：
+
+```json
+{"status": 200, "ttft_s": 7.695, "total_s": 19.631,
+ "cache_hit": "none", "degrade": "L0", "refused": false,
+ "refs": 3, "answer_chars": 969, "error": null}
+```
+
+含义：
+- 真实模型调用成功（不是 mock）；
+- 首个 delta 7.7s，端到端 19.6s（live 冷请求，含检索/精排/生成）；
+- 返回 3 条引用，未拒答，L0 档。
+
+## 2.1 notify 渠道自动识别
+
+以 Slack 形状 URL 启动 notify（**未真正发 Slack**，只验证配置解析）：
+
+```bash
+OPSPILOT_HUMAN_CHANNEL=auto \
+OPSPILOT_HUMAN_WEBHOOK="https://hooks.slack.com/services/T000/B000/XXXX" \
+OPSPILOT_NOTIFY_PORT=18090 python scripts/notify.py
+```
+
+`GET /healthz` → `{"status":"UP","service":"notify","human_channel":"slack(host=hooks.slack.com)"}`。
+说明：粘贴 Slack/飞书/企微机器人 URL 即可自动识别，不用写 relay；Telegram 走 token+chat_id。
+真正的“人收到”仍需要真实 webhook 与一次投递回执。
+
+## 2.2 飞书 webhook 实测（签名校验通过）
+
+飞书自定义机器人开启了签名校验；仅 URL 时 notify 正确识别为失败：
+
+```text
+POST /api/v2/alerts -> HTTP 503
+{"status":"upstream_failed","channel":"feishu","upstream":200,
+ "error":"feishu code=19021 msg=sign match fail or timestamp is not within one hour from current time"}
+```
+
+补 `OPSPILOT_FEISHU_SECRET` 后重试：
+
+```text
+GET /healthz -> {"human_channel":"feishu(host=open.feishu.cn)"}
+POST /api/v2/alerts -> HTTP 200
+{"status":"forwarded","channel":"feishu","upstream":200}
+```
+
+说明：
+- 飞书 API 已接受并返回业务成功（notify 现在会检查“HTTP 200 + 业务 code≠0”，不会再假绿）；
+- 测试消息已发到机器人所在群，**用户已确认群内收到**（2026-10-22）；
+- 该链路证明：URL + secret 两个值即可完成飞书自定义机器人接入，不需要自建 relay。
+
+## 2.3 进程级 jar 切换/回滚（本机测试）
+
+没有 systemd 测试机，但用本机进程做了真实的 **previous → current → rollback** 三跳：
+旧 jar 取自 `HEAD` 的独立 worktree 构建，current 为当前工作区 jar；同一个临时 H2/端口 8082，
+每跳都等 `/actuator/health` 200 后再停进程。
+
+```text
+previous health=True exited=False
+current  health=True exited=False
+rollback health=True exited=False
+RESULT=True
+```
+
+边界：这验证的是“jar 可替换、进程可回滚、健康面能恢复”，**不是 systemd 停服/切换演练**，
+也没有验证真实端口切换期间的连接中断时长；后者仍需要一台 systemd 测试机。
+
+## 2.4 Redis/磁盘依赖指标实测
+
+新增 `DependencyMetrics` 后，live 网关的 Prometheus 面出现：
+
+```text
+aiops_dependency_up{dependency="es"} 1.0
+aiops_dependency_up{dependency="qdrant"} 1.0
+aiops_dependency_up{dependency="redis"} 1.0
+aiops_disk_free_bytes{path="data"} 2.6486673408E10
+```
+
+停掉 Redis 容器后 20s：
+
+```text
+aiops_dependency_up{dependency="redis"} 0.0
+```
+
+这补上了 `OpsPilotRedisDown` 的指标生产者；规则还需 Prometheus 重新加载后等 2m 才会
+进入 Alertmanager。磁盘规则使用同一 gauge（5GiB 阈值），本次未真的填满磁盘，故只验证了
+指标与规则文件，不宣称“磁盘满场景已演练”。
+
+## 2.5 三场景告警演练（网关 down / Redis down）
+
+### 场景 1：网关 down
+
+- 02:37:39 停 gateway（8081）；
+- 02:40:11 Alertmanager 出现 `OpsPilotDown`，`receivers=[human-notify]`，
+  `status=active`，`startsAt=18:39:51Z`；
+- Alertmanager webhook 通知成功（见下方计数）；
+- 02:43 重启 gateway，`up{job="opspilot"}=1`，告警恢复。
+
+### 场景 2：Redis down
+
+- 02:46:38 停 `opspilot-redis`；
+- 20s 后 `aiops_dependency_up{dependency="redis"}=0`；
+- 02:49:21 Alertmanager 出现 `OpsPilotRedisDown`，`receivers=[human-notify]`，
+  `status=active`，`startsAt=18:49:06Z`；
+- 恢复 Redis 后 35s，`/api/v2/alerts` 为空，告警恢复。
+
+### 投递证据
+
+演练前/后 Alertmanager 指标：
+
+```text
+alertmanager_notifications_total{integration="webhook"} 752 -> 756
+alertmanager_notifications_failed_total{integration="webhook",reason="other"} 748 -> 748
+```
+
+即新增 4 次成功通知（两条 firing + 两条 resolved），无新增失败；两条告警的
+`receivers` 都是 `human-notify`。飞书应收到 2 条 firing + 2 条 resolved（请人工确认）。
+
+### 磁盘满场景
+
+只验证了 `aiops_disk_free_bytes` 指标与 `OpsPilotDiskLow` 规则已加载，**没有真的填满磁盘**；
+不宣称该场景已演练。
+
+## 3. 未完成/被环境阻塞
+
+| 项 | 结果 | 原因 |
+|---|---|---|
+| 飞书人类回执 | 已确认 | 飞书自定义机器人（URL + 签名 secret）已配置，notify 返回 `200 forwarded`，用户确认群内收到 |
+| Trivy SCA | 未完成 | Trivy 0.76.1 二进制已通过 `gh release download` 取得，但漏洞库 `mirror.gcr.io` 连接超时；本地 Docker Hub 也受限 |
+| WORM 异地副本 | 未做 | 无真实远端/WORM 挂载路径；本地只读目录不等于对象锁 |
+| 测试机停服/切换/回滚 | 部分完成 | 本机进程级 previous→current→rollback 三跳均 health=True；**缺 systemd 测试机上的真实停服/切换** |
+
+## 4. 复现命令（安全版）
+
+```bash
+# 1) 起中间件
+docker compose up -d redis qdrant elasticsearch
+
+# 2) 起网关（strict；密钥从 .env 读，不打印）
+set -a; . ./.env; set +a
+OPSPILOT_STRICT=true java -jar target/opspilot-gateway-1.0.0.jar
+
+# 3) 另一终端验证
+curl -fsS http://127.0.0.1:8081/actuator/health/readiness
+# 4) 真实 chat 用 offline/localapi.py（不要打印 token）
+python - <<'PY'
+import sys; sys.path.insert(0, "offline"); import localapi
+t = localapi.login("sre-full")
+r = localapi.stream_chat({"query": "50012_DB_TIMEOUT 怎么排查", "source": "manual"}, t)
+print(r["status"], r["ttft_s"], len((r.get("done") or {}).get("refs") or []))
+PY
+```
+
+> 注意：`java -jar` 前台会占用终端；生产用 systemd/计划任务，不要用这个命令常驻。
+> `.env` 含真实凭据，不要 cat、不要提交。

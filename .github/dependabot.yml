@@ -1,0 +1,17 @@
+version: 2
+# G1（2026-10-22）：依赖与 Actions 的例行升级入口。SCA 由 CI 的 Trivy 扫描承担；
+# Dependabot 负责把"有新版"变成可审的 PR，而不是等人想起来再升。
+updates:
+  - package-ecosystem: maven
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+  - package-ecosystem: pip
+    directory: /offline
+    schedule:
+      interval: monthly

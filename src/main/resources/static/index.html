@@ -1343,7 +1343,9 @@ function renderEvents(a) {
       [ev.via, ev.cache_hit !== 'none' ? ev.cache_hit : '', ev.mode,
        ev.degrade_level || '', ev.q || ev.path || ev.msg || ''].filter(Boolean).join(' · ');
     const srcAlarm = ev.src_tenant && ev.src_tenant !== ev.tenant ? ' ⚡跨租户回放!' : '';
-    const who = (ev.sub || ev.level != null) ? '[' + (ev.sub || '?') + '/' + (ev.level ?? '-') + '] ' : '';
+    // G0-W0.1：ev.sub 来自 token 主体（账号名），与本函数其余字段同纪律——进 innerHTML 前必须 esc()，
+    // 否则一条伪造/被篡改的审计事件就能往面板注入 HTML（同类字段都走了 esc()，此处是漏点）。
+    const who = (ev.sub || ev.level != null) ? '[' + (ev.sub ? esc(ev.sub) : '?') + '/' + (ev.level ?? '-') + '] ' : '';
     prepend('<div class="ev ' + cls + '"><span class="t">' + new Date(ev.ts).toLocaleTimeString() +
       '</span><span class="b">' + ev.ev + '</span><span class="d">' + who + esc(detail) + srcAlarm +
       '</span></div>');

@@ -17,8 +17,11 @@
 #   --foreground：直接前台跑（Ctrl-C 停）
 #
 # 覆盖口（放 .env 即可，均有默认）：
-#   SERVER_PORT   监听端口，默认 8081（与 application.yml / compose / README 同口径）
-#   GATEWAY_HEAP  JVM 堆上限，默认 1024m；内存紧张的机器在 .env 里调小
+#   SERVER_PORT      监听端口，默认 8081（与 application.yml / compose / README 同口径）
+#   SERVER_ADDRESS   监听地址，默认 127.0.0.1（G0-W0.1：只给本机访问）
+#                    ——容器（compose 端口映射）或前置反代形态才显式设 0.0.0.0；
+#                    裸机设 0.0.0.0 等于把面板与 /v1 面直接放到网络上（鉴权不是网络边界）。
+#   GATEWAY_HEAP     JVM 堆上限，默认 1024m；内存紧张的机器在 .env 里调小
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -26,13 +29,15 @@ FOREGROUND=0
 [ "${1:-}" = "--foreground" ] && FOREGROUND=1
 
 PORT="${SERVER_PORT:-8081}"
+ADDR="${SERVER_ADDRESS:-127.0.0.1}"
 HEAP="${GATEWAY_HEAP:-1024m}"
 JAR="target/opspilot-gateway-1.0.0.jar"
 
 if [ -f .env ]; then
   set -a; . ./.env; set +a
-  # .env 可能在 set -a 之前被读过一次，重新取以让 SERVER_PORT/GATEWAY_HEAP 生效
+  # .env 可能在 set -a 之前被读过一次，重新取以让 SERVER_PORT/SERVER_ADDRESS/GATEWAY_HEAP 生效
   PORT="${SERVER_PORT:-8081}"
+  ADDR="${SERVER_ADDRESS:-127.0.0.1}"
   HEAP="${GATEWAY_HEAP:-1024m}"
 fi
 # shellcheck source=scripts/java_home.sh
@@ -78,20 +83,24 @@ STAMP="$(date +%Y%m%d-%H%M%S)"
 LOG="logs/run-${STAMP}.log"
 mkdir -p logs
 export OPSPILOT_BASE="http://localhost:${PORT}"   # python 工具链的覆盖口，别漏（否则打默认端口）
-echo "port=$PORT  heap=$HEAP  log=$LOG"
+echo "listen=${ADDR}:${PORT}  heap=${HEAP}  log=${LOG}"
+# 0.0.0.0/:: 时浏览器不能直接用该地址访问，提示一句，免得对着"打不开"猜
+case "$ADDR" in
+  0.0.0.0|::|"[::]") echo "注意：绑定在所有网卡上（浏览器请用 http://127.0.0.1:${PORT}/）；仅容器/反代形态应如此。" ;;
+esac
 
 if [ "$FOREGROUND" = "1" ]; then
-  echo "前台启动（Ctrl-C 停）。"
-  exec "$JAVA_HOME/bin/java" "-Xmx${HEAP}" "-Dserver.port=${PORT}" -jar "$JAR"
+  echo "前台启动（Ctrl-C 停），监听 ${ADDR}:${PORT}。"
+  exec "$JAVA_HOME/bin/java" "-Xmx${HEAP}" "-Dserver.port=${PORT}" "-Dserver.address=${ADDR}" -jar "$JAR"
 fi
 
 # ---- 3) 后台起，轮询到 Started 才算成 ----
-nohup "$JAVA_HOME/bin/java" "-Xmx${HEAP}" "-Dserver.port=${PORT}" -jar "$JAR" > "$LOG" 2>&1 &
+nohup "$JAVA_HOME/bin/java" "-Xmx${HEAP}" "-Dserver.port=${PORT}" "-Dserver.address=${ADDR}" -jar "$JAR" > "$LOG" 2>&1 &
 disown 2>/dev/null || true
 
 for i in $(seq 1 60); do
   if grep -q "Started OpsPilotApplication" "$LOG" 2>/dev/null; then
-    echo "OK 已启动："
+    echo "OK 已启动（实际监听 ${ADDR}:${PORT}）："
     grep "Started OpsPilotApplication" "$LOG" | tail -1 | sed 's/^.*: //'
     echo "面板   http://localhost:${PORT}/"
     echo "健康   http://localhost:${PORT}/actuator/health"

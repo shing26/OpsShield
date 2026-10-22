@@ -1,6 +1,6 @@
-# OpsPilot 的三条告警规则——**两种错误码粒度刻意混用**。
+# OpsPilot 的告警规则——业务故障三条 + 自监控六条，**两种错误码粒度刻意混用**。
 #
-# 为什么是这三条而不是全部指标：可抓的 aiops_* 里，只有"上游坏了""检索腿劣化"
+# 为什么是这三条业务规则而不是全部指标：可抓的 aiops_* 里，只有"上游坏了""检索腿劣化"
 # "兜底直出增多"构成值得叫人的故障条件。llm_calls / dedup_aggregated 是纯计数——
 # 它们涨得快说明系统在正常工作，拿它们触发告警等于用这套系统自己的指标制造噪声，
 # 而消灭噪声告警正是它存在的理由。
@@ -8,6 +8,28 @@
 # 混粒度的理由：第三条刻意**不带 error_code**。它逼着同一条管道处理一个没有强标识符
 # 可锚定的告警——min-relevance 门控、语义召回、纯语义兜底三条路径在无标识符输入下的
 # 行为差异只在这里可见。前两条走精确符号快路径，第三条走语义路，对照才有意义。
+#
+# 2026-10-22 运维审查（G0）补的四条自监控，回答同一个问题："**告警系统自己坏了，
+# 谁来告警？**"：
+#   up==0        抓取面消失 = 规则→Alertmanager→bridge→网关同一条环在同一个点断掉；
+#   backup stale 备份沉默失败（cron 假绿、落可写层、zip 打不开）只有"上次成功时间"可信；
+#   audit fail   审计写失败被吞掉（不阻断业务），业务越正常越没人发现合规证据在丢；
+#   inflight     在途接近降级阈值 = 容量拐点，该扩容量而不是等 L1 已经发生；
+#   redis/disk   依赖健康与磁盘余量（G1 补）：Redis 挂/盘满都可能在业务报错前先发生。
+# 四条的共同点：系统"还能跑"，但正在失去可恢复 / 可追溯 / 可承载的资格，面板上看不出来。
+# 抓取侧生产者**不在本文件**：PromQL 引用不存在的序列时是空向量、静默不 fire，故每条
+# 都写下了它要求的指标名与语义（那是跨端契约）。交付时点的对齐状态（2026-10-22 G0）：
+#   backup  → 已由 W0.2 的 BackupStatusService 暴露同名 gauge
+#             （meter aiops.backup.last_success.timestamp.seconds → 本文件的 aiops_backup_last_success_timestamp_seconds）；
+#   audit / inflight → **尚无生产者**，需在 AuditService / 指标侧补计数器与 gauge；
+# 缺生产者的规则不报错、只是永远不 fire——这是必须显式验收的静默失效，不能靠"配置已提交"交差。
+#
+# **重启假阳的已知边界**（2026-10-22）：三条计数规则统一用 increase(...[5m]) > 0 且
+# for: 2m。increase() 把计数器下降解释为"重置"，于是进程重启后的窗口里会把重置后的
+# 初值当作增长——重启本身就可能让规则在 5 分钟窗口内出现假增量。for: 2m 只能挡住
+# 单次抓取抖动，压不住这条边界（窗口里的假增量能连续成立两分钟以上）；真正的处置是
+# 值班看到"刚重启过"时按已知假阳处理。这不是规则参数能消除的东西，登记在此，避免
+# 后来者把它当新缺陷重新发明一遍。
 #
 # 契约：`annotations.summary` 是给 bridge 的自然语言正文，`labels.error_code` 是精确符号。
 # bridge 只拼接、不发明——标签缺失就走语义路，那是被设计的分支，不是错误。
@@ -17,31 +39,108 @@ groups:
       - alert: OpsPilotUpstreamRateLimited
         # 增量 > 0 即报：这是"上游真的开始限流了"的直接证据，
         # 攒够阈值再报会把 429 期间的真实排障需求挡在门外。
-        expr: sum(rate(aiops_llm_rate_limited_total[5m])) > 0
-        for: 0m
+        # for: 2m 与另两条计数规则同口径——单点增量可能只是重启假阳（见文件头）。
+        expr: sum(increase(aiops_llm_rate_limited_total[5m])) > 0
+        for: 2m
         labels:
           severity: warning
           error_code: "51001_MODEL_ARREARAGE"
         annotations:
-          summary: "OpsPilot 上游模型服务正在限流（近 5 分钟 {{ $value | printf \"%.3f\" }} 次/秒 429）。流式链路可能整体失败，请给出分型诊断与止损操作。"
+          summary: "OpsPilot 上游模型服务正在限流（近 5 分钟 {{ $value | printf \"%.0f\" }} 次 429）。流式链路可能整体失败，请给出分型诊断与止损操作。"
           description: "指标 aiops_llm_rate_limited_total 在上升。"
 
       - alert: OpsPilotRetrievalTimeouts
-        expr: sum(rate(aiops_retrieval_timeouts_total[5m])) > 0
-        for: 0m
+        expr: sum(increase(aiops_retrieval_timeouts_total[5m])) > 0
+        for: 2m
         labels:
           severity: warning
           error_code: "51005_LEG_TIMEOUT_SILENT_DEGRADE"
         annotations:
-          summary: "OpsPilot 检索腿持续超时（近 5 分钟 {{ $value | printf \"%.3f\" }} 次/秒）。双路检索可能已静默退化为单路，请给出排查与止损步骤。"
+          summary: "OpsPilot 检索腿持续超时（近 5 分钟 {{ $value | printf \"%.0f\" }} 次）。双路检索可能已静默退化为单路，请给出排查与止损步骤。"
           description: "指标 aiops_retrieval_timeouts_total 在上升。"
 
       - alert: OpsPilotSopFallbacks
         # 刻意不加 error_code 标签——见文件头"混粒度"说明。
-        expr: sum(rate(aiops_sop_fallbacks_total[5m])) > 0
-        for: 0m
+        expr: sum(increase(aiops_sop_fallbacks_total[5m])) > 0
+        for: 2m
         labels:
           severity: info
         annotations:
-          summary: "OpsPilot 静态 SOP 兜底次数在上升（近 5 分钟 {{ $value | printf \"%.3f\" }} 次/秒）。可能命中了熔断档位或知识库与上游错位，请给出排查方向。"
+          summary: "OpsPilot 静态 SOP 兜底次数在上升（近 5 分钟 {{ $value | printf \"%.0f\" }} 次）。可能命中了熔断档位或知识库与上游错位，请给出排查方向。"
           description: "指标 aiops_sop_fallbacks_total 在上升。"
+
+      - alert: OpsPilotDown
+        # up==0 是**抓取面**的事实：Prometheus 连不上 /actuator/prometheus。
+        # 这条必须单独存在，因为环断在同一个点上：规则由 Prometheus 评估、可投递性由
+        # Alertmanager 保证，而 bridge 的转发终点正是挂掉的网关——这条告警**只会**经
+        # alertmanager.yml 的 human-notify 出去。它是"告警出口不能只依赖被监控对象"的实证。
+        # for: 2m 而不是 0m：单次抓取失败（GC 停顿 / 瞬时过载）不该叫人，持续两分钟才是真挂。
+        expr: up{job="opspilot"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          # 刻意不带 error_code：网关自己不可达时没有"上游错误码"可给，缺失走语义路。
+        annotations:
+          summary: "OpsPilot 网关抓取目标 up=0（Prometheus 已连续 2 分钟连不上 /actuator/prometheus）。网关可能已退出、假死或端口不通；bridge 同链路已断，请人工确认进程与端口占用。"
+          description: "指标 up{job=\"opspilot\"} == 0。"
+
+      - alert: OpsPilotBackupStale
+        # 93600s = 26h：日备份周期 + 补跑一次 + 人工反应的余量。不用"24h+1m"是刻意的——
+        # 备份窗口漂移几分钟不该叫人，而"整整一天没成功"已经是数据丢失风险。
+        # 判据只看"上次成功时间戳"：失败的那次 cron 往往什么也不写（假绿），
+        # 唯一可信的事实是成功那次留下的时间。
+        # 抓取侧契约：gauge，值为上次成功备份的 unix 秒（缺失时不 fire，见文件头）。
+        expr: time() - aiops_backup_last_success_timestamp_seconds > 93600
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "OpsPilot 备份已超过 26 小时没有成功记录（距上次成功 {{ $value | printf \"%.0f\" }} 秒，阈值 93600 秒）。账号库是唯一不可再生数据，请立即检查备份任务与 backup/ 产物。"
+          description: "aiops_backup_last_success_timestamp_seconds 距今超过 93600 秒。"
+
+      - alert: OpsPilotAuditWriteFailures
+        # 审计写失败被 AuditService 有意吞掉（不阻断业务，见其 writeEvent 注释）——
+        # 于是**业务越正常、越没人发现合规证据在丢**。这正是"该告警而不是该看日志"的场景。
+        # 抓取侧契约：counter，由审计写失败处递增；Prometheus 侧名带 _total 后缀。
+        expr: increase(aiops_audit_write_failures_total[5m]) > 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "OpsPilot 审计写失败：近 5 分钟 {{ $value | printf \"%.0f\" }} 次。审计证据面正在丢行（业务链路不会报错，属静默缺失），请检查 logs/ 磁盘余量与写权限。"
+          description: "指标 aiops_audit_write_failures_total 在上升。"
+
+      - alert: OpsPilotHighInflight
+        # 32 = 降级阈值 40（opspilot.degrade.inflight-threshold）的 80%：状态机到 40 就把
+        # 向量腿摘成 L1，那时是"已经降级"；32 给的是**降级前的反应窗口**（扩容量 / 查上游）。
+        # 阈值写死在规则里而不引用配置：Prometheus 侧读不到 application.yml，且它与
+        # inflight-threshold 的耦合必须在评审时可见——改一个就得同步改两处。
+        # gauge 不是计数器：直接比较，不要套 increase/rate。
+        expr: aiops_inflight > 32
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "OpsPilot 在途请求数持续超过 32（降级阈值为 40）。容量接近拐点、L1 降级可能随时触发，请评估扩容或上游延迟。"
+          description: "指标 aiops_inflight > 32 已持续 2 分钟。"
+
+      - alert: OpsPilotRedisDown
+        # G1：/actuator/health 的 redis DOWN 本身不会进 Prometheus；DependencyMetrics 把
+        # HealthProbe 的结果转成 aiops_dependency_up{dependency="redis"}，本规则才有生产者。
+        expr: aiops_dependency_up{dependency="redis"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "OpsPilot Redis 不可用已持续 2 分钟（aiops_dependency_up{dependency=\"redis\"}=0）。配额/滑动窗口/L1 缓存/风暴收敛都会退化，请检查 Redis 进程、端口、口令与内存。"
+          description: "aiops_dependency_up{dependency=\"redis\"} == 0。"
+
+      - alert: OpsPilotDiskLow
+        # 5GiB 是单机 H2 + 审计 + 备份的最低余量；H2 写满会直接导致登录/审计失败。
+        expr: aiops_disk_free_bytes{path="data"} < 5 * 1024 * 1024 * 1024
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "OpsPilot 数据盘可用空间低于 5GiB（当前 {{ $value | printf \"%.0f\" }} 字节）。H2/审计/备份继续写会失败，请立即清理或扩容。"
+          description: "aiops_disk_free_bytes{path=\"data\"} < 5GiB。"

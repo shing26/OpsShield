@@ -4,6 +4,7 @@ import com.opspilot.auth.JwtAuthFilter;
 import com.opspilot.auth.UserContext;
 import com.opspilot.cache.L1CacheService;
 import com.opspilot.cache.L2SemanticCacheService;
+import com.opspilot.config.BackupStatusService;
 import com.opspilot.config.OpsPilotProperties;
 import com.opspilot.metrics.OpsMetrics;
 import com.opspilot.resilience.DegradationState;
@@ -34,6 +35,7 @@ import org.springframework.web.server.ResponseStatusException;
 public class AdminController {
 
     private static final Set<String> VALID_LEVELS = Set.of("L0", "L1", "L2", "auto");
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(AdminController.class);
 
     private final OpsMetrics metrics;
     private final DegradationState degrade;
@@ -46,6 +48,7 @@ public class AdminController {
     private final com.opspilot.metrics.AuditService audit;
     private final com.opspilot.storm.SingleFlight singleFlight;
     private final com.opspilot.resilience.QuotaService quota;
+    private final BackupStatusService backupStatus;   // 最近成功备份的可观测面（G0）
     private final org.springframework.boot.info.BuildProperties build; // 面板 build 指纹（build-info 缺省时为 null）
 
     public AdminController(OpsMetrics metrics, DegradationState degrade,
@@ -54,6 +57,7 @@ public class AdminController {
                            com.opspilot.health.HealthProbe healthProbe, com.opspilot.metrics.AuditService audit,
                            com.opspilot.storm.SingleFlight singleFlight,
                            com.opspilot.resilience.QuotaService quota,
+                           BackupStatusService backupStatus,
                            @org.springframework.lang.Nullable org.springframework.boot.info.BuildProperties build) {
         this.metrics = metrics;
         this.degrade = degrade;
@@ -66,6 +70,7 @@ public class AdminController {
         this.audit = audit;
         this.singleFlight = singleFlight;
         this.quota = quota;
+        this.backupStatus = backupStatus;
         this.build = build;
     }
 
@@ -145,8 +150,25 @@ public class AdminController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "备份路径非法：须为 backup/ 目录下的 .zip，且不含引号/分号/反斜杠");
         }
-        audit.logAdmin(JwtAuthFilter.from(http), "backup", "ok", to);
-        return Map.of("backup", to);
+        // G0：响应必须能自证"这份产物是哪个字节、能否解开"——旧响应只有路径，
+        // 调用方无法确认容器卷映射/截断等问题（QA P1-3 的同类假绿）。
+        // 算不出摘要不是错误（容器形态宿主可能看不到刚写的文件），但 verified=false 要如实说。
+        java.nio.file.Path artifact = java.nio.file.Path.of(to);
+        String sha = "";
+        boolean verified = false;
+        try {
+            sha = BackupStatusService.sha256(artifact);
+            verified = BackupStatusService.zipIntact(artifact);
+        } catch (Exception e) {
+            log.warn("备份产物核验失败（响应给 verified=false）: {} ({})", to, e.toString());
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("backup", to);
+        out.put("sha256", sha);
+        out.put("verified", verified);
+        audit.logAdmin(JwtAuthFilter.from(http), "backup", "ok",
+                sha.isEmpty() ? to : to + " sha256=" + sha);
+        return out;
     }
 
     /**
@@ -168,6 +190,7 @@ public class AdminController {
         b.put("jvm", System.getProperty("java.version"));
         b.put("uptime_s", rt.getUptime() / 1000);
         b.put("pid", ProcessHandle.current().pid());
+        b.put("commit", buildCommit(System.getenv()));   // G1-W1.4：面板要能回答"现在跑的是哪一版"
         out.put("build", b);
 
         out.put("metrics", metricsView());
@@ -193,6 +216,9 @@ public class AdminController {
                 "sub", u.sub(), "used", quota.usedToday(u.sub()), "limit", quota.dailyLimit()));
         runtime.put("reingest", Map.of("busy", ingestion.busy(),
                 "last", java.util.Objects.toString(ingestion.lastResult(), "unknown")));
+        // 备份可信度（G0）：与 gauge aiops.backup.last_success.timestamp.seconds 同源同口径，
+        // 面板显示的"备份龄"与告警规则算出来的必须是同一个数。
+        runtime.put("backup", backupView());
         out.put("runtime", runtime);
         return out;
     }
@@ -205,6 +231,39 @@ public class AdminController {
         requirePlatformAdmin(http, "audit/recent");
         var r = audit.recentSince(since, limit);
         return Map.of("events", r.events(), "max_seq", r.maxSeq(), "truncated", r.truncated());
+    }
+
+    /**
+     * 部署 commit（G1-W1.4）：{@code OPSPILOT_BUILD_COMMIT} 优先，其次 {@code GIT_COMMIT}，
+     * 都没有回 {@code unknown}。
+     *
+     * <p>为什么读环境而不是 {@code BuildProperties}：build-info 只产 version/time（pom 里就一个
+     * build-info goal，没引 git-commit-id 插件），而环境变量是容器与宿主部署都已存在的注入通道
+     * （CI 的 GIT_COMMIT、compose 的 environment 都能给），不新增依赖。
+     *
+     * <p>为什么缺省是 {@code unknown} 而不是空串：面板必须能区分"没注入"（unknown）与
+     * "注入了空值"（配置错误）。显式键优先：两个都设时，OPSPILOT_BUILD_COMMIT 是更具体的那个。
+     * 截断到 64 字符——build 指纹是给人看的短标识，不该让一个畸形环境变量把 /state 撑大。
+     */
+    static String buildCommit(Map<String, String> env) {
+        for (String key : new String[]{"OPSPILOT_BUILD_COMMIT", "GIT_COMMIT"}) {
+            String v = env == null ? null : env.get(key);
+            if (v != null && !v.isBlank()) {
+                String trimmed = v.trim();
+                return trimmed.length() > 64 ? trimmed.substring(0, 64) : trimmed;
+            }
+        }
+        return "unknown";
+    }
+
+    /** 备份状态子块：last_success（epoch 秒，0=无记录）/ age_hours（-1=无记录）/ verified。 */
+    private Map<String, Object> backupView() {
+        var s = backupStatus.snapshot();
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("last_success", s.lastSuccessEpoch());
+        m.put("age_hours", s.ageHours() < 0 ? -1.0 : Math.round(s.ageHours() * 100.0) / 100.0);
+        m.put("verified", s.verified());
+        return m;
     }
 
     /** metrics() 端点与 /state 共用的装配（单一键源，面板契约两处一致）。 */

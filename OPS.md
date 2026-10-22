@@ -3,6 +3,21 @@
 > 读者 = 管理员。演示话术在 [docs/DEMO.md](docs/DEMO.md)，架构叙事在 README/ADR——本文只放**日常要做的事**。
 > 命名：对外项目名 **OpsShield**；`opspilot` 是内部工程代号（包名/配置前缀/`/v1` model 名），代码与配置零改动。
 
+## M0/M1 门禁索引（先看这里）
+
+README 的定位口径已改成「单机可复现的生产级机制参考实现」——**能不能上线不靠这段话判断，靠门禁**。门禁的单一事实源是 [docs/ops/production-gate.md](docs/ops/production-gate.md)；本文只放**日常要做的动作**。
+
+| 批次 | 范围 | 兑现的门禁 |
+| --- | --- | --- |
+| **M0（G0 收尾，3–4 天）** | 让系统「可被托付地坏」：部署默认值（绑定地址 / 占位凭据 / 请求体上限 / 面板输出转义）、备份调度与龄期告警、告警到人、失败请求证据 | 门禁 1 / 2 / 3（判据见门禁文件 §2） |
+| **M1（G1 发布，1–2 周）** | 把「单机」做成「可发布」：准入控制、优雅停机、发布/回滚、延迟分位与 SLO、依赖升级、审计留存、值班 5 分钟动作 | 门禁 4–10 全量（判据见门禁文件 §2） |
+
+怎么用（三条纪律）：
+
+1. **提交前**跑 fast 门禁、**发布前**跑 full 门禁 + 演练；门禁的 fast/full 判定与复核命令在门禁文件 §1，六类演练步骤与判据在 §3。
+2. **值班被叫醒**先看门禁文件 §5「5 分钟判据」定位到层，再回本文按症状找动作——先定位，再动手。
+3. 门禁的当前状态与最近一次复核日期**只记在门禁文件 §4**，本文不复述：复述一遍就多一个会漂移的真相源（这类漂移在本项目里已经出过两次台账事故）。
+
 ## 0. 脚本索引（按用途分组；逐脚本职责与坑见 [docs/repo-map.md](docs/repo-map.md)）
 
 | 分组 | 脚本 | 一句话 |
@@ -25,7 +40,11 @@
 
 所有用户操作走 CLI。**⚠️ 并发口径按后端形态分**（2026-09-16 实测更正，事故 `51103_H2_CONCURRENT_WRITE_CORRUPTION`）：
 
-- **宿主裸进程形态**：CLI 与运行中网关经 H2 AUTO_SERVER 并发无冲突（原口径，成立）。
+- **宿主裸进程形态（G0 口径，2026-10-22 收紧）**：默认**不再**用 AUTO_SERVER 并存——CLI 与运行中网关争同一个 H2 文件锁，
+  `scripts/user_admin.sh` 检测到网关在跑（端口监听或 health 200）会直接拒绝（exit 2），除非显式 `FORCE=1`（仅演练库/确认端口不是本项目时用）。
+  维护动作走「停网关 → CLI → 起网关」或 HTTP 管理面（`/admin/backup`）；AUTO_SERVER 只能在 `H2_DB_URL` 里显式写出来（知情选择）。
+- **schema 版本化（G1，2026-10-22）**：账号库建表由 **Flyway V1**（`src/main/resources/db/migration/V1__users.sql`）负责，`spring.sql.init` 已关闭；空库启动即建表，已有库会幂等执行 V1 并记 `flyway_schema_history`。加列/改约束必须新增 V2+，禁止再改 V1（校验会拒绝）。
+- **恢复旧备份后**：H2 文件回到备份时刻，`flyway_schema_history` 也一起回退；网关启动时 Flyway 会按历史补迁移。若备份来自更老版本，先看 `flyway_schema_history` 再决定前滚/回滚，不要手工删表。
 - **容器形态**：`./data` 是 bind mount，**H2 的锁文件跨挂载点不可靠**——CLI 与容器内网关同时写会
   损坏账号库（本次实测：CLI 写成功后停容器，下次打开即 MVStore chunk 损坏、恢复工具也救不回）。
   **正确做法：先 `docker compose stop gateway` 再跑 CLI，或走 HTTP 管理面（`/admin/backup` 等）。**
@@ -107,7 +126,7 @@ cron（Linux 部署版；本机手动跑同样有效）：
 | 处置闭环（对目标系统的自动执行/自愈） | 两组析取项：①产品方向从"建议"转"执行"；②接入真实告警流 **+** 可审计的 runbook 执行通道（审批链/HITL 门，见 ADR-0009 只读面扩展） | 只读立场为承诺非疏漏：拒答门控 + 全链路溯源保证人在回路。**2026-09-16 状态注**：②中的"告警流"一半已满足（自举源，ADR-0011），但"执行通道"未建、①也未发生 → **本项未触发**，仍按待还债记录。**注**：AIOps 谱系 ①遥测采集/②异常检测=**永久非目标**，不列本表（边界声明见 README/面板谱系块） |
 | 跨指纹 incident 关联（同一根因、多条不同指纹告警的**关联**——不是归并） | **触发线已兑现（2026-10-17）→ 同日定案并实施**。判据：真实告警流里"同一根因天然是多个指纹"已实证（[qa §3.1](docs/qa/2026-10-17-alertmanager-intake.md)），而外部告警源接入使"人工归并成本可测"成为可观测项。**证据面改名**：原写 `logs/alert-producer.jsonl`，实测该源 33 行同文本只给出 **1 个** fp（看不出"碎"）——真正的证据面是 `logs/alert-bridge.jsonl`（`incident_id` 分组 + `alert_id` 逐条） | 同指纹域收敛已覆盖（500 并发 → LLM 1 次）；跨指纹**关联**已落——同一事故的 N 条告警共享一个 `am-…` 分组身份、落在审计行 `trace_id`，可整段取出，见 [ADR-0019](docs/adr/0019-incident-boundary-owned-by-upstream.md) 与 qa §7。**归并（N→1）明确未做且未立项**：它要先回答"拿哪条告警的文案当 query"，本仓已否决过一次 |
 | L1 降级期的门控降级（摘除 Rerank 后无相关性分数可依，相关性门控失效、只剩零召回拒答） | 出现一次"L1 期**误拒或漏拒**造成真实事故"且被真人/QA 复现 → 立项标定 RRF 分数分布并给出 L1 专用阈值 | 取舍与理由见 [ADR-0012](docs/adr/0012-degradation-cost-semantics.md)：RRF 分数无量纲（只依赖排名），照搬 L0 在 Rerank 分布上标定的 `min-relevance: 0.2` 会变成拍脑袋拒答，而未标定阈值造成的**误拒是静默的**（用户只看到拒答，看不到本可作答）——比现状更糟。零召回仍拒答，故并非"完全不门控"；L1≡es_only 的同构关系已由单测锁定 |
-| L2 写入重复 embed（同一请求 embed 两次：检索腿一次、L2 写入一次） | 出现两组析取项任一：① **embedding 调用成本成为瓶颈**（日调用量翻倍触账单异常或上游限流）；② 单请求 `stage_ms.l2_store` 占比 **> 10%**（`/state` 与审计行可测）→ 立项把检索腿算出的向量回传给 L2 写入复用 | 成本已量化：实测一条 10.2s 请求里 `l2_store=232ms`（约 2.3%），延迟上不划算；真正的动机在**上游调用次数减半**。修法要向 `QdrantSearchService` 的返回面回传查询向量（并在 es_only/降级无向量时回退到 embed），接口面确有改动，故按触发线挂起不预防施工。**注**：原代码注释曾写"复用检索时已算好的向量"而实际未复用——那是**宣称失实**，已于 2026-09-25 改为如实描述（那个才是缺陷，已修） |
+| L2 写入重复 embed（同一请求 embed 两次：检索腿一次、L2 写入一次） | 出现两组析取项任一：① **embedding 调用成本成为瓶颈**（日调用量翻倍触账单异常或上游限流）；② 原判据 `stage_ms.l2_store` 占比 >10% 在 G1（2026-10-22）后失效——L2 写入已异步化，该字段只剩"入队开销"；暂由①（上游调用量/账单）兜底，G2 补 L2 写入的独立 embedding 计数后恢复可测 | 成本已量化：实测一条 10.2s 请求里 `l2_store=232ms`（约 2.3%），延迟上不划算；真正的动机在**上游调用次数减半**。修法要向 `QdrantSearchService` 的返回面回传查询向量（并在 es_only/降级无向量时回退到 embed），接口面确有改动，故按触发线挂起不预防施工。**注**：原代码注释曾写"复用检索时已算好的向量"而实际未复用——那是**宣称失实**，已于 2026-09-25 改为如实描述（那个才是缺陷，已修） |
 | 行动契约的 top-3 产额（[ADR-0017](docs/adr/0017-read-only-action-contract.md)：契约只从**本次引用的 3 个 chunk** 抽，`final-top-k: 3`） | 出现下述任一：①troubleshoot 页的**空契约状态在真实使用或演示里被指认**为"不好用"（真人/QA 复现，能指到具体 query）；②产品侧给出**明确产额下限**（如"≥X% 查询要带命令清单"）→ 到点二选一动工：抬 `final-top-k`（连带重跑评测、重登现役口径那组数字：精确 Top-1 100% / 语义 Hit@3 100% / 语义 Top-1 88.2%），或同文档兄弟段扩张（须先做"给未引用原文开放行口"的显式权限复核，并重跑段名闸与四层策略的变异测试） | 实测 **6/11** 固定查询形状出非空契约（2026-10-10，live，`/admin/cache/flush` 清 L1+L2 后逐个跑，11 个读到 `cache_hit=none`，共 9 条动作）；11 个目标文档**全都有 2~3 个可抽的排查段叶 chunk**，故**语料不是瓶颈、top-3 才是**——命中的查询都引用了编号叶（`排查步骤 > 第二步：定位慢 SQL`），落空那 5 个的三槽被文档标题、段头（`排查步骤`）与症状摘要占满，命令所在的叶排在第 4 名之后。"契约 ⊆ 引用"是构造保证，**多给命令必然要动它**，故不预防施工。判据见 OPS §12 末条：看 `done` 帧 `refs` 面包屑里有没有"第N步"字样的叶，没有就是本条、与策略松紧无关 |
 
 | SSE 异步上下文错误后继续写（2026-09-28 压测窗口观测到 2 次） | 出现一次**客户可见**的"响应已开始但中途静默截断"且被复现——判据：能指到具体请求的 SSE 流在 done 帧前断掉，且伴随 `IllegalStateException: AsyncContext after error` | 观测到的 2 次都发生在**客户端断开之后**（locust 收尾那一秒；同轮 2700 请求里 2 次），不影响任何已成功响应；属"错误后仍尝试写"的收尾竞态，非数据正确性问题（审计行与缓存写入都在错误之前完成）。原文见 `logs/run-113138.log`；本轮为"记录 + 触发线"而非修复（不在批次二范围内，且无客户可见影响） |
@@ -130,7 +149,7 @@ cron（Linux 部署版；本机手动跑同样有效）：
 |---|---|---|
 | 别名回滚 admin 端点（ADR-0006 承诺"可秒级回退"，端点未实现） | 首次出现"重灌后需要回滚"的真实需求，或任何一次 reingest 质量事故 | 物理库名带时间戳 + 手工改别名指向即秒级回退（见上表 SOP 第 2 步）；**无端点 ≠ 无退路** |
 | 外部监控 adapter（评估 M3 剩余项） | 三组析取项任一成立即到期：① 拿到**可读且被授权**的外部告警/监控 API（Alertmanager / 云监控 webhook，有文档化契约与可用测试凭据）；② 产品方向转为含外部集成，且 ≥1 个外部消费者书面要求以 webhook 接入；③ 一次真实故障因缺外部告警接入而被漏掉（判据：该故障落在自举源盲区内，且复盘结论指向"没接外部源"）。**2026-09-21 改写**：原触发线"出现真实告源"不可判读——没有任何时刻会让它到期，等于没有到期日，违反本表自订纪律。**【2026-10-17 触发线①已兑现·已落第一版】**：Alertmanager 的 webhook 契约是公开文档化、本机自建即被授权的告警源，①成立。已落地的形态是**宿主 bridge**（`scripts/alert_bridge.py`）而非网关端点——本轮目的是观测"指纹在真实告警标签下碎在哪"，不是上新能力，故产品面零改动、不开新的鉴权维度（理由见 §13）。**仍未做（如实登记）**：桥是单实例、无外部多实例共享态；「提升为网关原生端点」是另一个决策，触发线见下条 | 自举源 + Docker 告警源 + Alertmanager 指标告警源三源并存；形态与边界见 §13 |
-| 告警接入从 bridge 提升为网关原生端点（`/api/v1/alerts/webhook`） | 两组析取项任一成立即到期：① §13 台账里的指纹分布证明确有"真实标签导致的误收敛"需要服务端介入（判据：能指到具体 `fp` 与两条本该不同指纹的告警）；② 出现**桥形态跑不动**的真实部署需求（多实例部署 / 需要网关原生鉴权与配额归属，判据：桥的单实例锁成为实际瓶颈而非纸面限制） | 桥已覆盖单机全部需求；提升为端点要先发明"机器调用者的身份与配额归属"——JWT 是给人（和 agent）用的，Alertmanager 不是账号。这是真实的地基工作，不做在证据之前。**2026-10-17 补注**：方案 C 修的是"误分裂"（碎），**不是**本条触发线①的"误收敛"（本该不同的指纹撞在一起），故这次修复**没有**触碰本条触发线 |
+| 告警接入从 bridge 提升为网关原生端点（`/api/v1/alerts/webhook`） | 两组析取项任一成立即到期：① §13 台账里的指纹分布证明确有"真实标签导致的误收敛"需要服务端介入（判据：能指到具体 `fp` 与两条本该不同指纹的告警）；② 出现**桥形态跑不动**的真实部署需求（多实例部署 / 需要网关原生鉴权与配额归属，判据：桥的单实例锁成为实际瓶颈而非纸面限制） | 桥已覆盖单机全部需求；提升为端点要先发明"机器调用者的身份与配额归属"——JWT 是给人（和 agent）用的，Alertmanager 不是账号。这是真实的地基工作，不做在证据之前。**2026-10-17 补注**：方案 C 修的是"误分裂"（碎），**不是**本条触发线①的"误收敛"（本该不同的指纹撞在一起），故这次修复**没有**触碰本条触发线。**2026-10-20 复核·仍未触发**：本机 `logs/alert-bridge.jsonl` 中 25 条带 `alert_id` 且有网关 `fp` 的有效投递记录里，同一 `fp` 对应不同 `alert_id` 的组数为 0；部署仍是单实例，且尚无实际多实例部署或单实例锁造成等待、拒绝、漏告警的证据。故不创建 C3 issue，不进入 spec/tickets/实现 |
 | 指纹契约与真实告警文案的错配（Alertmanager 模板把 `$value` 渲染进注解，同一条告警每次重发都是新指纹 ⇒ L1 与单飞双双失效） | **触发线已兑现（2026-10-17 首次实测即复现）→ 当日定案并实施"方案 C：服务端拆身份"**。实证见 [qa/2026-10-17-alertmanager-intake.md](docs/qa/2026-10-17-alertmanager-intake.md) §3。**判据不是"再做一次实验"**，而是先回答"治不治得了别人写的规则"——方案 A 只在自家规则里成立，故排除；选定 C，使服务端不再从人类可读文案里推断身份。**仍未做（如实登记）**：§3.5 的同身份降级/失败重复穿透是独立问题（见下一行）。跨指纹关联已于当日同轮落成（上一行 / qa §7） | 规则与桥都保持原职：规则照旧把 `$value` 渲染进文案，桥不替网关归一化，只多派生一个与 message 无关的 `alert_id`（四元组 alertname/job/error_code/status）。人工提问与既有自举源不传该字段，逐字回退到原文本指纹，行为不变。**产品面只多一个可选 body 字段**（`ChatRequest.alertId`），无新端点、无新鉴权维度；契约与验收见 §13 / qa §6，定案见 [ADR-0018](docs/adr/0018-alert-identity-split-from-query-fingerprint.md) |
 | 降级/失败路径的告警重复穿透（L1 只缓存"成功且非 SOP"的答案；来源：qa 2026-10-17 §3.5） | 出现一次**真实告警风暴窗**且重复穿透造成可测成本——判据：同一 `alert_id` 在 ≤15 分钟内被投递 ≥3 次、`cache_hit=none`，且该窗内 `degradation_level≠L0` 或 `sent_ok=false` 占多数，并能指到配额/上游调用/延迟任一读数 | 本轮**刻意不动**：这是"降级期答案要不要进 L1"的独立取舍（SOP 不入是 A2-6 的既有决策），与方案 C 的"身份碎"是两回事。当下单飞只能折**并发**同身份请求，折不了 Alertmanager 的**顺序重发**；观测面 = 台账 `alert_id` 分组 + `cache_hit` |
 | 复盘 → 知识回灌（真实排障结论沉淀为可检索语料） | 两组析取项任一成立即到期：① **同一根因的故障被人工复盘 ≥2 次**；② 外部监控 adapter 触发后同批处理。**【2026-10-06 触发线①兑现·已完成第一次真实回灌】**：2026-10-04 宿主 OOM 连杀容器**两次**（同一根因），2026-10-06 写成复盘 `rb-102` 入语料——第二次就该沉淀复用，本条正是这么做的。同批复盘共 5 篇（rb-101 本机辖区清单 / rb-102 容器 OOM / rb-103 端口占用 / rb-104 面板旧缓存 / rb-105 截断 jar），**全部是本机真实发生过的事故**（签名/命令/处置均当晚实测），走 `build_chunks → reingest → evaluate` 全链路入库（448 chunks，live 24.4s 零空窗），并接上**真实 Docker 告警源** `scripts/watchdog_alerts.py`（容器状态翻转 → `source=alert` 走完整编排链，实测 exit 137 告警 → 检索命中 rb-102）。**仍未做（如实登记）**：回灌仍是**人工离线**写 md → 重灌，运行期依旧**无"结论→语料"写路径**（`IngestionRunner` 只读 `chunks.jsonl`；全仓唯一写它的仍是 `build_chunks.py`）——要不要做运行期自动回灌是新决策，不在本触发线范围内；告警看门狗也未进 CI 常驻（与 liveness 同批，待部署环境接线） | 语料现含 68 篇复盘/Runbook（5 篇真实 + 63 篇 fixture），运行期**无"结论→语料"写路径**不变。**陷阱提醒修订**：rb-101~105 **是**做过的故障（当晚实录），其余 63 篇仍是喂检索的 fixture——两者在语料里并存，检索时不区分，但对外引用证据时必须分得清 |
@@ -296,8 +315,20 @@ python scripts/liveness.py --interval 30
 | 数据 | 性质 | 策略 |
 |---|---|---|
 | H2 `./data/users.mv.db`（口令散列 + token_ver 吊销状态） | **唯一不可再生** | `scripts/backup.sh` 每日（网关活着走 `POST /admin/backup`、DB 所有者在线 `BACKUP TO` 事务一致；网关停了走 CLI 嵌入式。**禁止 cp 热拷运行中的库文件**） |
-| `logs/audit.jsonl` | 合规留痕，logback 14 天滚动会回收 | backup.sh 一并 tar（保 14 天） |
+| `logs/audit.jsonl` | 合规留痕，logback **180 天**滚动（G0）会回收 | backup.sh 一并 tar（本地保 14 天） |
 | ES / Qdrant | **派生索引，不备份**——chunks.jsonl 在 git（ADR-0001），恢复=reingest（实测 448 chunks 24.4s，live、服务端日志口径；mock 8.0s） | 无需动作 |
+
+**审计防篡改（G1，2026-10-22）**：每行带 `prev_hash`/`hash`（SHA-256 链，首行 `GENESIS`），链头同步落 `logs/.audit-head`；校验：
+
+```bash
+python scripts/verify_audit_chain.py logs/audit.jsonl --head logs/.audit-head
+```
+
+它能证明**内容未被改/未被中间插入**；**不能**证明尾部未被删除——那需要异地只追加副本（如 S3 Object Lock/远端 syslog）。
+
+异地副本（G1 模板，未接真实远端）：把仓库外目录挂到 `/mnt/audit-offsite`，配 `/etc/opspilot/audit-offsite.env` 的 `AUDIT_OFFSITE_DIR`，由 `ops/systemd/opspilot-audit-offsite.{service,timer}` 每日 02:30 执行 `scripts/audit_offsite.sh`。脚本复制后按副本再验一次链、生成 `SHA256SUMS` 并落地只读；真正的对象锁/远端不可变存储仍由挂载侧保证。
+
+升级前的旧行没有 hash，校验器会标为 legacy 并允许其出现在链首，不会假装旧行已被覆盖。
 
 cron（Linux 部署）：
 
@@ -305,7 +336,9 @@ cron（Linux 部署）：
 0 2 * * * cd /opt/opspilot && bash scripts/backup.sh >> logs/backup.cron.log 2>&1
 ```
 
-（Windows 本机：任务计划程序调 `C:\Program Files\Git\bin\bash.exe -lc "cd /d/OpsPilot\ —\ AIOps && bash scripts/backup.sh"`，或想起来手敲一行——个人项目别把自动化做成负担。）
+（Windows 本机：用 `scripts/install_windows_tasks.ps1` 注册 `OpsPilot-Backup`（每日 02:00，StartWhenAvailable 补跑），
+不要靠手敲。G0 起备份成功后写 `backup/.last-success.json`（sha256/size/verified），网关启动后经
+`aiops_backup_last_success_timestamp_seconds` 暴露，`OpsPilotBackupStale` 规则在 >26h 时告警。）
 
 **恢复流程（H2 2.x Restore 要求目标库不存在=天然防误覆盖）**：
 
@@ -322,13 +355,15 @@ docker compose start gateway
 > QA P2-8 注：本节此前通篇裸机命令（`Get-Process java | Stop-Process`），容器化部署照抄必炸且
 > 与 §1 的容器声明自相矛盾——恢复前先确认自己跑的是哪种模式，停错对象等于没停。
 
-**恢复完整性演练（不需要等灾难，网关可不停）**：`bash scripts/user_admin.sh restore --from backup/users-<今天>.zip --to-db restore-drill` 恢复到演练库后加 `--to-db` 同款连接串 `list`，应见全部账号与各自的 token_ver（如 sre-limited ver=7）；验证后删 `data/restore-drill.*`。本仓库已实测通过（commit 记录在案）。
+**恢复完整性演练（不需要等灾难，网关可不停）**：`bash scripts/restore_drill.sh`（G0）——自动选最新 `users-*.zip`（含加密产物）、核对
+`.last-success.json` 的 sha256、恢复到独立演练库、用 CLI `list --to-db` 校验账号数 >0 且每行 token_ver 可读、最后清理演练库并打印 PASS/FAIL。
+它恢复的只是账号库，**不会**复活已吊销凭据——但生产恢复后必须强制全员重新登录（token_ver 回退的影响见门禁文件 §3.5）。
 
-**网络注**：AUTO_SERVER 走 Windows 防火墙常拦（LAN IP+随机端口），CLI 已内建「嵌入式优先、AUTO_SERVER 兜底」双路；两个都不通时报错会指路本节。Windows Git Bash 里跑 `docker compose exec gateway ls /app/backup` 这类容器内绝对路径命令需前置 `MSYS_NO_PATHCONV=1`（否则 MSYS 会把 /app/... 改写成宿主路径）。
+**网络注（G0 更新）**：默认已去掉 AUTO_SERVER；CLI 需在网关停止时以嵌入式方式打开同一文件。若部署仍显式启用 AUTO_SERVER，注意它走 Windows 防火墙常拦（LAN IP+随机端口），且 H2 TCP 无 TLS——只应在 `H2_DB_URL` 里显式开启。Windows Git Bash 里跑 `docker compose exec gateway ls /app/backup` 这类容器内绝对路径命令需前置 `MSYS_NO_PATHCONV=1`（否则 MSYS 会把 /app/... 改写成宿主路径）。
 
 ## 9. Ops Console 运维面板（只读可观测面，ADR-0009）
 
-**它是什么**：浏览器开 `http://localhost:8081/`，点顶栏「运行面板」视图即得（Boot 默认资源处理器同源 serve，**零构建、零 CDN、无外部依赖**）。**2026-10-19 起 `/` 是统一工作台**（ADR-0021）：一份 HTML、两个视图，默认视图是排障台（§12），本节说的是第二个视图。把已有的 `/admin/state` 快照与 `/admin/audit/recent` 事件流渲染成**六块 + 一条 KPI 头条**，其中**「请求处理轨迹」是主角**——计数器回答不了"这台机器刚才替我做了什么、花在哪儿"，而审计行里本来就带着全部事实（`q` / `mode` / `cache_hit` / `degrade_level` / `refused` / `max_level` / `took_ms` / `stage_ms`）。KPI 条（请求总数 / LLM 调用 / 风暴收敛请求 / 缓存命中 / 每请求 LLM 调用）、「运行状态」（build 指纹 + 三依赖灯 + live/mock + reingest）、「降级状态机」（L0/L1/L2 分段档位 + 熔断计数与冷却倒计时 + MANUAL LOCK 徽标 + 在途/阈值 + 配额条）、「请求处理轨迹」（每笔请求一张卡，**全部字段取自审计行、无推断无补算**：查询原文、检索模式、缓存档、降级档、实际生效的权限上限、主体、指纹，附 `stage_ms` 分段耗时条——ES 词法 / Qdrant 向量 / RRF 融合 / 精排 / L2 写入 / LLM 生成，段宽=该段真实耗时、零值段不占宽度；拒答笔左边框标红并显式写"置信度门控拒答"、缓存命中笔标绿）、「请求到达率」（**采样持久化在浏览器 localStorage，刷新/关页/重启都不丢**；时间窗 5 分钟 / 1 小时可切，切换只改聚合粒度不改采样；每格 = 该时间桶内 `total_requests` 的真实增量之和，**不做补间**；图例标注每格秒数、窗口合计与峰值）、「数据流」（13 个真计数 + Single-Flight 在途指纹）、「事件流」（ev 七类全量流水，含鉴权/非法/降级切换/跨租户回放告警）。**分区数以 `index.html` 的 `<h2>` 为准，README「Ops Console」节同源描述**。
+**它是什么**：浏览器开 `http://localhost:8081/`，点顶栏「运行面板」视图即得（Boot 默认资源处理器同源 serve，**零构建、零 CDN、无外部依赖**）。**2026-10-19 起 `/` 是统一工作台**（ADR-0021）：一份 HTML、两个视图，默认视图是排障台（§12），本节说的是第二个视图。把已有的 `/admin/state` 快照与 `/admin/audit/recent` 事件流渲染成**六块 + 一条 KPI 头条**，其中**「请求处理轨迹」是主角**——计数器回答不了"这台机器刚才替我做了什么、花在哪儿"，而审计行里本来就带着全部事实（`q` / `mode` / `cache_hit` / `degrade_level` / `refused` / `max_level` / `took_ms` / `stage_ms`）。KPI 条（请求总数 / LLM 调用 / 风暴收敛请求 / 缓存命中 / 每请求 LLM 调用）、「运行状态」（build 指纹 + 三依赖灯 + live/mock + reingest）、「降级状态机」（L0/L1/L2 分段档位 + 熔断计数与冷却倒计时 + MANUAL LOCK 徽标 + 在途/阈值 + 配额条）、「请求处理轨迹」（每笔请求一张卡，**全部字段取自审计行、无推断无补算**：查询原文、检索模式、缓存档、降级档、实际生效的权限上限、主体、指纹，附 `stage_ms` 分段耗时条——ES 词法 / Qdrant 向量 / RRF 融合 / 精排 / L2 写入（G1 起为异步入队开销） / LLM 生成，段宽=该段真实耗时、零值段不占宽度；拒答笔左边框标红并显式写"置信度门控拒答"、缓存命中笔标绿）、「请求到达率」（**采样持久化在浏览器 localStorage，刷新/关页/重启都不丢**；时间窗 5 分钟 / 1 小时可切，切换只改聚合粒度不改采样；每格 = 该时间桶内 `total_requests` 的真实增量之和，**不做补间**；图例标注每格秒数、窗口合计与峰值）、「数据流」（13 个真计数 + Single-Flight 在途指纹）、「事件流」（ev 七类全量流水，含鉴权/非法/降级切换/跨租户回放告警）。**分区数以 `index.html` 的 `<h2>` 为准，README「Ops Console」节同源描述**。
 
 **已撤除的两块（2026-10-06，用户判断"没什么作用"）**：原面板上的「能力边界」与「AIOps 谱系定位」两块**静态**声明已从面板移除，连同承载它们的 `<details>` 折叠区与 `BOUNDS`/`SPECTRUM` 两个常量数组。理由：一字不变地挂在监控屏上不产生任何信息，还和活数据抢注意力。**内容没有丢**——仍在 README「AIOps 谱系定位」五域表与本文档 §5 债务闹钟表里。**该自证的地方是文档，不是值班屏幕。**
 
@@ -474,13 +509,14 @@ python scripts/check_upstream.py  # 三路（LLM / embedding / rerank）全通�
 产生、经标准协议投递进来"的告警。**定调：探测性研究产物，不是产品接入面**——网关不加端点、
 不开新的鉴权维度（见 §5.1 那一行的状态注）。
 
-**三件东西与它们的分工**：
+**四件东西与它们的分工**：
 
 | 组件 | 在哪 | 干什么 |
 | --- | --- | --- |
-| Prometheus | 容器（`alerting` profile） | 抓宿主 8081 的 `aiops_*`，按 `ops/alerting/rules/opspilot.yml` 判三条规则 |
-| Alertmanager | 容器（`alerting` profile） | 按 `group_by` 收敛后投递 webhook 到宿主 8089 |
-| `alert_bridge.py` | **宿主**（与网关同形态） | 收 `/api/v2/alerts` → 逐条摊平 → 打 `/api/v1/copilot/chat/stream` |
+| Prometheus | 容器（`alerting` profile） | 抓宿主 8081 的 `aiops_*`，按 `ops/alerting/rules/opspilot.yml` 判**九条规则**（业务三条 + 自监控六条：up/备份龄/审计写失败/在途/Redis down/磁盘余量） |
+| Alertmanager | 容器（`alerting` profile） | 按 `group_by` 收敛后投递：主 receiver → 宿主 8089（bridge）；子路由 `continue` → 宿主 8090（notify，人类出口） |
+| `alert_bridge.py` | **宿主**（与网关同形态） | 收 `/api/v2/alerts` → 逐条摊平 → 打 `/api/v1/copilot/chat/stream`；**全败返 503**（让 AM 重试），部分失败 200+failed |
+| `notify.py` | **宿主**（G0 新增；G1 多渠道路由） | 收同一份 Alertmanager webhook → 按 `OPSPILOT_HUMAN_CHANNEL=auto` 自动识别 Slack / 飞书自定义机器人 / 企微，或 Telegram（token+chat_id）；识别不了按 raw 转发 relay。未配置则落 `logs/human-alerts.jsonl` + WARN，**不静默丢** |
 
 **为什么 bridge 在宿主**：它复用 `offline/localapi.py` 的 `assert_local`——出口白名单只允许 http + 环回，
 且校验解析后的 IP。容器里的 localhost 指向容器自己，够不到宿主网关；为部署整齐去松那条 SSRF 防线
@@ -491,12 +527,27 @@ python scripts/check_upstream.py  # 三路（LLM / embedding / rerank）全通�
 
 ```bash
 bash scripts/start_gateway.sh                                  # ① 宿主网关（8081）
-python scripts/alert_bridge.py                                 # ② 宿主桥（8089）
-docker compose --profile alerting up -d                        # ③ 监控容器（9090 / 9093）
+python scripts/alert_bridge.py                                 # ② 宿主桥（8089，排障输入）
+python scripts/notify.py --port 8090                           # ③ 宿主人类通知（8090；未配 webhook 则落 JSONL）
+docker compose --profile alerting up -d                        # ④ 监控容器（9090 / 9093）
 ```
 
 桥自己读仓库根的 `.env`（`load_env_file`，**不覆盖显式 env**）取 `DEMO_PASSWORD`，故不再依赖
 `set -a && . ./.env` 这段 bash 语法——本机没有可用 bash 也能起（2026-10-17 补）。
+
+**人类出口（G0，2026-10-22）**：此前唯一 receiver 是 bridge，而 bridge 的终点是被监控的网关本身——
+"网关自己挂了"时，告警与排障同时消失，没有人会收到任何东西。现在 Alertmanager 的第二个 receiver
+指向 `notify.py`（宿主 8090，Docker Desktop 下经 `host.docker.internal` 回连；原生 Linux Docker 的
+`host-gateway` 指向网桥 IP，环回绑定不可达——这是 bridge 既有的同一条边界，跨过它需要改监听面并评审）。
+`OPSPILOT_HUMAN_WEBHOOK` 为空不是错误：notify 会把每条告警写进 `logs/human-alerts.jsonl` 并 WARN，
+"有人工通道但没配"与"没有人工通道"必须能区分。
+
+**渠道配置（G1，2026-10-22）**：默认 `OPSPILOT_HUMAN_CHANNEL=auto`，粘贴 Slack/飞书自定义机器人/企微
+webhook URL 即可，不用写 relay；Telegram 另填 `OPSPILOT_TELEGRAM_BOT_TOKEN` 与
+`OPSPILOT_TELEGRAM_CHAT_ID`；飞书自定义机器人若开启签名校验，另填 `OPSPILOT_FEISHU_SECRET`
+（否则飞书回 code=19021，notify 会判失败）。飞书 App ID/Secret 本版不支持（还需要
+tenant_access_token、明确 chat_id 与机器人权限）；微信个人号/QQ 个人号无稳定官方 API。
+systemd 形态用 `ops/systemd/opspilot-notify.service` + `/etc/opspilot/notify.env`。
 
 `alerting` profile 是**独立**的：基础栈（redis/qdrant/es）没起也能单独把这两个容器拉起来，
 它们只会看到 target down。反过来说，只跑基础栈时这两个容器不会被启动（不占那约 400MB）。
@@ -648,7 +699,7 @@ STORAGE_MODE=memory DASHSCOPE_MODE=mock bash scripts/start_gateway.sh
    （同批排除 `RedissonAutoConfigurationV2`——它会在 memory 模式下照样急连 Redis）。
 2. **`ElasticsearchRestClientHealthIndicator` 是"按 classpath"注册的**（不是按 `RestClient` bean），
    所以"memory 模式不建 ES 客户端"挡不住它，它照样 ping `localhost:9200` 拖垮 `/actuator/health`。
-   **处置**：`management.health.elasticsearch.enabled: false`——本项目自己的 `elasticsearchClusterHealth`
+   **处置**：`management.health.elasticsearch.enabled: false`——本项目自己的 `esHealthIndicator`（组件键 `es`）
    做的是同一件事且更准（走别名、带 socket 超时、能报 docs 计数）。
 3. **装载时机**（见上"启动期的代价"）：`ApplicationRunner` → `InitializingBean.afterPropertiesSet`。
 

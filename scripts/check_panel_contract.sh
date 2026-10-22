@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Ops Console 契约检查（CI 零服务依赖，ADR-0009 / 外审④修正版）：
 # 面板是纯静态 HTML 消费 /admin/state 与 /admin/audit/recent——后端改名会让面板静默失明。
-# 本脚本用字面量比对钉死三层契约，改名即 CI 红；demo.sh 第 7 检（live 键集合）是第二道闸。
+# 本脚本用字面量比对钉死六层契约，改名/漏转义即 CI 红；demo.sh 第 7 检（live 键集合）是第二道闸。
 # 用法: bash scripts/check_panel_contract.sh
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -59,5 +59,12 @@ echo "$EXPOSURE" | grep -q "health" || {
 echo "$EXPOSURE" | grep -q "prometheus" || {
   echo "FAIL: actuator 暴露面缺 prometheus（ADRs 0016 的抓取端）: $EXPOSURE"; fail=1; }
 
-if [ $fail -eq 0 ]; then echo "OK：面板契约四层一致（路径/指标→面板/面板→指标/state 键集）+ actuator 暴露面"; fi
+# 层 6：事件流的 ev.sub 必须走 esc()（G0-W0.1，2026-10-22 审查）。
+# 根因：renderEvents 用 insertAdjacentHTML 拼字符串，同函数其余字段都转义了，只有 who 里的
+# ev.sub（token 主体/账号名）直接进 HTML——这是面板唯一的注入点。后端即使把 sub 约束住，
+# 前端也不能靠上游保证：转义是输出编码的职责，不是输入校验的替代品。
+grep -qF "esc(ev.sub)" "$HTML" || {
+  echo "FAIL: 面板事件流的 ev.sub 未经 esc() 转义（innerHTML 拼接 → 注入面）"; fail=1; }
+
+if [ $fail -eq 0 ]; then echo "OK：面板契约六层一致（路径/指标→面板/面板→指标/state 键集/actuator 暴露面/ev.sub 转义）"; fi
 exit $fail

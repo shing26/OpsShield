@@ -2,21 +2,28 @@
 
 # 🛡️ OpsShield
 
-**面向 AIOps 与 SRE 场景的生产级 LLM 韧性治理与流量防御网关**
+**面向 AIOps 与 SRE 场景的 LLM 韧性治理与流量防御网关——单机可复现的生产级机制参考实现**
 
 *告警风暴打不穿、模型挂了不雪崩、运维指令零幻觉。*
 
+<p align="center">
+  <img src="docs/assets/panel-preview.png" alt="OpsShield 统一工作台：排障台输入错误码后返回流式诊断、只读命令清单与引用来源，右上角切运行面板查看真实计数器、降级状态与处理轨迹" width="920">
+</p>
+
+<p align="center"><sub>运行面板视图静态截图（memory + mock 零依赖试跑；面板上的数字用于说明视图结构，不用于复述 live 指标）：排障输入 → 流式诊断 → 只读命令清单 → 引用来源 → 运行监控</sub></p>
+
 [![CI Status](https://github.com/shing26/OpsShield/actions/workflows/ci.yml/badge.svg)](https://github.com/shing26/OpsShield/actions)
 [![Java](https://img.shields.io/badge/Java-21-ED8B00?style=flat&logo=openjdk&logoColor=white)](https://openjdk.org/)
-[![Spring Boot](https://img.shields.io/badge/Spring_Boot-3.3.5-6DB33F?style=flat&logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)
+[![Spring Boot](https://img.shields.io/badge/Spring_Boot-3.5.7-6DB33F?style=flat&logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)
 [![Metrics](https://img.shields.io/badge/Metrics-Micrometer_%7C_Prometheus-498BA3?style=flat&logo=prometheus&logoColor=white)](https://prometheus.io/)
-[![Java Tests](https://img.shields.io/badge/Java_Tests-301_Passed-4CAF50?style=flat&logo=openjdk&logoColor=white)](#-测试体系与安全回归测试)
-[![Python Probes](https://img.shields.io/badge/Probes-319_Passed-3776AB?style=flat&logo=python&logoColor=white)](#-测试体系与安全回归测试)
+[![Java Tests](https://img.shields.io/badge/Java_Tests-385_Passed-4CAF50?style=flat&logo=openjdk&logoColor=white)](#-测试体系与安全回归测试)
+[![Python Probes](https://img.shields.io/badge/Probes-374_Passed-3776AB?style=flat&logo=python&logoColor=white)](#-测试体系与安全回归测试)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 <p align="center">
   <a href="#-项目定位与核心立场">📖 项目定位</a> •
   <a href="#-30-秒版本">📊 30 秒版本</a> •
+  <a href="#-运维就绪边界">🧭 运维就绪边界</a> •
   <a href="#-系统架构与流量管道">🏗️ 系统架构</a> •
   <a href="#-快速开始">🚀 快速开始</a> •
   <a href="#-端点与可观测性矩阵">🖥️ 端点矩阵</a> •
@@ -81,6 +88,64 @@ Java 21 虚拟线程 · ES 倒排 + Qdrant 向量双路召回（RRF 融合）· 
 **读表三条口径**：① 以上均为 **DashScope live** 后端实测；mock 后端（key 留空自动切换，同代码路径）下**不承诺这些数字**。② 「场景 A 吞吐」与「风暴」**不是同一种负载**：前者是混合查询（80% 热 + 20% 冷），后者是**同一去重键的风暴**（全量去重、请求极快），且该行来自 2026-09-09 的运行（早于 P2 账号体系）——三者的数字不可互相推广。③ **live 独有的论证价值**：评测集显示语义查询 Top-1 `es_only` 仅 70.6% → hybrid 88.2%（语义 MRR 0.794→0.936）——样本越口语、纯词法腿越低，向量路的捞回越值钱；且扩语料/扩样时 `es_only` 腿漂移明显（当前 golden（68 样本，含口语极值与本机辖区系列）下 `es_only` 语义 Hit@3 91.2%、MRR 0.794，hybrid 逐位不变；历史扩语料曾让 `es_only` 语义 Hit@3 由 100% 降至 92%、MRR 0.813→0.767，hybrid 逐位不动）——**混合检索的稳健性正体现在这里**（E1 教训两次实测复现）。报告出处与生成时刻见 `offline/eval/reports/PROVENANCE.json`（内容摘要判据，CI 强制同代）。
 
 </details>
+
+---
+
+## 🧭 运维就绪边界
+
+前文的数字回答的是「机制在单机上能不能复现」，不回答「明天出事时有没有人收到告警、能不能恢复到昨天」。这两件事在本项目里是分开登记的，口径如下：
+
+> **定位口径**：OpsShield 是**单机可复现的生产级机制参考实现**。机制层（削峰、降级、只读命令清单、权限过滤、文档数字门闩）按生产标准做，且有产物可复核；运维交付层（备份调度、告警到人、进程守护、准入控制、发布回滚）尚未完成——按 [docs/ops/production-gate.md](docs/ops/production-gate.md) 的十条门禁验收之后，才谈「可托付」。
+>
+> **G0 收尾批次（2026-10-22）**已把其中一部分从「没有」推进到「有脚本与门禁、待部署接线/演练」：strict 启动校验、环回默认、占位凭据拒启、1MB 请求上限、面板转义、安全响应头、失败请求审计/堆栈/计数、备份校验与龄期指标、恢复演练脚本、告警人类出口、优雅停机配置、审计 2GB 上限/180 天/异步落盘。**这些仍不等于「可托付」**——下表只保留仍未闭环的部分，状态只认门禁文件的复核记录。
+>
+> **G1 首版（2026-10-22）**继续补上了：全局+租户准入与 429/Retry-After、客户端断开取消与优雅排空、L2 TTL/有界 LRU/reingest 清空、SOP TTL 与启动补灌、Redis volatile-lru、H2/backend 健康指示器与 liveness/readiness 分组、TTFT/请求耗时 Timer 与 SLO burn-rate 规则、Flyway schema 版本化、运行时 smoke 与 release/rollback/SBOM 脚本、Spring Boot 3.5.7 升版、按症状拆的 5 分钟 runbook、审计 SHA-256 哈希链与校验器、人类告警多渠道路由（Slack/飞书自定义机器人/企微/Telegram）。门禁 5/6/8/10（发布回滚演练、单人并发压测、SCA 实跑、runbook 演练）仍只有 fast/单测/静态证据。2026-10-22 另跑过一次 **`--full` 运行时冒烟**（memory/mock 真进程 + 真实手动备份）：PASS=68 / WARN=0 / FAIL=0，覆盖 readiness、全部 aiops 指标、审计链、面板身份；`soak.sh` 8 并发 5s：185 请求 / 181 成功 / 4×429 / 0×5xx，审计链正常；`fault_drill.sh` 验证 strict 配置启动即拒（exit 1）与审计链改一行必红（exit 3）。它们证明的是「运行时面与准入背压接线通了」，**不等于十条门禁全绿**；剩余真实环境动作逐项列在 [docs/ops/g1-remaining.md](docs/ops/g1-remaining.md)。
+
+这个口径来自 2026-10-22 的运维审查（[docs/qa/2026-10-22-ops-readiness-review.md](docs/qa/2026-10-22-ops-readiness-review.md)）：四条线并行实测后的结论是**机制层可演示、可论证，运维交付层尚未可托付**。下面三张表是那份结论的可执行版本；表格与门禁文件冲突时，以门禁文件为准（它带日期与复核记录）。
+
+### 已经做到（有产物或门闩可复核）
+
+| 能力面 | 证据落点 |
+| --- | --- |
+| 权限是引擎层数据过滤，不是提示词约定 | [ADR-0008](docs/adr/0008-permission-dimensions-on-every-shared-path.md)；越狱语料实测零泄漏（产物见 [offline/eval/reports/](offline/eval/reports/)） |
+| 只读命令清单 ⊆ 本次引用，零生成面 | [ADR-0017](docs/adr/0017-read-only-action-contract.md)；`action_contract_probe.py` 的 AC-1..AC-9 九组不变式 |
+| 三级降级状态机：切档落审计事件、冷却到期半开自愈 | [ADR-0012](docs/adr/0012-degradation-cost-semantics.md)；审计 `ev="degrade_transition"` |
+| 指标单一事实源 → Prometheus 抓取面 | [ADR-0016](docs/adr/0016-prometheus-metrics-exposure.md)；`/actuator/prometheus` |
+| 零依赖试跑：空机器也能起一次完整链路 | [ADR-0022](docs/adr/0022-standalone-storage-mode.md) |
+| 统一工作台 + 按身份分级的只读运行面板 | [ADR-0021](docs/adr/0021-unified-workbench-single-shell.md) |
+| 三道文档门闩：数字、对外用词、报告同代 | `offline/doc_numbers.py`、`scripts/check_public_copy.py`、`offline/provenance.py`（均进 CI） |
+
+### 尚未做到（如实登记，不附时间承诺）
+
+| 缺口 | 现状一句话 | 门禁 |
+| --- | --- | --- |
+| 备份调度与可验证恢复 | 脚本/校验/状态文件/演练脚本已就位（`restore_drill.sh` PASS）；**缺每日实际调度与一次告警送达回执**；恢复旧库仍会回退 token_ver，恢复后必须强制全员重登 | 1 |
+| 告警到人 | `notify.py` 多通道 + up/备份龄/审计/在途 规则已就位；**飞书 webhook+secret 已配置，用户已确认群内收到；网关 down / Redis down 两场景已真实触发并投递**；磁盘满仅验规则/指标，未真填盘 | 2 |
+| 部署默认边界 | 已落地 strict 启动校验、环回默认、占位凭据拒启、1MB 请求上限、面板转义、安全响应头；容器加只读根/`cap_drop: ALL`/`no-new-privileges`；部署清单须显式 `OPSPILOT_STRICT=true` | 3 |
+| 失败请求的证据 | 审计 `ev=chat_failed` + 堆栈 + `aiops_requests_failed_total`、客户端断开 aborted、优雅收尾已落地；**缺一次真实失败请求的 full 演练对账** | 4 |
+| 优雅停机与发布回滚 | 优雅停机配置、`release.sh`（jar+sha256+manifest+commit）、`smoke.sh`、`rollback.sh`（校验+操作提示）、`drill_release_rollback.sh`（产物哈希+回滚入口）、本机进程级 previous→current→rollback 已通过；**缺 systemd 测试机上的真实停服/切换** | 5 |
+| 准入控制 | 全局+租户两级许可、429+Retry-After、admission_rejected 计数已落地（[ADR-0026](docs/adr/0026-admission-control-and-degradation-scope.md)）；soak 8×5s 实测 4×429、0×5xx；**缺 live 单租户压测**（门禁 6） | 6 |
+| 延迟分位与 SLO 测量 | TTFT（P50/P95/P99+histogram）与请求耗时 Timer、SLO burn-rate 规则已落地；**缺 live 读数与月报**（门禁 7） | 7 |
+| 依赖支持窗口 | **Spring Boot 3.5.7（受支持线）、Flyway schema 版本化、CycloneDX SBOM 已落地；SCA（Trivy）已进 CI 但尚未在真实构建上出过结果** | 8 |
+| 审计留存与防篡改 | 2GB 上限 / 180 天 / 异步落盘 + SHA-256 哈希链 + `verify_audit_chain.py` 已落地；systemd 单元已加 `UMask=0027`/`ProtectSystem=strict` 等加固，`audit_offsite.sh` + 每日 timer 模板已提供；**尚未接真实远端/WORM**（链本身不能证尾部未删） | 9 |
+| 值班 5 分钟动作 | [docs/ops/runbook.md](docs/ops/runbook.md) 已按「登录 500 / 网关不可达 / 降级常亮」拆成 5 分钟动作；**缺一次按 runbook 的真实演练** | 10 |
+
+### G1 门禁表（十条；判据、演练步骤与复核记录见 [docs/ops/production-gate.md](docs/ops/production-gate.md)）
+
+| # | 门禁 | 判定档 |
+| --- | --- | --- |
+| 1 | 备份每日成功且有龄期告警；恢复演练通过（含吊销状态回退说明） | full |
+| 2 | 网关 down / Redis down / 磁盘满三个场景都能在 5 分钟内告警到人 | full |
+| 3 | 监听地址与网络策略明确；出厂占位凭据启动即失败 | fast |
+| 4 | 失败请求有审计、堆栈与失败分类指标 | full |
+| 5 | 有优雅停机与可复现的发布/回滚脚本 | full |
+| 6 | 全局 + 租户准入生效，单人压不垮全站 | full |
+| 7 | 延迟分位与 SLO 可测量 | fast |
+| 8 | 依赖在受支持版本，有 SCA/SBOM | fast |
+| 9 | 审计可证明未被篡改且满足留存要求 | full |
+| 10 | 值班人能在 5 分钟内按 runbook 处理「登录 500 / 网关不可达 / 降级常亮」 | full |
+
+> 「fast」= 零凭据、无活体栈，提交前 / CI 可跑；「full」= 需要活体栈与一次真实演练，发布前跑。门禁的当前状态与最近一次复核日期只记在门禁文件的记录表里——README 不重复维护会漂移的状态。
 
 ---
 
@@ -273,10 +338,10 @@ OpsShield 把"系统活着"做成了结构化的入口矩阵（默认端口 `808
 
 防线不只靠单测——关键判据全部经"改坏必红、复原必绿"的安全回归测试，文档数字由门闩每次现算比对产物：
 
-* **Java 301 单测**（`mvn test` 实跑全绿）：并发合并、状态机无损跃迁、AST 词法解析、双出口指标一致性、覆盖范围聚合、内存存储后端与身份过滤的跨后端对照；
-* **Python 319 用例**（`pytest offline/tests/`）：含 `action_contract_probe.py` 的 **AC-1..AC-9 九组形式化不变式**——帧形状 / 逐字性 / 契约⊆引用闭包 / 段名闸 / 红线绊线 / 回放一致性 / 租户围栏 / 指标单调 / 反假绿覆盖；以及 `preset_probe.py` 的 **P-1..P-3 三组**——左栏预设与页面同源、预设形状（不锁产额）、覆盖范围与语料逐项相等；
+* **Java 385 单测**（`mvn test` 实跑全绿）：并发合并、状态机无损跃迁、AST 词法解析、双出口指标一致性、覆盖范围聚合、内存存储后端与身份过滤的跨后端对照；
+* **Python 374 用例**（`pytest offline/tests/`）：含 `action_contract_probe.py` 的 **AC-1..AC-9 九组形式化不变式**——帧形状 / 逐字性 / 契约⊆引用闭包 / 段名闸 / 红线绊线 / 回放一致性 / 租户围栏 / 指标单调 / 反假绿覆盖；以及 `preset_probe.py` 的 **P-1..P-3 三组**——左栏预设与页面同源、预设形状（不锁产额）、覆盖范围与语料逐项相等；
 * **安全回归测试**：契约探针 5 路（段名闸恒真、逐字恒真、红线恒空、闭包前置 None、AC-7 租户恒真——每条都有"改坏后 N failed / 复原后全绿"的实测记录）；文档门闩另有 A/B/C 三路（改文档数字、改产物、改写措辞，各须红）；
-* **CI 五 job**（java / panel-contract / provenance / python / shell）零 key 零中间件可跑；`doc_numbers` 门闩现算比对 **23 条文档数字 / 37 处引用**，数字与产物分叉即 CI 红；评测报告与语料的同代性用内容摘要钉死（`provenance`，不用 checkout 会刷平的 mtime）；对外面用词由 `check_public_copy` 钉住（内部 canonical 词不得漏到本 README 与页面文案，词表从 `docs/CONTEXT.md` 现取）。
+* **CI 六 job**（java / static-gate / panel-contract / provenance / python / shell）零 key 零中间件可跑；`doc_numbers` 门闩现算比对 **23 条文档数字 / 37 处引用**，数字与产物分叉即 CI 红；评测报告与语料的同代性用内容摘要钉死（`provenance`，不用 checkout 会刷平的 mtime）；对外面用词由 `check_public_copy` 钉住（内部 canonical 词不得漏到本 README 与页面文案，词表从 `docs/CONTEXT.md` 现取）。
 
 <details>
 <summary><b>评测与压测：复现命令</b>（需活体栈 + 活体 key；数字底稿即各自产物）</summary>
@@ -307,7 +372,7 @@ $PY load/l1_latency.py       # L1 回放延迟（热点命中口径）→ load/r
 
 ## 📐 架构决策记录
 
-系统的演进过程严格遵从 ADR 机制，每篇含否决项与后果。关键决策索引如下（完整 **24 篇**见 [docs/adr/](docs/adr/)）：
+系统的演进过程严格遵从 ADR 机制，每篇含否决项与后果。关键决策索引如下（完整 **26 篇**见 [docs/adr/](docs/adr/)）：
 
 | # | 决策 | 一句话理由 |
 | --- | --- | --- |
@@ -326,6 +391,8 @@ $PY load/l1_latency.py       # L1 回放延迟（热点命中口径）→ load/r
 | [0022](docs/adr/0022-standalone-storage-mode.md) | 零依赖试跑：显式开关，不自动回退 | 中间件可达性会抖，自动回退会产出"假绿"实例 |
 | [0023](docs/adr/0023-public-surface-terminology.md) | 对外面：术语双轨、双向门闩、覆盖范围声明 | 内部精确术语不外泄；覆盖边界按身份过滤、现算 |
 | [0024](docs/adr/0024-alert-delivery-seam.md) | Bridge 与 Producer 共用告警投递入口，来源策略不归一 | 统一认证、闸门、投影与台账机制，同时保持行为不变 |
+| [0025](docs/adr/0025-deployment-profiles-and-strict-mode.md) | 部署 profile 与 strict 模式：绑定地址、凭据校验、演示/生产分离 | 出厂占位凭据 + 全网卡监听是"装好即被接管"的默认值，让它在启动期失败而不是事后 |
+| [0026](docs/adr/0026-admission-control-and-degradation-scope.md) | 准入控制：全局 + 租户信号量、429 退避、降级作用域保持全局 | 单人并发不该演成全员降级；先挡在入口，再谈降级维度 |
 
 ---
 
@@ -339,7 +406,7 @@ $PY load/l1_latency.py       # L1 回放延迟（热点命中口径）→ load/r
 | 日常运维、脚本索引、**债务触发线** | [OPS.md](OPS.md)（脚本按"服务生命周期 / 门禁检查 / 故障注入与演示"分组索引） |
 | 领域词汇 | [docs/CONTEXT.md](docs/CONTEXT.md) |
 | 目录地图 / 逐包职责 / 维护者向内容 | [docs/repo-map.md](docs/repo-map.md) |
-| 架构决策与否决理由 | [docs/adr/](docs/adr/)（24 篇，每篇含否决项与后果） |
+| 架构决策与否决理由 | [docs/adr/](docs/adr/)（26 篇，每篇含否决项与后果） |
 
 ---
 
