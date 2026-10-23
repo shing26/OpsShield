@@ -276,7 +276,7 @@ receivers=[human-notify], instance=192.168.59.129:8081, service=opspilot-vm
 ~~~
 
 恢复磁盘后 alert resolved；Alertmanager webhook 通知计数新增成功。
-边界：飞书群内磁盘告警消息需要人工确认；OpsPilotDown 仍因本机宿主网关停止而 active，与磁盘场景无关。
+边界：飞书群内磁盘告警已由用户确认收到；OpsPilotDown 仍因本机宿主网关停止而 active，与磁盘场景无关。
 
 ## 3. 未完成/被环境阻塞
 

@@ -37,7 +37,7 @@ Last Result=0；由任务触发备份 `backup/users-2026-10-23.zip`，`verified=
 Windows Prometheus 新增 VM target；`OpsPilotDiskLow` 于 19:07:36Z active、receiver=human-notify、
 service=opspilot-vm，恢复后 resolved；Alertmanager webhook 成功通知新增。
 
-还缺：飞书群内磁盘告警消息的最终人工确认。
+已完成：用户已确认收到飞书磁盘告警。
 
 ## 3. 失败证据 full 演练（门禁 4）
 

@@ -36,7 +36,7 @@
 
 > **2026-10-24 进展**：T1/T2/T3 均已完成。T2 注入 OPSPILOT_BUILD_COMMIT 后
 > /state.build.commit 与 manifest 对齐（969e137/65cc9b3）；T3 由 Windows Prometheus 抓 VM，
-> OpsPilotDiskLow 已 active→resolved，receiver=human-notify。门禁 5 闭环；门禁 2 待飞书磁盘消息人工确认。
+> OpsPilotDiskLow 已 active→resolved，receiver=human-notify。门禁 5 闭环；门禁 2 飞书磁盘告警已由用户确认。
 
 > **如果目标是“做全”，建议直接新建 Ubuntu 24.04 LTS Server VM，不要在 CentOS 7 上勉强做全。**
 > CentOS 7 已 EOL、systemd 219、yum 源下线，门禁 5 的证据只能算“旧测试机形态”，不能代表生产基线。

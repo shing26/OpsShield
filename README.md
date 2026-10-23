@@ -120,7 +120,7 @@ Java 21 虚拟线程 · ES 倒排 + Qdrant 向量双路召回（RRF 融合）· 
 | 缺口 | 现状一句话 | 门禁 |
 | --- | --- | --- |
 | 备份调度与可验证恢复 | **Windows 计划任务 `OpsPilot-Backup` 已注册并触发成功**（Last Result=0，age=0.0h，verified=true）；`restore_drill.sh` PASS；恢复旧库仍会回退 token_ver，恢复后必须强制全员重登 | 1 |
-| 告警到人 | 飞书已通，网关 down / Redis down / **磁盘满三场景均已真实触发并投递**；VM 1G loop 盘 94%，`OpsPilotDiskLow` active→resolved，receiver=human-notify；飞书磁盘消息待最终确认 | 2 |
+| 告警到人 | 飞书已通，网关 down / Redis down / **磁盘满三场景均已真实触发并投递**；VM 1G loop 盘 94%，`OpsPilotDiskLow` active→resolved，receiver=human-notify；用户已确认收到飞书磁盘告警 | 2 |
 | 部署默认边界 | 已落地 strict 启动校验、环回默认、占位凭据拒启、1MB 请求上限、面板转义、安全响应头；容器加只读根/`cap_drop: ALL`/`no-new-privileges`；部署清单须显式 `OPSPILOT_STRICT=true` | 3 |
 | 失败请求的证据 | **已做真实失败对账**：request_id `a8cf4948` 的 `ev=chat_failed` 审计、`stream error` 日志、`aiops_requests_failed_total{reason="LlmHttpException"}` 三面对齐 | 4 |
 | 优雅停机与发布回滚 | **Ubuntu 24.04 VM systemd 真实停服/换 jar/回滚已通过**：current→v-prev→current，readiness UP，`/state.build.commit` 与 manifest 对齐（969e137/65cc9b3） | 5 |
