@@ -33,10 +33,11 @@ Last Result=0；由任务触发备份 `backup/users-2026-10-23.zip`，`verified=
 - Redis down：02:46:38 停 Redis，20s 后 gauge=0，02:49:21 `OpsPilotRedisDown` active，receiver=human-notify；
 - Alertmanager webhook 成功通知 +4（两条 firing + 两条 resolved），无新增失败。
 
-还缺：
-- 磁盘满场景：已在 Ubuntu VM 用 1G loop 盘填到 94%（`aiops_disk_free_bytes` 906MB→393MB），
-  但 VM 上没有 Prometheus/Alertmanager，`OpsPilotDiskLow` 的真实 firing + 飞书未验证；
-  指标/规则已证，告警链路未证。
+已完成磁盘满：Ubuntu VM 用 1G loop 盘填到 94%（`aiops_disk_free_bytes` 906MB→393MB），
+Windows Prometheus 新增 VM target；`OpsPilotDiskLow` 于 19:07:36Z active、receiver=human-notify、
+service=opspilot-vm，恢复后 resolved；Alertmanager webhook 成功通知新增。
+
+还缺：飞书群内磁盘告警消息的最终人工确认。
 
 ## 3. 失败证据 full 演练（门禁 4）
 
@@ -54,11 +55,11 @@ Last Result=0；由任务触发备份 `backup/users-2026-10-23.zip`，`verified=
 
 - current → v-prev（commit 65cc9b3）→ current 三次切换；
 - 每次 `systemctl is-active` active、readiness UP；
-- `rollback.sh v-prev --apply` 校验 sha256 OK。
+- `rollback.sh v-prev --apply` 校验 sha256 OK；
+- 注入 `OPSPILOT_BUILD_COMMIT` 后 `/state.build.commit` 分别 969e137 / 65cc9b3 / 969e137，
+  与 manifest 对齐。
 
-还缺一条：jar 的 build-info 没有 commit，`/state.build.commit` 仍是 `unknown`，
-“manifest commit ↔ /state commit”没有真正对齐；因此门禁 5 暂不判全绿。
-（停服/换 jar/回滚本身已通过。）
+门禁 5 已闭环。
 
 ## 5. 单人并发压测（门禁 6）
 

@@ -120,10 +120,10 @@ Java 21 虚拟线程 · ES 倒排 + Qdrant 向量双路召回（RRF 融合）· 
 | 缺口 | 现状一句话 | 门禁 |
 | --- | --- | --- |
 | 备份调度与可验证恢复 | **Windows 计划任务 `OpsPilot-Backup` 已注册并触发成功**（Last Result=0，age=0.0h，verified=true）；`restore_drill.sh` PASS；恢复旧库仍会回退 token_ver，恢复后必须强制全员重登 | 1 |
-| 告警到人 | 飞书已通，用户确认 4 条场景消息；网关 down / Redis down 已真实投递；**Ubuntu VM 1G loop 盘填到 94%，指标 906MB→393MB**；VM 无 Prometheus，磁盘满告警 firing/飞书未验 | 2 |
+| 告警到人 | 飞书已通，网关 down / Redis down / **磁盘满三场景均已真实触发并投递**；VM 1G loop 盘 94%，`OpsPilotDiskLow` active→resolved，receiver=human-notify；飞书磁盘消息待最终确认 | 2 |
 | 部署默认边界 | 已落地 strict 启动校验、环回默认、占位凭据拒启、1MB 请求上限、面板转义、安全响应头；容器加只读根/`cap_drop: ALL`/`no-new-privileges`；部署清单须显式 `OPSPILOT_STRICT=true` | 3 |
 | 失败请求的证据 | **已做真实失败对账**：request_id `a8cf4948` 的 `ev=chat_failed` 审计、`stream error` 日志、`aiops_requests_failed_total{reason="LlmHttpException"}` 三面对齐 | 4 |
-| 优雅停机与发布回滚 | **Ubuntu 24.04 VM systemd 真实停服/换 jar/回滚已通过**（current→v-prev→current，readiness UP，sha256 OK）；**jar build-info 无 commit，/state commit 未对齐 manifest**，门禁 5 仍不判全绿 | 5 |
+| 优雅停机与发布回滚 | **Ubuntu 24.04 VM systemd 真实停服/换 jar/回滚已通过**：current→v-prev→current，readiness UP，`/state.build.commit` 与 manifest 对齐（969e137/65cc9b3） | 5 |
 | 准入控制 | 全局+租户两级许可、429+Retry-After、admission_rejected 计数已落地（[ADR-0026](docs/adr/0026-admission-control-and-degradation-scope.md)）；**live 20 并发 10s**：4×200/80×429/0×5xx，另一租户 1×200/0×429；样本短，缺 20–30 条对照与长窗口（门禁 6） | 6 |
 | 延迟分位与 SLO 测量 | TTFT/请求 Timer、SLO burn-rate 规则已落地；**已用 live 样本生成 [SLO 样本报告](docs/ops/slo-sample-2026-10-23.md)**（0×5xx、TTFT P95 18.1s）；缺 30 天连续流量与月报（门禁 7） | 7 |
 | 依赖支持窗口 | Spring Boot 3.5.14、Flyway、CycloneDX SBOM 已落地；**CI Trivy 全绿**：37→0（33 补丁升级 + 4 条有补偿控制的豁免，矩阵见 [sca-findings.md](docs/ops/sca-findings.md)） | 8 |

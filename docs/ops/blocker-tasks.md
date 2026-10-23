@@ -34,9 +34,9 @@
 
 ## 2. T1/T2/T3：Linux VM（推荐路径）
 
-> **2026-10-23 进展**：T1（systemd 起服务）与 T2（current→v-prev→current，readiness 均 UP）
-> 已在 Ubuntu 24.04 VM 完成；T3 已用 1G loop 盘填到 94%，指标低于 5GiB，但 VM 上没有
-> Prometheus/Alertmanager，告警 firing/飞书仍未验证。门禁 5 还差 /state commit 对齐。
+> **2026-10-24 进展**：T1/T2/T3 均已完成。T2 注入 OPSPILOT_BUILD_COMMIT 后
+> /state.build.commit 与 manifest 对齐（969e137/65cc9b3）；T3 由 Windows Prometheus 抓 VM，
+> OpsPilotDiskLow 已 active→resolved，receiver=human-notify。门禁 5 闭环；门禁 2 待飞书磁盘消息人工确认。
 
 > **如果目标是“做全”，建议直接新建 Ubuntu 24.04 LTS Server VM，不要在 CentOS 7 上勉强做全。**
 > CentOS 7 已 EOL、systemd 219、yum 源下线，门禁 5 的证据只能算“旧测试机形态”，不能代表生产基线。

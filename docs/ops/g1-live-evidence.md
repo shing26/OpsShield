@@ -248,8 +248,15 @@ v-current active, readiness UP
 rollback.sh v-prev --apply 校验 sha256 OK
 ~~~
 
-边界：jar 的 build-info 没有 commit（只注入 version/time），/state.build.commit 仍是
-unknown；所以“manifest commit ↔ /state commit”这一条还没真正对齐。停服/换 jar/回滚本身已通过。
+注入 OPSPILOT_BUILD_COMMIT 后：
+
+~~~text
+v-current: /state.build.commit = 969e137，manifest v-current = 969e137
+v-prev:    /state.build.commit = 65cc9b3，manifest v-prev = 65cc9b3
+v-current: /state.build.commit = 969e137，readiness UP
+~~~
+
+manifest commit 与 /state commit 已对齐；门禁 5 的停服/换 jar/回滚/状态对齐全部完成。
 
 ### T3：1G loop 盘磁盘满
 
@@ -259,9 +266,17 @@ after fill:  aiops_disk_free_bytes{path="data"} 4.12504064E8 (~393MB)
 df: /dev/loop0 974M 851M 57M 94% /mnt/opspilot-test
 ~~~
 
-恢复后 service active、readiness UP，aiops_disk_free_bytes 回到 ~9.96E9。
-边界：VM 上没有 Prometheus/Alertmanager，OpsPilotDiskLow 的真实 firing/飞书未验证；
-只验证了指标确实低于 5GiB。门禁 2 磁盘满仍不能判全绿。
+VM 网关绑定 0.0.0.0，Windows Prometheus 新增 target 192.168.59.129:8081
+（service=opspilot-vm）；notify 以飞书通道运行。
+
+~~~text
+Alertmanager: OpsPilotDiskLow
+status=active, startsAt=2026-10-23T19:07:36Z
+receivers=[human-notify], instance=192.168.59.129:8081, service=opspilot-vm
+~~~
+
+恢复磁盘后 alert resolved；Alertmanager webhook 通知计数新增成功。
+边界：飞书群内磁盘告警消息需要人工确认；OpsPilotDown 仍因本机宿主网关停止而 active，与磁盘场景无关。
 
 ## 3. 未完成/被环境阻塞
 
