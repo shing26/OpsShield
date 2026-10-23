@@ -200,6 +200,30 @@ Last Result: 0
 结论：A/B/C 三症状均已实际操作；A 是在临时库上注入登录 500 并恢复，B/C 是真实停进程/模型错误。
 门禁 10 可判绿（本机形态；生产 systemd 形态仍需在目标机复跑）。
 
+## 2.9 live 单租户并发采样（门禁 6 / 7）
+
+脚本：`scripts/live_concurrency.py`；真实 DashScope，20 并发，10s（实际 23.8s 排空），
+租户 `tenant-internal` 加载，`tenant-acme` 对照。原始数据：[`live-concurrency-2026-10-23.json`](live-concurrency-2026-10-23.json)。
+
+| 指标 | tenant-internal（加载） | tenant-acme（对照） |
+|---|---:|---:|
+| 请求数 | 84 | 1 |
+| 200 | 4 | 1 |
+| 429 | 80（95.2%） | 0 |
+| 5xx/连接错误 | 0 | 0 |
+| TTFT P50 | 18.126s | 8.944s |
+| TTFT P95 | 18.133s | 8.944s |
+
+网关侧：`aiops_requests_total=85`、`aiops_admission_rejected_total=80`、
+`aiops_requests_failed_total=0`、`aiops_llm_calls_total=2`；
+`/admin/state`：`degradation_level=L0`、`failures=0`。
+
+结论与边界：
+- 20 并发下租户级许可（4）触发 429 背压，0 个 5xx；另一租户未出现 429；
+- 成功请求 TTFT P95 约 18s，对照租户约 8.9s；这是 10s 窗口样本，不是容量结论；
+- 对照样本只有 1 条，不能宣称“其他租户成功率统计不下降”，只能说不受同租户 429 牵连；
+- L2 未被单租户流量点亮（L0），但仍需更长窗口复测。
+
 ## 3. 未完成/被环境阻塞
 
 | 项 | 结果 | 原因 |

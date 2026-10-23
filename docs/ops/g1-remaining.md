@@ -56,11 +56,15 @@ Last Result=0；由任务触发备份 `backup/users-2026-10-23.zip`，`verified=
 
 ## 5. 单人并发压测（门禁 6）
 
-缺：**live 上游**下的单租户并发测试（mock/内存 soak 只证明背压不崩）。
+已完成一轮 live 采样（20 并发 / 10s；`scripts/live_concurrency.py`）：
+84 次加载请求、4×200、80×429、0×5xx；对照租户 1×200、0×429；
+`aiops_admission_rejected_total=80`、`requests_failed=0`、`degradation_level=L0`；
+成功 TTFT P95 18.1s，对照 8.9s。证据见 [g1-live-evidence.md](g1-live-evidence.md) §2.9。
 
-- 用 locust 或 `soak.sh` 改 live 配置，单租户 20–50 并发。
-- 记录请求数/成功率/429 比例、`aiops_admission_rejected_total`、L0→L1→L2、P95/P99 TTFT。
-- 验收：其他租户成功率不因单租户压测显著下降；L2 不因单人流量点亮。
+还缺：
+- 对照租户至少 20–30 次**同窗口**成功请求，才能比较“成功率不显著下降”；
+- 更长窗口（5–30 分钟）与 P99/容量拐点；
+- 不要用 10s 样本宣称容量通过。
 
 ## 6. SCA 真实结果（门禁 8）
 

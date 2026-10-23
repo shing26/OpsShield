@@ -124,8 +124,8 @@ Java 21 虚拟线程 · ES 倒排 + Qdrant 向量双路召回（RRF 融合）· 
 | 部署默认边界 | 已落地 strict 启动校验、环回默认、占位凭据拒启、1MB 请求上限、面板转义、安全响应头；容器加只读根/`cap_drop: ALL`/`no-new-privileges`；部署清单须显式 `OPSPILOT_STRICT=true` | 3 |
 | 失败请求的证据 | **已做真实失败对账**：request_id `a8cf4948` 的 `ev=chat_failed` 审计、`stream error` 日志、`aiops_requests_failed_total{reason="LlmHttpException"}` 三面对齐 | 4 |
 | 优雅停机与发布回滚 | 优雅停机配置、`release.sh`（jar+sha256+manifest+commit）、`smoke.sh`、`rollback.sh`（校验+操作提示）、`drill_release_rollback.sh`（产物哈希+回滚入口）、本机进程级 previous→current→rollback 已通过；**缺 systemd 测试机上的真实停服/切换** | 5 |
-| 准入控制 | 全局+租户两级许可、429+Retry-After、admission_rejected 计数已落地（[ADR-0026](docs/adr/0026-admission-control-and-degradation-scope.md)）；soak 8×5s 实测 4×429、0×5xx；**缺 live 单租户压测**（门禁 6） | 6 |
-| 延迟分位与 SLO 测量 | TTFT（P50/P95/P99+histogram）与请求耗时 Timer、SLO burn-rate 规则已落地；**缺 live 读数与月报**（门禁 7） | 7 |
+| 准入控制 | 全局+租户两级许可、429+Retry-After、admission_rejected 计数已落地（[ADR-0026](docs/adr/0026-admission-control-and-degradation-scope.md)）；**live 20 并发 10s**：4×200/80×429/0×5xx，另一租户 1×200/0×429；样本短，缺 20–30 条对照与长窗口（门禁 6） | 6 |
+| 延迟分位与 SLO 测量 | TTFT/请求 Timer、SLO burn-rate 规则已落地；**已用 live 样本生成 [SLO 样本报告](docs/ops/slo-sample-2026-10-23.md)**（0×5xx、TTFT P95 18.1s）；缺 30 天连续流量与月报（门禁 7） | 7 |
 | 依赖支持窗口 | Spring Boot 3.5.14、Flyway、CycloneDX SBOM 已落地；**CI Trivy 全绿**：37→0（33 补丁升级 + 4 条有补偿控制的豁免，矩阵见 [sca-findings.md](docs/ops/sca-findings.md)） | 8 |
 | 审计留存与防篡改 | 2GB 上限 / 180 天 / 异步落盘 + SHA-256 哈希链 + `verify_audit_chain.py` 已落地；systemd 单元已加 `UMask=0027`/`ProtectSystem=strict` 等加固，`audit_offsite.sh` + 每日 timer 模板已提供；**尚未接真实远端/WORM**（链本身不能证尾部未删） | 9 |
 | 值班 5 分钟动作 | [docs/ops/runbook.md](docs/ops/runbook.md) 已拆三症状；**A/B/C 均已本地实演**：登录 500→恢复、网关停→重启、L2→L0；生产 systemd 形态仍需目标机复跑 | 10 |
