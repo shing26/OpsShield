@@ -139,6 +139,57 @@ sudo rm -f /mnt/opspilot-test/fill
 验收：aiops_disk_free_bytes{path="data"} 低于 5GiB；OpsPilotDiskLow firing 且飞书收到；恢复后 resolved。
 1G 盘会让规则很快触发；更真实可改用 10G 盘填到 5G 以下。
 
+## 2.7 已有 CentOS 7 VM 的兼容路径
+
+**不需要为了做测试专门下载 Ubuntu 镜像。** CentOS 7 可以完成门禁 5/2 的测试机演练，
+但它是 EOL 系统、systemd 219，结论必须标注“CentOS 7 测试机形态”，不能当生产基线。
+
+CentOS 7 的 yum 源已下线，先切 vault：
+
+~~~bash
+sudo sed -i 's|^mirrorlist=|#mirrorlist=|g; s|^#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-*.repo
+sudo yum clean all
+sudo yum makecache
+sudo yum install -y git curl unzip iproute gawk
+~~~
+
+JDK 21 不在 CentOS 7 基础源里，用 Adoptium tarball：
+
+~~~bash
+curl -L -o /tmp/jdk21.tar.gz "https://api.adoptium.net/v3/binary/latest/21/ga/linux/x64/jdk/hotspot/normal/eclipse"
+sudo mkdir -p /opt/java/21
+sudo tar -xzf /tmp/jdk21.tar.gz -C /opt/java/21 --strip-components=1
+/opt/java/21/bin/java -version
+~~~
+
+如果 java -version 报 GLIBC 版本不足，说明这台 CentOS 7 的 glibc 太旧，改用 Ubuntu/Rocky 测试机；
+不要在生产机上升 glibc。
+
+安装 systemd 单元后，CentOS 7 的 systemd 219 可能不认 RestrictSUIDSGID / LockPersonality。
+先检查：
+
+~~~bash
+sudo systemd-analyze verify /etc/systemd/system/opspilot-gateway.service
+~~~
+
+有 “Unknown lvalue” 时加 drop-in 清空这两项（不会降低其他加固）：
+
+~~~bash
+sudo mkdir -p /etc/systemd/system/opspilot-gateway.service.d
+sudo tee /etc/systemd/system/opspilot-gateway.service.d/centos7.conf >/dev/null <<'EOF'
+[Service]
+JAVA_HOME=/opt/java/21
+RestrictSUIDSGID=
+LockPersonality=
+EOF
+sudo systemctl daemon-reload
+~~~
+
+其余 T1/T2/T3 步骤与 Ubuntu 相同；loop 盘、释放 disk、OpsPilotDiskLow 在 CentOS 7 上同样可用。
+
+**结论**：已有 CentOS 7 就先用它做 T1/T2/T3，不需要下载 Ubuntu；但门禁 5 的证据只能写成
+“CentOS 7 测试机通过”，生产仍建议 Ubuntu 22.04/24.04 或 Rocky/Alma 9。
+
 ## 3. WSL 方案（可选）
 
 Docker Desktop 自带的 docker-desktop WSL distro 不是通用 Linux 环境，不要在里面找 bash/java。
