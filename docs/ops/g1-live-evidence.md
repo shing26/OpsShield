@@ -278,14 +278,54 @@ receivers=[human-notify], instance=192.168.59.129:8081, service=opspilot-vm
 恢复磁盘后 alert resolved；Alertmanager webhook 通知计数新增成功。
 边界：飞书群内磁盘告警已由用户确认收到；OpsPilotDown 仍因本机宿主网关停止而 active，与磁盘场景无关。
 
+## 2.11 MinIO Object Lock 实测（门禁 9 对象锁部分）
+
+VM 上另起独立 MinIO 实例（不覆盖原有 9000）：
+
+~~~text
+endpoint: http://192.168.59.129:9002
+bucket:   opspilot-audit
+image:    registry.cn-hangzhou.aliyuncs.com/mdpublic/mingdaoyun-minio:RELEASE.2025-04-22T22-12-26Z
+object lock: COMPLIANCE 180 days
+~~~
+
+上传两次带时间戳的 audit 副本：
+
+~~~text
+20261023T233000Z/audit.tar.gz
+20261023T233100Z/audit.tar.gz
+~~~
+
+对象元数据：
+
+~~~text
+X-Amz-Object-Lock-Mode: COMPLIANCE
+X-Amz-Object-Lock-Retain-Until-Date: 2027-04-21T23:32:36Z
+~~~
+
+不可变验证：
+
+~~~text
+mc rm --version-id e20891ba-... -> "is WORM protected and cannot be overwritten" (rc=1)
+~~~
+
+下载副本后按时间序验链：
+
+~~~text
+PASS 审计链：2 条带 hash，2881 条旧格式；末 hash=b5359a1c...
+~~~
+
+边界：MinIO 与网关在同一台 VM，对象锁/版本保护/副本验链已证，但**不是异地副本**；
+门禁 9 的“异地”仍缺。原有 9000 实例未动；新实例凭据在 /etc/opspilot/minio-audit.env（600）。
+
 ## 3. 未完成/被环境阻塞
 
 | 项 | 结果 | 原因 |
 |---|---|---|
 | 飞书人类回执 | 已确认 | 飞书自定义机器人（URL + 签名 secret）已配置，notify 返回 `200 forwarded`，用户确认群内收到 |
-| Trivy SCA | 未完成 | Trivy 0.76.1 二进制已通过 `gh release download` 取得，但漏洞库 `mirror.gcr.io` 连接超时；本地 Docker Hub 也受限 |
-| WORM 异地副本 | 未做 | 无真实远端/WORM 挂载路径；本地只读目录不等于对象锁 |
-| 测试机停服/切换/回滚 | 部分完成 | 本机进程级 previous→current→rollback 三跳均 health=True；**缺 systemd 测试机上的真实停服/切换** |
+| Trivy SCA | 已完成 | CI run 39873876035 全绿；artifact Java vulns=0；4 条跨大版本豁免见 `.trivyignore` |
+| WORM 异地副本 | 部分完成 | 本地 MinIO Object Lock 已验（COMPLIANCE 180d、版本删除被拒、副本验链 PASS）；同一台 VM，**不是异地** |
+| 测试机停服/切换/回滚 | 已完成 | Ubuntu 24.04 systemd：current→v-prev→current，readiness UP，`/state.build.commit` 与 manifest 对齐 |
 
 ## 4. 复现命令（安全版）
 

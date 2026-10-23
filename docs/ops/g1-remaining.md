@@ -85,7 +85,8 @@ service=opspilot-vm，恢复后 resolved；Alertmanager webhook 成功通知新�
 
 ## 7. 审计异地 WORM（门禁 9）
 
-缺：真实远端/不可变存储（本地脚本与 systemd 模板已就位）。
+已完成本地 MinIO Object Lock：bucket `opspilot-audit`，COMPLIANCE 180d；两次时间戳 audit 副本；
+对象元数据锁定、版本删除被拒、下载副本验链 PASS。还缺**异地**：MinIO 与网关同机。
 
 - 挂载只追加卷到 `/mnt/audit-offsite`，配 `AUDIT_OFFSITE_DIR`，启用 `opspilot-audit-offsite.timer`。
 - 验收：连续两次运行产生两个时间戳目录；副本验链通过；挂载侧确认对象锁/不可变。
