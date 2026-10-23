@@ -34,6 +34,11 @@
 
 ## 2. T1/T2/T3：Linux VM（推荐路径）
 
+> **如果目标是“做全”，建议直接新建 Ubuntu 24.04 LTS Server VM，不要在 CentOS 7 上勉强做全。**
+> CentOS 7 已 EOL、systemd 219、yum 源下线，门禁 5 的证据只能算“旧测试机形态”，不能代表生产基线。
+> Ubuntu 24.04 的 systemd 255 能完整支持本仓库 unit 的加固指令，JDK21 也有官方 apt 包。
+> 下载入口：https://ubuntu.com/download/server （选 24.04 LTS，Server 版，不要 Desktop）。
+
 ### 2.1 VM 规格
 
 - 4 vCPU / 8 GB RAM / 40 GB 磁盘（最低 2C/4G/20G 也能跑）；
