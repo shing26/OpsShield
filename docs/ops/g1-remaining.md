@@ -4,6 +4,7 @@
 > 判据与证据要求以 [production-gate.md](production-gate.md) 为准；逐项配置步骤见
 > [g1-external-setup.md](g1-external-setup.md)（systemd/env/webhook/中间件/Trivy/WORM/回滚）。
 > 本轮 live 实测（readiness + 真实 DashScope chat）见 [g1-live-evidence.md](g1-live-evidence.md)。
+> 按资源依赖拆的任务清单与 VM/WSL 操作步骤见 [blocker-tasks.md](blocker-tasks.md)。
 
 ## 0. 当前已验证到哪
 

@@ -31,7 +31,7 @@ FOREGROUND=0
 PORT="${SERVER_PORT:-8081}"
 ADDR="${SERVER_ADDRESS:-127.0.0.1}"
 HEAP="${GATEWAY_HEAP:-1024m}"
-JAR="target/opspilot-gateway-1.0.0.jar"
+JAR="${OPSPILOT_JAR:-target/opspilot-gateway-1.0.0.jar}"
 
 if [ -f .env ]; then
   set -a; . ./.env; set +a
