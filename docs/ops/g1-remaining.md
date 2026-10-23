@@ -34,7 +34,9 @@ Last Result=0；由任务触发备份 `backup/users-2026-10-23.zip`，`verified=
 - Alertmanager webhook 成功通知 +4（两条 firing + 两条 resolved），无新增失败。
 
 还缺：
-- 磁盘满场景：只验证 `aiops_disk_free_bytes` 指标与 `OpsPilotDiskLow` 规则已加载，**未真的填满磁盘**。
+- 磁盘满场景：已在 Ubuntu VM 用 1G loop 盘填到 94%（`aiops_disk_free_bytes` 906MB→393MB），
+  但 VM 上没有 Prometheus/Alertmanager，`OpsPilotDiskLow` 的真实 firing + 飞书未验证；
+  指标/规则已证，告警链路未证。
 
 ## 3. 失败证据 full 演练（门禁 4）
 
@@ -48,12 +50,15 @@ Last Result=0；由任务触发备份 `backup/users-2026-10-23.zip`，`verified=
 
 ## 4. 发布/回滚真实演练（门禁 5）
 
-缺：真实 systemd/容器服务上的停服、换 jar、起服、回滚。
+已完成 Ubuntu 24.04 VM 上的 systemd 演练（证据见 [g1-live-evidence.md](g1-live-evidence.md) §2.10）：
 
-已有 `release.sh` / `rollback.sh` / `drill_release_rollback.sh`（产物哈希与入口已验证），
-并已做本机进程级 previous→current→rollback（三次 health 均 True，见 live evidence §2.3）。
-还缺 **systemd 测试机上的真实停服/切换**：停服 → 换 jar → 起服 → readiness →
-`rollback.sh <prev> --apply` → `/state` 的 `build.version/commit` 与 manifest 对齐。
+- current → v-prev（commit 65cc9b3）→ current 三次切换；
+- 每次 `systemctl is-active` active、readiness UP；
+- `rollback.sh v-prev --apply` 校验 sha256 OK。
+
+还缺一条：jar 的 build-info 没有 commit，`/state.build.commit` 仍是 `unknown`，
+“manifest commit ↔ /state commit”没有真正对齐；因此门禁 5 暂不判全绿。
+（停服/换 jar/回滚本身已通过。）
 
 ## 5. 单人并发压测（门禁 6）
 

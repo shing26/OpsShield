@@ -224,6 +224,45 @@ Last Result: 0
 - 对照样本只有 1 条，不能宣称“其他租户成功率统计不下降”，只能说不受同租户 429 牵连；
 - L2 未被单租户流量点亮（L0），但仍需更长窗口复测。
 
+## 2.10 Ubuntu VM 测试机（2026-10-23）
+
+VM：Ubuntu 24.04，systemd 255，OpenJDK 21，IP 192.168.59.129；网关以 systemd 运行在
+/opt/opspilot，jar 为 /opt/opspilot/app.jar（OPSPILOT_JAR 与 rollback 落点一致）。
+
+### T1：systemd 起服务
+
+~~~text
+systemctl is-active opspilot-gateway.service -> active
+GET /actuator/health/readiness -> {"status":"UP"}
+GET /actuator/health -> {"status":"UP","groups":["liveness","readiness"]}
+~~~
+
+### T2：停服/换 jar/回滚
+
+当前版本 v-current（commit 969e137）→ 回滚到上一版 v-prev（commit 65cc9b3）→ 再回 v-current：
+
+~~~text
+current  active, readiness UP
+v-prev   active, readiness UP
+v-current active, readiness UP
+rollback.sh v-prev --apply 校验 sha256 OK
+~~~
+
+边界：jar 的 build-info 没有 commit（只注入 version/time），/state.build.commit 仍是
+unknown；所以“manifest commit ↔ /state commit”这一条还没真正对齐。停服/换 jar/回滚本身已通过。
+
+### T3：1G loop 盘磁盘满
+
+~~~text
+before fill: aiops_disk_free_bytes{path="data"} 9.5019008E8  (~906MB)
+after fill:  aiops_disk_free_bytes{path="data"} 4.12504064E8 (~393MB)
+df: /dev/loop0 974M 851M 57M 94% /mnt/opspilot-test
+~~~
+
+恢复后 service active、readiness UP，aiops_disk_free_bytes 回到 ~9.96E9。
+边界：VM 上没有 Prometheus/Alertmanager，OpsPilotDiskLow 的真实 firing/飞书未验证；
+只验证了指标确实低于 5GiB。门禁 2 磁盘满仍不能判全绿。
+
 ## 3. 未完成/被环境阻塞
 
 | 项 | 结果 | 原因 |

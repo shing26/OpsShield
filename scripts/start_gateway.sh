@@ -47,12 +47,14 @@ die() { echo "FAIL: $*" >&2; exit 1; }
 
 # ---- 1) 端口占用预检：点名占用者，别让人对着 503 猜 ----
 port_pids() {
+  # 空结果在 pipefail 下会让 grep/lsof 返回 1；这里必须显式吞掉，
+  # 否则“端口正好空闲”会被 set -e 当成启动失败（Ubuntu 实测踩到）。
   if command -v netstat >/dev/null 2>&1; then
-    netstat -ano 2>/dev/null | awk -v p=":$PORT\$" '$2 ~ p && $4 == "LISTENING" {print $5}' | sort -u
+    netstat -ano 2>/dev/null | awk -v p=":$PORT\$" '$2 ~ p && $4 == "LISTENING" {print $5}' | sort -u || true
   elif command -v ss >/dev/null 2>&1; then
-    ss -lptnH "sport = :$PORT" 2>/dev/null | grep -o 'pid=[0-9]*' | cut -d= -f2 | sort -u
+    ss -lptnH "sport = :$PORT" 2>/dev/null | grep -o 'pid=[0-9]*' | cut -d= -f2 | sort -u || true
   elif command -v lsof >/dev/null 2>&1; then
-    lsof -ti "tcp:$PORT" -sTCP:LISTEN 2>/dev/null | sort -u
+    lsof -ti "tcp:$PORT" -sTCP:LISTEN 2>/dev/null | sort -u || true
   fi
 }
 describe_pid() {

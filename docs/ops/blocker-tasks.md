@@ -34,6 +34,10 @@
 
 ## 2. T1/T2/T3：Linux VM（推荐路径）
 
+> **2026-10-23 进展**：T1（systemd 起服务）与 T2（current→v-prev→current，readiness 均 UP）
+> 已在 Ubuntu 24.04 VM 完成；T3 已用 1G loop 盘填到 94%，指标低于 5GiB，但 VM 上没有
+> Prometheus/Alertmanager，告警 firing/飞书仍未验证。门禁 5 还差 /state commit 对齐。
+
 > **如果目标是“做全”，建议直接新建 Ubuntu 24.04 LTS Server VM，不要在 CentOS 7 上勉强做全。**
 > CentOS 7 已 EOL、systemd 219、yum 源下线，门禁 5 的证据只能算“旧测试机形态”，不能代表生产基线。
 > Ubuntu 24.04 的 systemd 255 能完整支持本仓库 unit 的加固指令，JDK21 也有官方 apt 包。
