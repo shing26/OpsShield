@@ -37,8 +37,8 @@
 > **2026-10-24 进展**：T1/T2/T3 均已完成。T2 注入 OPSPILOT_BUILD_COMMIT 后
 > /state.build.commit 与 manifest 对齐（969e137/65cc9b3）；T3 由 Windows Prometheus 抓 VM，
 > OpsPilotDiskLow 已 active→resolved，receiver=human-notify。门禁 5 闭环；门禁 2 飞书磁盘告警已由用户确认。
-> **2026-10-24 WORM 进展**：VM 上独立 MinIO（9002）已建 Object Lock bucket，两次 audit 副本上传，
-> COMPLIANCE 180d、版本删除被拒、副本验链 PASS；还缺异地（MinIO 与网关同机）。
+> **2026-10-24 WORM 完成**：VM 上独立 MinIO（9002）已建 Object Lock bucket，两次 audit 副本上传，
+> COMPLIANCE 180d、版本删除被拒、副本验链 PASS；用户接受“本地对象锁、非异地”口径，门禁 9 闭环。
 
 > **如果目标是“做全”，建议直接新建 Ubuntu 24.04 LTS Server VM，不要在 CentOS 7 上勉强做全。**
 > CentOS 7 已 EOL、systemd 219、yum 源下线，门禁 5 的证据只能算“旧测试机形态”，不能代表生产基线。

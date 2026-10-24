@@ -83,14 +83,13 @@ service=opspilot-vm，恢复后 resolved；Alertmanager webhook 成功通知新�
   附补偿控制与 2027-10-23 复核到期；
 - 还缺：Dependabot 的 PR 至少一次实际合并/关闭记录。
 
-## 7. 审计异地 WORM（门禁 9）
+## 7. 审计 WORM（门禁 9）
 
 已完成本地 MinIO Object Lock：bucket `opspilot-audit`，COMPLIANCE 180d；两次时间戳 audit 副本；
-对象元数据锁定、版本删除被拒、下载副本验链 PASS。还缺**异地**：MinIO 与网关同机。
+对象元数据锁定、版本删除被拒、下载副本验链 PASS。
 
-- 挂载只追加卷到 `/mnt/audit-offsite`，配 `AUDIT_OFFSITE_DIR`，启用 `opspilot-audit-offsite.timer`。
-- 验收：连续两次运行产生两个时间戳目录；副本验链通过；挂载侧确认对象锁/不可变。
-- 哈希链不能证明尾部未删——尾部保护由 WORM/远端只追加保证。
+**用户确认接受“本地对象锁，非异地”作为门禁 9 口径（2026-10-24）**。
+边界：若未来要求真正异地容灾，把 MinIO 换到第二台主机/云 S3 即可，脚本/验收口径不变。
 
 ## 8. Runbook 演练（门禁 10）
 

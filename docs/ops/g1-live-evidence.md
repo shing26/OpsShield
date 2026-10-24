@@ -316,7 +316,7 @@ PASS 审计链：2 条带 hash，2881 条旧格式；末 hash=b5359a1c...
 ~~~
 
 边界：MinIO 与网关在同一台 VM，对象锁/版本保护/副本验链已证，但**不是异地副本**；
-门禁 9 的“异地”仍缺。原有 9000 实例未动；新实例凭据在 /etc/opspilot/minio-audit.env（600）。
+用户已确认接受“本地对象锁、非异地”作为门禁 9 口径。原有 9000 实例未动；新实例凭据在 /etc/opspilot/minio-audit.env（600）。
 
 ## 3. 未完成/被环境阻塞
 
@@ -324,7 +324,7 @@ PASS 审计链：2 条带 hash，2881 条旧格式；末 hash=b5359a1c...
 |---|---|---|
 | 飞书人类回执 | 已确认 | 飞书自定义机器人（URL + 签名 secret）已配置，notify 返回 `200 forwarded`，用户确认群内收到 |
 | Trivy SCA | 已完成 | CI run 39873876035 全绿；artifact Java vulns=0；4 条跨大版本豁免见 `.trivyignore` |
-| WORM 异地副本 | 部分完成 | 本地 MinIO Object Lock 已验（COMPLIANCE 180d、版本删除被拒、副本验链 PASS）；同一台 VM，**不是异地** |
+| WORM 副本 | 已完成（口径已确认） | 本地 MinIO Object Lock 已验（COMPLIANCE 180d、版本删除被拒、副本验链 PASS）；用户确认接受“非异地”口径 |
 | 测试机停服/切换/回滚 | 已完成 | Ubuntu 24.04 systemd：current→v-prev→current，readiness UP，`/state.build.commit` 与 manifest 对齐 |
 
 ## 4. 复现命令（安全版）
