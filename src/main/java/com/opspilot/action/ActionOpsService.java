@@ -47,7 +47,8 @@ public class ActionOpsService {
 
     public record ProposeResult(String opId, String confirmToken, String expiresAt) {}
     public record StatusResult(String opId, String state, String command, String ref,
-                               String proposedBy, String confirmedBy, String tenant) {}
+                               String proposedBy, String confirmedBy, String tenant,
+                               String expiresAt) {}
 
     /** L1 提案：全部服务端复核通过后落库，返回一次性确认 token（明文只出现这一次）。 */
     public ProposeResult propose(UserContext proposer, String chunkId, String command) {
@@ -125,6 +126,25 @@ public class ActionOpsService {
         return status(confirmer, opId);
     }
 
+    /** 本租户的 op 列表（面板确认入口的数据面）：只看本租户，state 可过滤。 */
+    public java.util.List<StatusResult> list(UserContext caller, String stateFilter) {
+        String sql = "SELECT op_id, state, command, ref, proposed_by, confirmed_by, tenant, confirm_expires_at "
+                + "FROM action_ops WHERE tenant = ?";
+        java.util.List<Object> args = new java.util.ArrayList<>(java.util.List.of(caller.tenantId()));
+        if (stateFilter != null && !stateFilter.isBlank()) {
+            sql += " AND state = ?";
+            args.add(stateFilter);
+        }
+        sql += " ORDER BY proposed_at DESC LIMIT 50";
+        return jdbc.query(sql, (rs, i) -> new StatusResult(
+                rs.getString("op_id"), rs.getString("state"), rs.getString("command"),
+                rs.getString("ref"), rs.getString("proposed_by"), rs.getString("confirmed_by"),
+                rs.getString("tenant"),
+                rs.getTimestamp("confirm_expires_at") == null ? null
+                        : rs.getTimestamp("confirm_expires_at").toInstant().toString()),
+                args.toArray());
+    }
+
     public StatusResult status(UserContext caller, String opId) {
         var row = jdbc.queryForMap(
                 "SELECT op_id, state, command, ref, proposed_by, confirmed_by, tenant "
@@ -134,7 +154,7 @@ public class ActionOpsService {
         }
         return new StatusResult(opId, (String) row.get("state"), (String) row.get("command"),
                 (String) row.get("ref"), (String) row.get("proposed_by"),
-                (String) row.get("confirmed_by"), (String) row.get("tenant"));
+                (String) row.get("confirmed_by"), (String) row.get("tenant"), null);
     }
 
     /** 过期扫描（confirm 前置检查与定时清理共用；红队过期用例的判定点）。 */

@@ -45,6 +45,14 @@ public class ActionOpsController {
         return ops.confirm(JwtAuthFilter.from(http), req.opId(), req.token());
     }
 
+    /** 本租户待确认 op 列表（面板确认入口的数据面；?state= 可过滤）。 */
+    @GetMapping
+    public java.util.List<ActionOpsService.StatusResult> list(
+            @org.springframework.web.bind.annotation.RequestParam(required = false) String state,
+            HttpServletRequest http) {
+        return ops.list(JwtAuthFilter.from(http), state);
+    }
+
     @GetMapping("/{opId}")
     public ActionOpsService.StatusResult status(@PathVariable String opId, HttpServletRequest http) {
         return ops.status(JwtAuthFilter.from(http), opId);

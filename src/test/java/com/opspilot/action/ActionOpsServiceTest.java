@@ -83,6 +83,16 @@ class ActionOpsServiceTest {
     }
 
     @Test
+    void listIsTenantScoped() {
+        loadL1Chunk();
+        ops.propose(PROPOSER, "rb-l1::恢复动作", CMD);
+        var mine = ops.list(PROPOSER, "proposed");
+        assertTrue(mine.stream().anyMatch(o -> CMD.equals(o.command())), "本租户应看到待确认 op");
+        assertTrue(mine.stream().allMatch(o -> o.expiresAt() != null), "面板倒计时需要 expiresAt");
+        assertTrue(ops.list(ACME, "proposed").isEmpty(), "跨租户列表必须为空");
+    }
+
+    @Test
     void badTokenRejected() {
         loadL1Chunk();
         var p = ops.propose(PROPOSER, "rb-l1::恢复动作", CMD);

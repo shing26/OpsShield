@@ -424,6 +424,24 @@
         <div class="tiles" id="tiles"></div>
         <div class="sub" id="sfrow"></div>
       </section>
+
+      <section id="l1sec" hidden>
+        <h2>受控恢复动作 · L1
+          <span class="tag">需不同确认人 · 一次性凭据 · 15 分钟窗口 · 命令逐字来自文档</span>
+        </h2>
+        <div class="sub" id="l1hint" style="margin-bottom:8px"></div>
+        <div id="l1pending"></div>
+        <details style="margin-top:10px">
+          <summary style="cursor:pointer;color:var(--fg2)">粘贴 op_id 与一次性凭据确认（凭据来自提案人转交）</summary>
+          <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+            <input id="l1op" placeholder="op_id (act_…)" style="flex:1;min-width:140px">
+            <input id="l1tok" placeholder="一次性凭据（64 位十六进制）" style="flex:2;min-width:200px">
+            <button class="btn" id="l1confirm">确认执行</button>
+          </div>
+          <div class="msg" id="l1msg" style="margin-top:6px"></div>
+        </details>
+      </section>
+
     </div>
     <section>
       <h2>事件流 · AUDIT
@@ -1153,7 +1171,65 @@ async function poll() {
   renderHeader(); renderDrawer(); renderPanelGate();
   $('pollstate').textContent = '轮询中 · ' + (cadence() / 1000) + 's'; $('pollstate').style.color = '';
   renderState(s); if (a) renderEvents(a);
+  refreshActions();
 }
+
+/* ---------- L1 受控恢复动作（面板确认入口，ADR-0028 §0 裁决 1） ----------
+   服务端守卫：confirmer≠proposer / 租户匹配 / 密级足够 / token 哈希原子消费 / 窗口。
+   面板只做展示与提交——所有判定在网关，这里没有第二套规则。 */
+let l1Timer = null;
+async function refreshActions() {
+  const sec = $('l1sec'); if (!sec) return;
+  sec.hidden = false;                    // platform 身份可见（panel 本身已门控）
+  try {
+    const ops = await api('/api/v1/copilot/actions?state=proposed');
+    renderActions(ops || []);
+  } catch (e) { /* 非致命：面板主数据不受影响 */ }
+}
+function renderActions(ops) {
+  const box = $('l1pending'), hint = $('l1hint');
+  clearInterval(l1Timer);
+  if (!ops.length) { box.innerHTML = ''; hint.textContent = '当前无待确认的恢复动作。'; return; }
+  hint.textContent = ops.length + ' 条待确认——确认前逐字核对命令与影响范围；窗口过期须重新提案。';
+  const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const card = o =>
+    '<div style="border:1px solid var(--bd);border-radius:8px;padding:10px;margin-bottom:8px">'
+    + '<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline">'
+    + '<code style="font-size:12px;color:var(--fg2)">' + esc(o.opId) + '</code>'
+    + '<span class="num" data-exp="' + esc(o.expiresAt || '') + '" style="color:var(--warn)"></span></div>'
+    + '<pre style="margin:6px 0;padding:8px;background:var(--bg2);border-radius:6px;font-size:12px;overflow-x:auto">'
+    + esc(o.command) + '</pre>'
+    + '<div class="sub" style="font-size:12px">提案人 ' + esc(o.proposedBy)
+    + ' · 来源 ' + esc(o.ref) + ' · 状态 ' + esc(o.state) + '</div></div>';
+  box.innerHTML = ops.map(card).join('');
+  const tick = () => box.querySelectorAll('[data-exp]').forEach(el => {
+    const exp = el.dataset.exp; if (!exp) { el.textContent = ''; return; }
+    const s = Math.floor((new Date(exp) - Date.now()) / 1000);
+    el.textContent = s > 0 ? '窗口剩 ' + Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0') : '已过期';
+  });
+  tick(); l1Timer = setInterval(tick, 1000);
+}
+document.addEventListener('click', async e => {
+  if (e.target.id !== 'l1confirm') return;
+  const op = $('l1op').value.trim(), tok = $('l1tok').value.trim(), msg = $('l1msg');
+  if (!op || !tok) { msg.textContent = 'op_id 与一次性凭据都必填'; return; }
+  msg.textContent = '确认中…';
+  try {
+    const r = await fetch('/api/v1/copilot/actions/confirm', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + S.a.token },
+      body: JSON.stringify({ opId: op, token: tok })
+    });
+    const body = await r.json();
+    if (r.ok) { msg.textContent = '已确认（' + body.state + '）——派发由自动化系统执行。'; $('l1tok').value = ''; }
+    else msg.textContent = '被拒（' + (body.stage || r.status) + '）：' + (body.message || '');
+    refreshActions();
+  } catch (err) { msg.textContent = '网络异常：' + err; }
+});
+/* 深链：?op=act_xxx 自动填入 op_id（URL 只定位不承载权限——§0 裁决 3） */
+const qp = new URLSearchParams(location.search).get('op');
+if (qp) { const el = $('l1op'); if (el) el.value = qp; }
+
 
 /* ---------- 运行态 ---------- */
 
