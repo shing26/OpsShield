@@ -70,7 +70,7 @@ seed sre-acme    tenant-acme     3 sre
 cd "$WORK"
 STORAGE_MODE=memory DASHSCOPE_MODE=mock SERVER_PORT="$PORT" SERVER_ADDRESS=127.0.0.1 \
 JWT_SECRET="benchmark-secret-0123456789-abcdefghijklmnopqrstuvwxyz" DASHSCOPE_API_KEY="" \
-"$JAVA_BIN" -jar app.jar >app.log 2>&1 &
+"$JAVA_BIN" -Xms128m -Xmx512m -jar app.jar >app.log 2>&1 &
 PID=$!
 cd "$ROOT"
 BASE="http://127.0.0.1:$PORT"
