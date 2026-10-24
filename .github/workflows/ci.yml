@@ -66,6 +66,35 @@ jobs:
           name: sbom
           path: target/bom.json
 
+  # 路线图近期 #3：一键评测基准——检索质量/越权/门控/准入对入库阈值基线回归门禁。
+  # memory/mock 栈自足（CI 可复现、零真金成本），阈值按 mock 校准（benchmark_thresholds.json）；
+  # mock rerank 不区分域外 query，门控判据自动跳过（只在 live 口径判，见 offline/eval/benchmark.py）。
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install pinned dev deps
+        run: pip install -r offline/requirements-dev.txt
+      - run: mvn -B -DskipTests package
+      - name: One-command benchmark (retrieval + safety + admission)
+        env:
+          DEMO_PASSWORD: bench-demo-pass
+        run: bash scripts/benchmark.sh
+      - name: Upload benchmark report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-report
+          path: offline/eval/reports/benchmark.md
+
   # G1 门禁 8：SCA。Trivy 扫依赖 lock/BOM 与文件系统里的已知 CVE；只拦高危/严重且已有修复的项。
   # 为什么不用 OWASP dependency-check：它依赖 NVD API key/长时下载，在 PR 上稳定性差；
   # Trivy 的漏洞库随 action 镜像更新，CI 可复现。SBOM 仍由 sbom job 产出。

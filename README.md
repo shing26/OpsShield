@@ -17,6 +17,7 @@
 [![Spring Boot](https://img.shields.io/badge/Spring_Boot-3.5.14-6DB33F?style=flat&logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)
 [![Metrics](https://img.shields.io/badge/Metrics-Micrometer_%7C_Prometheus-498BA3?style=flat&logo=prometheus&logoColor=white)](https://prometheus.io/)
 [![Java Tests](https://img.shields.io/badge/Java_Tests-385_Passed-4CAF50?style=flat&logo=openjdk&logoColor=white)](#-测试体系与安全回归测试)
+[![Benchmark](https://img.shields.io/badge/Benchmark-Regression_Gated-4CAF50?style=flat&logo=githubactions&logoColor=white)](offline/eval/reports/benchmark.md)
 [![Python Probes](https://img.shields.io/badge/Probes-390_Passed-3776AB?style=flat&logo=python&logoColor=white)](#-测试体系与安全回归测试)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 

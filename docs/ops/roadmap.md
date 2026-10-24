@@ -96,6 +96,6 @@ Prompt 注入 / 越狱 / 跨租户探测 / 密级绕过攻击用例库；每次�
 | 可观测/告警接线 | `aiops_*` 指标 + Alertmanager 双出口 + DependencyMetrics 已落地 |
 | 备份恢复 | 计划任务 + `restore_drill.sh` + MinIO Object Lock 副本 |
 | 反馈闭环 | `/api/v1/copilot/feedback` 端点已存在（排序回流待接） |
-| 评测基准 | `offline/` 评测脚本 + `production_gate` 门禁已有，公开数据集未做 |
+| 评测基准 | **本轮实现**：`bash scripts/benchmark.sh` 一键基准（检索/越权/门控/准入 × 阈值门禁），CI `benchmark` job 拦回归；公开数据集待做 |
 | 轻量 CLI | `scripts/user_admin.sh` 等已有；面板已有 Ops Console |
 | 红队化 | 越权/注入用例在测试中，未产品化为独立套件 |

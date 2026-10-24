@@ -1,0 +1,187 @@
+{
+  "generated_at": "2026-10-24T12:56:24+00:00",
+  "commit": "7d37e9f",
+  "backend": {
+    "rerank": "mock-idf-coverage",
+    "llm": "mock-template",
+    "embedding": "mock-lexical-hash"
+  },
+  "retrieval": {
+    "es_only": {
+      "exact": {
+        "hit@1": 1.0,
+        "hit@3": 1.0,
+        "mrr": 1.0
+      },
+      "semantic": {
+        "hit@1": 0.1471,
+        "hit@3": 0.2353,
+        "mrr": 0.1912
+      }
+    },
+    "vector_only": {
+      "exact": {
+        "hit@1": 1.0,
+        "hit@3": 1.0,
+        "mrr": 1.0
+      },
+      "semantic": {
+        "hit@1": 0.6471,
+        "hit@3": 0.8824,
+        "mrr": 0.75
+      }
+    },
+    "hybrid": {
+      "exact": {
+        "hit@1": 1.0,
+        "hit@3": 1.0,
+        "mrr": 1.0
+      },
+      "semantic": {
+        "hit@1": 0.6765,
+        "hit@3": 0.8824,
+        "mrr": 0.7696
+      }
+    }
+  },
+  "safety": {
+    "jailbreak": {
+      "cases": 5,
+      "leaked": 0
+    }
+  },
+  "gate_matrix": {
+    "0.1": {
+      "threshold": 0.1,
+      "correct_refusals": 0,
+      "missed_refusals": 24,
+      "false_refusals": 0,
+      "correct_answers": 68,
+      "missed_refusal_rate": 1.0,
+      "false_refusal_rate": 0.0,
+      "zero_recall_among_false_refusals": 0,
+      "n_refuse_samples": 24,
+      "n_answer_samples": 68
+    },
+    "0.2": {
+      "threshold": 0.2,
+      "correct_refusals": 0,
+      "missed_refusals": 24,
+      "false_refusals": 0,
+      "correct_answers": 68,
+      "missed_refusal_rate": 1.0,
+      "false_refusal_rate": 0.0,
+      "zero_recall_among_false_refusals": 0,
+      "n_refuse_samples": 24,
+      "n_answer_samples": 68
+    },
+    "0.3": {
+      "threshold": 0.3,
+      "correct_refusals": 1,
+      "missed_refusals": 23,
+      "false_refusals": 1,
+      "correct_answers": 67,
+      "missed_refusal_rate": 0.9583333333333334,
+      "false_refusal_rate": 0.014705882352941176,
+      "zero_recall_among_false_refusals": 0,
+      "n_refuse_samples": 24,
+      "n_answer_samples": 68
+    },
+    "0.4": {
+      "threshold": 0.4,
+      "correct_refusals": 11,
+      "missed_refusals": 13,
+      "false_refusals": 4,
+      "correct_answers": 64,
+      "missed_refusal_rate": 0.5416666666666666,
+      "false_refusal_rate": 0.058823529411764705,
+      "zero_recall_among_false_refusals": 0,
+      "n_refuse_samples": 24,
+      "n_answer_samples": 68
+    }
+  },
+  "admission": {
+    "burst": 12,
+    "ok": 4,
+    "rejected_429": 8,
+    "other": 0,
+    "statuses": [
+      200,
+      429,
+      429,
+      429,
+      200,
+      200,
+      429,
+      429,
+      200,
+      429,
+      429,
+      429
+    ]
+  },
+  "rerank_mode": "mock",
+  "verdicts": [
+    {
+      "check": "retrieval.es_only.exact_hit@1",
+      "observed": 1.0,
+      "threshold": ">= 1",
+      "pass": true
+    },
+    {
+      "check": "retrieval.es_only.exact_mrr",
+      "observed": 1.0,
+      "threshold": ">= 1",
+      "pass": true
+    },
+    {
+      "check": "retrieval.vector_only.exact_hit@1",
+      "observed": 1.0,
+      "threshold": ">= 1",
+      "pass": true
+    },
+    {
+      "check": "retrieval.vector_only.exact_mrr",
+      "observed": 1.0,
+      "threshold": ">= 1",
+      "pass": true
+    },
+    {
+      "check": "retrieval.hybrid.exact_hit@1",
+      "observed": 1.0,
+      "threshold": ">= 1",
+      "pass": true
+    },
+    {
+      "check": "retrieval.hybrid.exact_mrr",
+      "observed": 1.0,
+      "threshold": ">= 1",
+      "pass": true
+    },
+    {
+      "check": "safety.jailbreak_leaked",
+      "observed": 0,
+      "threshold": "== 0（硬 0）",
+      "pass": true
+    },
+    {
+      "check": "admission.rejected_429",
+      "observed": 8,
+      "threshold": ">= 1",
+      "pass": true
+    },
+    {
+      "check": "admission.other_5xx",
+      "observed": 0,
+      "threshold": "== 0",
+      "pass": true
+    },
+    {
+      "check": "admission.ok",
+      "observed": 4,
+      "threshold": ">= 1",
+      "pass": true
+    }
+  ],
+  "pass": true
+}

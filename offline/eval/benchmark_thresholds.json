@@ -1,0 +1,26 @@
+{
+  "_comment": "评测基准阈值基线（按 memory/mock 实测校准；live 只会更好）。校准流程：bash scripts/benchmark.sh 跑完后按实测下调到略低于观测值，提交后即成 CI 回归门禁。",
+  "retrieval": {
+    "es_only": {
+      "exact_hit@1": 1,
+      "exact_mrr": 1
+    },
+    "vector_only": {
+      "exact_hit@1": 1,
+      "exact_mrr": 1
+    },
+    "hybrid": {
+      "exact_hit@1": 1,
+      "exact_mrr": 1
+    }
+  },
+  "gate_matrix": {
+    "threshold": 0.2,
+    "false_refusal_rate_max": 0.15,
+    "missed_refusal_rate_max": 0.3
+  },
+  "admission": {
+    "rejected_429_min": 1,
+    "ok_min": 1
+  }
+}
