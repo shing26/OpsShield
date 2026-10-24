@@ -84,6 +84,9 @@ curl -fsS --max-time 3 "$BASE/actuator/health/readiness" | grep -q '"status":"UP
 export OPSPILOT_BASE="$BASE"
 export PYTHON
 
+echo "== [0/3] 数据集脱敏审计 + 指纹清单（dataset_audit.py） =="
+(cd offline && "$PYTHON" eval/dataset_audit.py) || fail "数据集脱敏审计未过：公开数据集认证失败，先清语料再测"
+
 echo "== [1/3] 检索质量 + 越权（evaluate.py） =="
 (cd offline && "$PYTHON" eval/evaluate.py >/dev/null) || fail "evaluate.py 失败"
 

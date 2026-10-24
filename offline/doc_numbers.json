@@ -451,6 +451,70 @@
           "pattern": "refuse_set\\.jsonl`（(\\d+) 条"
         }
       ]
+    },
+    {
+      "id": "bench_exact_hit1_es_only",
+      "unit": "基准：es_only 精确码 Hit@1（benchmark.json）",
+      "derive": {
+        "kind": "json_field",
+        "path": "offline/eval/reports/benchmark.json",
+        "field": "retrieval.es_only.exact.hit@1"
+      },
+      "format": "percent",
+      "cited_in": [
+        {
+          "file": "docs/benchmark.md",
+          "pattern": "检索·精确码 Hit@1（es_only）\\s*\\| (\\d+)%"
+        }
+      ]
+    },
+    {
+      "id": "bench_exact_hit1_vector_only",
+      "unit": "基准：vector_only 精确码 Hit@1（benchmark.json）",
+      "derive": {
+        "kind": "json_field",
+        "path": "offline/eval/reports/benchmark.json",
+        "field": "retrieval.vector_only.exact.hit@1"
+      },
+      "format": "percent",
+      "cited_in": [
+        {
+          "file": "docs/benchmark.md",
+          "pattern": "检索·精确码 Hit@1（vector_only）\\s*\\| (\\d+)%"
+        }
+      ]
+    },
+    {
+      "id": "bench_exact_hit1_hybrid",
+      "unit": "基准：hybrid 精确码 Hit@1（benchmark.json）",
+      "derive": {
+        "kind": "json_field",
+        "path": "offline/eval/reports/benchmark.json",
+        "field": "retrieval.hybrid.exact.hit@1"
+      },
+      "format": "percent",
+      "cited_in": [
+        {
+          "file": "docs/benchmark.md",
+          "pattern": "检索·精确码 Hit@1（hybrid）\\s*\\| (\\d+)%"
+        }
+      ]
+    },
+    {
+      "id": "bench_jailbreak_leaked",
+      "unit": "基准：越狱高密级泄漏条数（benchmark.json，硬 0）",
+      "derive": {
+        "kind": "json_field",
+        "path": "offline/eval/reports/benchmark.json",
+        "field": "safety.jailbreak.leaked"
+      },
+      "format": "int",
+      "cited_in": [
+        {
+          "file": "docs/benchmark.md",
+          "pattern": "安全·越狱高密级泄漏（5 条 prompt，L1 账号）\\s*\\| (\\d+) 条"
+        }
+      ]
     }
   ]
 }
