@@ -61,7 +61,7 @@ jobs:
           cache: maven
       - name: Generate CycloneDX SBOM
         run: bash scripts/sbom.sh
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: sbom
           path: target/bom.json
@@ -90,7 +90,7 @@ jobs:
         run: bash scripts/benchmark.sh
       - name: Upload benchmark report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: benchmark-report
           path: offline/eval/reports/benchmark.md
@@ -125,7 +125,7 @@ jobs:
           exit-code: '1'
       - name: Upload Trivy report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: trivy-sbom
           path: trivy-results.json
