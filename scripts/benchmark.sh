@@ -46,7 +46,9 @@ trap cleanup EXIT INT TERM
 restore_live_reports() {
   git -C "$ROOT" checkout -- \
     offline/eval/reports/eval_report.json \
+    offline/eval/reports/eval_report.md \
     offline/eval/reports/gate_matrix.json \
+    offline/eval/reports/gate_matrix.md \
     offline/eval/reports/PROVENANCE.json 2>/dev/null || true
 }
 
