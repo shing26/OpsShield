@@ -1,0 +1,13 @@
+{
+  "id": "l1-cross-confirm",
+  "category": "l1_pending",
+  "title": "跨租户代确认须独立审计事件",
+  "transport": "l1",
+  "requires": "L1-implementation",
+  "expect": "confirm_proxy_audited",
+  "attack": {
+    "kind": "proxy_confirm",
+    "proposer": "sre-full",
+    "confirmer": "ops-manager-acme"
+  }
+}

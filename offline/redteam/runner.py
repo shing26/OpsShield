@@ -31,9 +31,11 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.request
+from datetime import timedelta
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -355,6 +357,75 @@ MCP_CHECKS = {
     "mcp_results_in_corpus": check_mcp_results_in_corpus,
 }
 
+# ---- verifier 靶子执行器（L1 操作面用例·实现已落地） ------------------------
+
+sys.path.insert(0, str(REDTEAM / 'verify'))
+import reference_verifier as rv  # noqa: E402  # 靶子本体；sha256 清单见 verify/MANIFEST.json
+
+# 测试专用 key（靶子用例固定材料；生产 key 从密管注入，绝不入库）
+VERIFIER_KEY = bytes.fromhex("bd" * 32)
+VERIFIER_TTL = 15 * 60
+
+
+def check_verify_target(case, gw, corpus, base, password) -> str:
+    kind = case["attack"]["kind"]
+    op_id = "act_" + case["id"]
+    payload = (case["attack"].get("payload")
+               or "kubectl rollout restart deployment/order-api -n prod").encode("utf-8")
+    declared = rv.payload_sha256(payload)
+    now = datetime.now(timezone.utc)
+    expires = (now + timedelta(seconds=VERIFIER_TTL)).isoformat()
+    state = Path(tempfile.mkdtemp()) / "dispatch_state.json"
+    good_sig = rv.expected_signature(VERIFIER_KEY, op_id, declared, expires)
+
+    # 真实时间线：派发时签名有效（对"当时的 expires"签名），之后才过期——
+    # 所以 expired 用例必须先定过期时间再签名，否则签名先挂（401），轮不到 410。
+    if kind == "expired":
+        expires = (now - timedelta(seconds=1)).isoformat()
+    sig = rv.expected_signature(VERIFIER_KEY, op_id, declared, expires)
+    if kind == "wrong_key":
+        sig = rv.expected_signature(bytes.fromhex("aa" * 32), op_id, declared, expires)
+    pay = payload
+    if kind == "tampered_payload":
+        pay = payload + b" # tampered"
+
+    # 409 用例先正确签发一次；第二次才是靶子（幂等判据）
+    if kind == "replayed":
+        s1, _ = rv.verify(op_id, payload, declared, good_sig, expires,
+                          VERIFIER_KEY, state, now=now)
+        if s1 != 200:
+            return f"SKIP: 前置首签失败（{s1}），测不到幂等"
+
+    status, reason = rv.verify(op_id, pay, declared, sig, expires, VERIFIER_KEY, state,
+                               now=now)
+    expected_status = int(case["expect"].rsplit("_", 1)[1])
+    if status != expected_status:
+        return f"LEAK: 期望 {expected_status} 实得 {status}（{reason}）——验签层被穿透"
+    return f"pass: {status} {reason}"
+
+
+VERIFY_CHECKS = {
+    "verify_reject_401": check_verify_target,
+    "verify_reject_422": check_verify_target,
+    "verify_reject_410": check_verify_target,
+    "verify_reject_409": check_verify_target,
+}
+
+
+# ---- L1 pending 用例（状态机/策略未合入：显式 SKIP，不冒充通过） ----------------
+
+
+def check_l1_pending(case, gw, corpus, base, password) -> str:
+    return "SKIP: L1 实现/策略未合入（规格 §9：用例先行；合入后本用例自动转真执行）"
+
+
+L1_CHECKS = {
+    "confirm_self_reject": check_l1_pending,
+    "confirm_proxy_audited": check_l1_pending,
+    "injection_stuck_proposed": check_l1_pending,
+    "hidden_command_rejected": check_l1_pending,
+}
+
 SEARCH_CHECKS = {
     "no_high_auth": check_no_high_auth,
     "same_tenant_only": check_same_tenant_only,
@@ -379,6 +450,16 @@ def run_case(case, gw, corpus, base, password) -> tuple[str, str]:
         if checker is None:
             return "SKIP", f"未知 mcp expect: {expect}"
         detail = checker(case, base, password, corpus)
+    elif transport == "verify":
+        checker = VERIFY_CHECKS.get(expect)
+        if checker is None:
+            return "SKIP", f"未知 verify expect: {expect}"
+        detail = checker(case, None, None, None, None)
+    elif transport == "l1":
+        checker = L1_CHECKS.get(expect)
+        if checker is None:
+            return "SKIP", f"未知 l1 expect: {expect}"
+        detail = checker(case, None, None, None, None)
     else:
         checker = {"search": SEARCH_CHECKS, "chat": CHAT_CHECKS}[transport].get(expect)
         if checker is None:
@@ -469,18 +550,23 @@ def main() -> int:
                         "detail": detail, "took_s": round(time.time() - t0, 2)})
         print(f"[{verdict:>4}] {c['id']} {detail[:90]}")
 
+    # 计数语义：leaks = 判据失败（fail-closed 硬 0）；skipped = 实现未合入的用例
+    #（诚实单列，不算泄漏也不算通过；manifest 锁住了用例内容，SKIP 无法用来逃避）。
     report = {
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "commit": subprocess.check_output(["git", "rev-parse", "--short", "HEAD"],
                                           text=True, cwd=str(REPO),
                                           stderr=subprocess.DEVNULL).strip(),
         "cases_total": len(cases),
-        "leaks": sum(1 for r in results if r["verdict"] != "pass"),
+        "pass": sum(1 for r in results if r["verdict"] == "pass"),
+        "skipped": sum(1 for r in results if r["verdict"] == "SKIP"),
+        "leaks": sum(1 for r in results if r["verdict"] == "LEAK"),
         "by_category": by_category,
         "results": results,
     }
     write_report(report, render_md(report))
-    print(f"redteam: {report['cases_total']} 用例 / 泄漏 {report['leaks']} → "
+    print(f"redteam: {report['cases_total']} 用例 / 通过 {report['pass']} / "
+          f"SKIP {report['skipped']} / 泄漏 {report['leaks']} → "
           f"{'PASS 零泄漏' if report['leaks'] == 0 else 'FAIL'}"
           f"（{REPORT_DIR / 'redteam_report.md'}）")
     return 0 if report["leaks"] == 0 else 1

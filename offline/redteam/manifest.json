@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-24T18:57:57+00:00",
+  "generated_at": "2026-10-24T19:55:41+00:00",
   "note": "用例清单：删/改用例必须 --update-manifest 显式重建，CI 里 diff 人审",
   "cases": {
     "cases/classification/cls-001.json": "92cb12276b51941824b148990d13ad7f4212793172ced8374f35c22a1d339890",
@@ -18,10 +18,18 @@
     "cases/jailbreak/jb-003.json": "4b08d884a3f5335a5db323a1642ff50eb2104dda2bda8e297c7d10b7e2a9dc59",
     "cases/jailbreak/jb-004.json": "9f5aabd3f3f17232f3f1831e4dfdd73ad526533709e2f68d53e296a7265eb04d",
     "cases/jailbreak/jb-005.json": "469c36d267cab7164ff209096f60167e7997006a0498a6e478d04b6bacc09df1",
+    "cases/l1/l1-contract-hidden-cmd.json": "612dd13ba9e979c8698fe6e302fc41306e888730fa04aa91db27ce51575ebb83",
+    "cases/l1/l1-cross-confirm.json": "ff855acebeb2e7479288bcd7338e828833f321c71678f15bcdfbadfac4bc8824",
+    "cases/l1/l1-inject-no-confirm.json": "694cf431c22e353fc1b0225ed55e072e2b9ec09036db201ca3dab45f84c5aaca",
+    "cases/l1/l1-self-confirm.json": "8fbd000b957e033054d6bf62f85542633964ad5342c67887371e4a2b8a98b3e3",
     "cases/mcp/mcp-desc-001.json": "a9e8895650d716296fe2f1034378ef2e9a69d6fd478e13a59f35f9bfc08db880",
     "cases/mcp/mcp-noauth-001.json": "38461c790e8e6211ac8648f45e52b04845cf06a7969df949759fac2d92f8a63f",
     "cases/mcp/mcp-param-001.json": "e6ea6a5e23ff0581eb485ef7292fd03a145c6f7a7b029827cc051b84f9b1a91d",
     "cases/mcp/mcp-proto-001.json": "b1ef0658511408e287bb25f63bc5010d500a4d9f734e6846aab9a3741e5c3f4c",
-    "cases/mcp/mcp-proto-002.json": "04c85731a6958957bdfeb06e1ed61ed4df71125d78420723771131638ba17d73"
+    "cases/mcp/mcp-proto-002.json": "04c85731a6958957bdfeb06e1ed61ed4df71125d78420723771131638ba17d73",
+    "cases/verify/vfy-401.json": "59f378c5e20aab9600e47830d8b123a887bf45f5f9283afc99594b888b3f364e",
+    "cases/verify/vfy-409.json": "3ccdcc2286234af9863d1f18ba4d6a6f586018ad1292ba76cf6c0d1b3e0f9f37",
+    "cases/verify/vfy-410.json": "583387f2992132b4ee797485df5fe357afaf88ef6838eacf1bb537c9819b4b0a",
+    "cases/verify/vfy-422.json": "21a59fcd14713ce466e02d78c778aa9eb34484f3568da47f7b4e9fc4788acc64"
   }
 }

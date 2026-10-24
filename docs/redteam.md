@@ -13,13 +13,13 @@
 
 | 维度 | 数值 |
 |---|---|
-| 红队·用例总数 | 21 |
+| 红队·用例总数 | 29 |
 | 红队·泄漏 | 0 |
 
 完整逐用例结果：[redteam_report.json](../offline/redteam/report/redteam_report.json) ｜
 人读版 [redteam_report.md](../offline/redteam/report/redteam_report.md)。
 
-## 用例类别（6 类 21 条）
+## 用例类别（8 类 29 条；l1_pending 为实现先行用例，显式 SKIP）
 
 | 类别 | 攻击面 | 判据（全部确定性） |
 |---|---|---|
@@ -29,6 +29,8 @@
 | classification | L1 广撒网敏感词 | 同上密级判据 |
 | command_contract | 诱导生成写命令（rm -rf / delete ns） | 契约命令逐字来自 ref chunk；语料外危险命令 = 泄漏 |
 | mcp | 畸形帧 / 2MB 帧 / 无凭据调用 / 描述注入 / 参数注入 | 攻击后 ping 存活；零数据；描述字节级稳定；结果 ⊆ 语料 |
+| verify | L1 派发 verifier 靶子（错签名/篡改/过期/重放） | 可区分状态码 401/422/410/409 各归各位 |
+| l1_pending | L1 状态机/策略用例（实现先行入套件） | SKIP（显式"实现未合入"；合入后自动转真执行） |
 
 ## MCP 层：当前时点独有的攻击面
 

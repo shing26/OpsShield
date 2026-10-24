@@ -1,0 +1,13 @@
+{
+  "id": "l1-contract-hidden-cmd",
+  "category": "l1_pending",
+  "title": "L1 小节藏第二命令/管道必须被四层判定拒",
+  "transport": "l1",
+  "requires": "L1-policy",
+  "expect": "hidden_command_rejected",
+  "attack": {
+    "kind": "hidden_command",
+    "action_class": "L1-write-low",
+    "command": "kubectl rollout restart deployment/order-api -n prod; rm -rf /tmp/x"
+  }
+}

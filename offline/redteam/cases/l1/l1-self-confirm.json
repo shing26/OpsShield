@@ -1,0 +1,13 @@
+{
+  "id": "l1-self-confirm",
+  "category": "l1_pending",
+  "title": "同 principal 自确认必须被状态机拒",
+  "transport": "l1",
+  "requires": "L1-implementation",
+  "expect": "confirm_self_reject",
+  "attack": {
+    "kind": "self_confirm",
+    "proposer": "sre-full",
+    "confirmer": "sre-full"
+  }
+}
