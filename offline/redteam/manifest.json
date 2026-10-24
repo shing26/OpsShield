@@ -1,0 +1,27 @@
+{
+  "generated_at": "2026-10-24T18:57:57+00:00",
+  "note": "用例清单：删/改用例必须 --update-manifest 显式重建，CI 里 diff 人审",
+  "cases": {
+    "cases/classification/cls-001.json": "92cb12276b51941824b148990d13ad7f4212793172ced8374f35c22a1d339890",
+    "cases/classification/cls-002.json": "b061a9dcdcb51358f3d96c51c51636f9d1115836fd07c157082326c3e113278a",
+    "cases/command_contract/cc-001.json": "1264ad7f0038e59957e961fc0a21ad531feb8592849752659814990cdb9771b4",
+    "cases/command_contract/cc-002.json": "d2d4534032758202aae3c8b029256632fbf0230b98c4ca91dcc0500bb670659d",
+    "cases/command_contract/cc-003.json": "9aaa719fcffbe2d1171b7c2942cfe617c0a81184f1773c3753c3693dd16e5ce3",
+    "cases/cross_tenant/ct-001.json": "d4a72c1ed2e09062f47477521aabe71e29d86621b2529ae0b96fbfd860a02f83",
+    "cases/cross_tenant/ct-002.json": "68c23fdf005943b0b319f66fe31f68ef56517b7c92d480650531e84b6bfab200",
+    "cases/injection/inj-chat-001.json": "10a4fa071b7731102ca0951e52db67d60a1e72833cb65c8600df6491767e502d",
+    "cases/injection/inj-chat-002.json": "50d4aa6cb97e6d73460a97f6e88f9bc384db5c6d94c567a913f3e742a85fae92",
+    "cases/injection/inj-search-001.json": "e87301e14b29b920bf95854bc2981563f54be6f80473856e6409b68563e0811d",
+    "cases/injection/inj-search-002.json": "317f457c40c0fc97a63aebf21dc8081d70b63f86e71e8839ff2a81c93cb96297",
+    "cases/jailbreak/jb-001.json": "6ece652e791ad1e67c1832971a7f0cf4be90d454fe2d5f92a3ac558e78a04d7d",
+    "cases/jailbreak/jb-002.json": "28b975ccb3bb324311be3af87f5b269b6ebd202206469d87a495b6dc61a14a7e",
+    "cases/jailbreak/jb-003.json": "4b08d884a3f5335a5db323a1642ff50eb2104dda2bda8e297c7d10b7e2a9dc59",
+    "cases/jailbreak/jb-004.json": "9f5aabd3f3f17232f3f1831e4dfdd73ad526533709e2f68d53e296a7265eb04d",
+    "cases/jailbreak/jb-005.json": "469c36d267cab7164ff209096f60167e7997006a0498a6e478d04b6bacc09df1",
+    "cases/mcp/mcp-desc-001.json": "a9e8895650d716296fe2f1034378ef2e9a69d6fd478e13a59f35f9bfc08db880",
+    "cases/mcp/mcp-noauth-001.json": "38461c790e8e6211ac8648f45e52b04845cf06a7969df949759fac2d92f8a63f",
+    "cases/mcp/mcp-param-001.json": "e6ea6a5e23ff0581eb485ef7292fd03a145c6f7a7b029827cc051b84f9b1a91d",
+    "cases/mcp/mcp-proto-001.json": "b1ef0658511408e287bb25f63bc5010d500a4d9f734e6846aab9a3741e5c3f4c",
+    "cases/mcp/mcp-proto-002.json": "04c85731a6958957bdfeb06e1ed61ed4df71125d78420723771131638ba17d73"
+  }
+}

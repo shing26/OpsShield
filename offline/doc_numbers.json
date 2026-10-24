@@ -515,6 +515,38 @@
           "pattern": "安全·越狱高密级泄漏（5 条 prompt，L1 账号）\\s*\\| (\\d+) 条"
         }
       ]
+    },
+    {
+      "id": "redteam_cases_total",
+      "unit": "红队对抗用例总数（offline/redteam/report/redteam_report.json）",
+      "derive": {
+        "kind": "json_field",
+        "path": "offline/redteam/report/redteam_report.json",
+        "field": "cases_total"
+      },
+      "format": "int",
+      "cited_in": [
+        {
+          "file": "docs/redteam.md",
+          "pattern": "红队·用例总数 \\| (\\d+)"
+        }
+      ]
+    },
+    {
+      "id": "redteam_leaks",
+      "unit": "红队泄漏条数（benchmark 对称的硬 0：任何一条即 FAIL）",
+      "derive": {
+        "kind": "json_field",
+        "path": "offline/redteam/report/redteam_report.json",
+        "field": "leaks"
+      },
+      "format": "int",
+      "cited_in": [
+        {
+          "file": "docs/redteam.md",
+          "pattern": "红队·泄漏 \\| (\\d+)"
+        }
+      ]
     }
   ]
 }

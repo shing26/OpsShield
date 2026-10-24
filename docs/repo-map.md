@@ -68,6 +68,7 @@
 | --- | --- |
 | `quickstart.sh` | 公开入口：一键冷启动（预检 buildx / compose 插件） |
 | `run.sh` | 开发态起服务（加载 `.env` + `mvn spring-boot:run`，可透传 `--opspilot.ingest=true`） |
+`redteam/runner.py` + `cases/` | **红队对抗套件**（6 类 21 用例，含 MCP 端到端攻击面）：manifest 防删用例、泄漏硬 0 判据、独立 runner；对外页 docs/redteam.md |
 `mcp_server.py` | **MCP Server（stdio，stdlib-only，ADR-0027）**：把检索/可信问答/网关状态暴露为 3 个只读 MCP 工具；以配置用户登录网关，全部护栏留在网关侧；stdout 只出协议帧（强制 UTF-8） |
 `mcp_smoke.py` | MCP 冒烟客户端：对真网关走 initialize→tools/list→tools/call 全链路，验收/排障第一入口（`--ask` 才消耗配额） |
 | `start_gateway.sh` | **jar 形态起网关（本机生产/演示形态，OPS §6 形态取舍）**：端口占用预检并点名占用者 → jar 缺失拒启 → 轮询到日志 `Started` 才算成（不信 `/actuator/health`，它可能属于别的项目）。覆盖口 `SERVER_PORT`（默认 8081）/ `GATEWAY_HEAP` |
