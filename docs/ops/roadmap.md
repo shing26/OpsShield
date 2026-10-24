@@ -96,6 +96,7 @@ Prompt 注入 / 越狱 / 跨租户探测 / 密级绕过攻击用例库；每次�
 | 可观测/告警接线 | `aiops_*` 指标 + Alertmanager 双出口 + DependencyMetrics 已落地 |
 | 备份恢复 | 计划任务 + `restore_drill.sh` + MinIO Object Lock 副本 |
 | 反馈闭环 | `/api/v1/copilot/feedback` 端点已存在（排序回流待接） |
+| 受控行动契约（中期 #5） | **ADR-0028 设计定稿（2026-10-25）**：分级进契约 + 双确认判定 + 人确认状态机 + 签名派发；实现顺序固定——红队操作面用例先行；规格见 [l1-action-contract.md](l1-action-contract.md) |
 | 评测基准 | **本轮实现**：一键基准 + CI 回归门禁 + **公开脱敏数据集**（43 文件审计 0 命中、sha256 指纹清单、CC BY 4.0）+ 对外基准页 [docs/benchmark.md](benchmark.md)（数字进 doc_numbers 门禁） |
 | 轻量 CLI | `scripts/user_admin.sh` 等已有；面板已有 Ops Console |
 | 红队化 | 越权/注入用例在测试中，未产品化为独立套件 |
