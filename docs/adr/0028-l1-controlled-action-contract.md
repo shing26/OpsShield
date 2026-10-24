@@ -53,6 +53,28 @@ Agent 说"怎么办"之后，值班人还要手工敲一遍 kubectl rollout rest
 - 已知保守偏差：四层判定的词法保守性对 L1 同样生效（合法写用法会被拒），
   与 ADR-0017 的取舍同源——"少给一条"好过"给错一条"。
 
+## 评审增补（2026-10-25，设计评审定稿）
+
+三个开放问题裁决：**面板确认优先**（已认证会话强绑定身份、审计链短、零外部回调面）、
+**通用 webhook + reference verifier**（约 50 行验签器 = 对外资产 + 红队靶子，证明契约可移植）、
+**一次性 token + 短 TTL + 已认证会话绑定，不绑 IP**（URL 只定位不承载权限）。
+
+六条实现前必须定死的增补（全部并入规格 v1.1）：
+
+1. **confirmer ≠ proposer 硬守卫**：confirmed 的 actor 必须与 proposed 的 actor 是不同
+   principal，且有 action:confirm 权限——防被注入的 Agent 自提案自确认；
+2. **幂等共享存储**：op_id 键持久化 + 共享后端（H2 起步，多副本迁 Redis/Postgres），
+   TTL >= dispatch 过期 x2，重复 dispatch 返回 409；
+3. **派发失败补偿**：failed 不可自动重试（自动重试 = 绕过人确认的后门）；新 op_id 重新
+   提案 + 重新人确认，旧 op_id 进 WORM 永久留痕；
+4. **reference verifier 约束**：constant-time 比较、固定校验顺序签名→哈希→过期→幂等、
+   可区分状态码 401/422/410/409；verifier 本身入库带 sha256 清单（防改靶子让红队变绿）；
+5. **WORM 门禁**：任一 L1 事件缺 WORM 记录即 FAIL（可从 WORM 重放整条链取证）；
+6. **灰度 label 白名单**：目标资源带指定 label 才允许 L1，防手滑重启整个 namespace。
+
+执行顺序修正：reference verifier 与签名派发**同步交付**（verifier 既是派发的验收目标
+也是红队靶子，先派发后写 verifier 会让红队无靶可打）。
+
 ## 验收路径（顺序固定）
 
 1. 红队扩写操作面用例（重放/过期/篡改/越权确认/注入不自动确认）→ 全过入 CI；

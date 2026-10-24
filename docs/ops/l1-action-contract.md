@@ -1,14 +1,25 @@
-# L1 受控行动契约——设计规格（ADR-0028 配套）
+# L1 受控行动契约——设计规格 v1.1（ADR-0028 配套，已含评审裁决）
 
 > 决策与备选取舍见 [ADR-0028](../adr/0028-l1-controlled-action-contract.md)；
-> 本页是实现规格：schema、状态机、时序、审计事件、红队扩写清单与开放问题。
-> **当前状态：设计定稿待评审；实现未开始。**
+> **2026-10-25 设计评审定稿**：三个开放问题已裁决（§0），六条评审增补已并入（标 ⛳）。
+> **当前状态：设计定稿；实现顺序见 §9。**
+
+## 0. 三个开放问题的裁决（2026-10-25）
+
+| # | 问题 | 裁决 | 关键约束 |
+|---|---|---|---|
+| 1 | 确认入口 | **面板优先**，飞书 v1.1 | 面板在已认证会话内点击：确认事件与身份强绑定、审计链短、零外部回调面。飞书卡片会引入回调伪造/重放/跨租户新攻击面——L1 必须先证明干净 |
+| 2 | 自动化对接 | **通用 webhook + reference verifier**，Rundeck v1.1 | 验收目标是"对方验签通过、重放/篡改/过期被拒"，与 echo/Rundeck 无关；reference verifier（约 50 行）本身是对外资产 + 红队靶子，证明契约可移植 |
+| 3 | 确认 URL | **一次性 token + 短 TTL（5–10min）+ 已认证会话绑定；不绑 IP** | capability URL 只定位不承载权限：泄露后攻击者没有已认证会话点不下确认。绑 IP 在运维场景误伤（4G/WiFi 切换）大于收益。确认页必须展示 op_id + payload 哈希 + 命令原文 + 影响范围 + 倒计时，防手滑 |
+
+Q3 隐含要求：URL token 与 op_id 一一对应、**消费即焚**；确认会话用户须与 propose 时身份匹配——
+跨租户代确认需额外授权并单独审计事件（`action_confirmed_proxy`）。
 
 ## 1. 契约 schema（草案）
 
 ~~~json
 {
-  "op_id": "act_01HZX...",            // 幂等键（ULID），防重放
+  "op_id": "act_01HZX...",            // 幂等键（ULID），防重放；存储后端见 §4 ⛳
   "action_class": "L1-write-low",      // L0-read | L1-write-low（L2 预留）
   "n": 3, "step": "恢复动作",          // 与 L0 Action 同源
   "command": "kubectl rollout restart deployment/order-api -n prod",
@@ -16,25 +27,27 @@
   "ref": "rb-030::恢复动作",           // 逐字来源（不变式：command ⊆ ref chunk 原文）
   "breadcrumb": "...", "service": "order-service",
   "auth_level": 3,                      // 文档块密级
-  "proposed_by": "sre-full",           // 提案人（Agent 以该用户身份检索命中）
+  "proposed_by": "sre-full",           // 提案人
   "proposed_at": "...",
   "state": "proposed",
   "confirm": {
     "required": true,
-    "window_s": 900,                    // 确认窗口：15 分钟过期
-    "confirmed_by": null, "confirmed_at": null
+    "window_s": 900,                    // 确认窗口 15 分钟
+    "confirm_token": "一次性，消费即焚，TTL=窗口",
+    "confirmed_by": null, "confirmed_at": null   // ⛳ 必须 ≠ proposed_by principal
   },
   "dispatch": {                          // confirmed 后才生成
-    "target": "webhook",               // v1 通用 webhook；后续可枚举 rundeck/argo
-    "payload_sha256": "...",           // 内容绑定：改一个字符验签即失败
-    "hmac": "...",                     // HMAC-SHA256(OP_ID+SHA+EXP, DISPATCH_KEY)
+    "target": "webhook",
+    "payload_sha256": "...",
+    "hmac": "...",                     // constant-time 验签（§6）
     "expires_at": "...",
-    "result": null                      // 自动化系统回调回填
+    "idempotency_key": "op_id",        // ⛳ 共享存储，重复 dispatch 返回 409
+    "result": null
   }
 }
 ~~~
 
-## 2. 状态机
+## 2. 状态机（含 ⛳ confirmer 守卫与补偿语义）
 
 ~~~
 proposed ──confirm(人)──> confirmed ──dispatch(签名签发)──> dispatched ──callback──> executed|failed
@@ -44,11 +57,17 @@ proposed ──confirm(人)──> confirmed ──dispatch(签名签发)──>
 
 推进规则：
 
-- `proposed → confirmed`：**仅**人经确认入口（面板按钮/IM 卡片按钮）；
-  Agent/MCP/告警桥没有任何端点能推进此状态——构造保证，不是过滤；
+- `proposed → confirmed`：**仅**人经面板确认入口（已认证会话 + 一次性 token）；
+  Agent/MCP/告警桥没有任何端点能推进此状态——构造保证；
+- ⛳ **confirmer ≠ proposer 硬守卫**：`confirmed` 事件的 actor 必须与 `proposed` 事件的
+  actor 是**不同 principal**，且 confirmer 必须持有对应租户的 `action:confirm` 权限。
+  被注入的 Agent 自己 propose 自己确认（哪怕有独立凭据）在此被状态机直接拒绝；
+- ⛳ 跨租户代确认（值班 manager）：单独审计事件 `action_confirmed_proxy`，不复用普通确认事件；
 - `confirmed → dispatched`：系统自动（签名 + webhook），无需人再操作；
-- 窗口（900s）内未确认 → expired；confirmed 后未签发 → revocable；
-- 终态不可逆；同 op_id 一生只允许一次成功签发（幂等）。
+- ⛳ **dispatch 失败的补偿语义**：`dispatched → failed` 后**不可自动重试**（自动重试 =
+  绕过人确认的后门）；重新执行必须走**新 op_id 重新提案 + 重新人确认**；
+  旧 op_id 连同失败原因进 WORM 永久留痕；
+- 同 op_id 重复 confirm/dispatch → **409**（幂等语义，存储后端见 §4）。
 
 ## 3. 判定（ControlledCommandPolicy，伪码）
 
@@ -70,59 +89,92 @@ def classify(command_text, chunk_meta):
 要点：**L1 不是 L0 的放宽，是另一条更窄的通道**——注入判定两层全过是共同前提；
 文档声明解决"这条写命令是有意的恢复动作"的语义确认；前缀闭集解决"写到什么程度"的边界。
 
-## 4. 端点与时序
+## 4. 幂等与确认存储（⛳ 评审增补）
+
+- op_id 幂等键需要**持久化 + 共享后端**：单机 H2 起步，多副本部署迁 Redis/Postgres
+  （表结构按可迁移设计）；分布式下没有共享幂等存储，重放防护就是纸糊的；
+- TTL：**≥ dispatch 过期时间 × 2**（过期窗口之后仍能识别重放）；
+- 语义：同一 op_id 重复 confirm / 重复 dispatch → **409 CONFLICT**（区别于其他失败码）；
+- 确认一次性 token：与 op_id 一一对应、消费即焚——同样进该存储（原子消费，防并发双击）。
+
+## 5. 端点与时序
 
 ~~~
 Agent(MCP propose_action / 告警桥)
-  │ POST /api/v1/copilot/actions/propose   （L≥2 用户；body 含 op 上下文+ref）
+  │ POST /api/v1/copilot/actions/propose   （L>=2 用户；body 含 op 上下文+ref）
   ▼
-OpsShield：判定 classify → proposed 落库 → 审计 ev=action_proposed
-  │ 返回 {op_id, confirm_url, expires_at}
+OpsShield：classify → proposed 落库 → 审计 ev=action_proposed（进 WORM ⛳）
+  │ 返回 {op_id, confirm_url(一次性 token), expires_at}
   ▼
-值班人（面板/IM 卡片）──POST /api/v1/copilot/actions/confirm──> confirmed（ev=action_confirmed）
+值班人（面板，已认证会话 + 一次性 token）──confirm──> confirmed（ev=action_confirmed，进 WORM ⛳）
   ▼
-OpsShield：生成 dispatch payload + HMAC → POST 自动化系统 webhook（ev=action_dispatched）
+OpsShield：payload + HMAC → POST 自动化系统 webhook（ev=action_dispatched，进 WORM ⛳）
   ▼
-自动化系统：验签 → 执行 → POST /api/v1/integrations/executor/callback（ev=action_result）
+自动化系统：reference verifier 验签（§6）→ 执行 → callback（ev=action_result，进 WORM ⛳）
 ~~~
 
-安全细节：
+确认页必须展示：op_id + payload 哈希 + 命令原文 + 影响范围 + 倒计时（防手滑）。
 
-- **验签**：自动化侧用共享 DISPATCH_KEY 验 HMAC（op_id+payload_sha256+expires_at）；
-  payload 任一字符被改、过期、op_id 重放，验签皆失败——OpsShield 不需要信任网络；
-- **确认凭据**：confirm 端点要求确认人自己的 JWT（非提案 token）；
-  提案人与确认人可以是同一人（小团队现实），但审计分字段记录，事后可查"自提自确"率；
-- **频控**：confirm 端点挂独立限流（确认疲劳是真实风险，泄漏的确认比泄漏的检索危险得多）。
+## 6. reference verifier（⛳ 红队靶子 + 对外资产，与派发同步交付）
 
-## 5. 审计事件（ev=）
+约 50 行的独立验签器（任何自动化系统侧可嵌入的参考实现）：
+
+- **constant-time 比较**：HMAC 用 `hmac.compare_digest`，绝不用 `==`；
+- **校验顺序固定**，任一失败返回**可区分状态码**（红队据此分辨打穿到哪一层）：
+  1. 签名不符 → **401**；
+  2. payload 哈希 ≠ 内容 → **422**；
+  3. 过期 → **410**；
+  4. op_id 已签发（幂等） → **409**；
+- **verifier 本身入库**（offline/ 下与 dataset_manifest 同构的 sha256 清单）：
+  防"改 verifier 让红队变绿"——verifier 是靶子，靶子自己必须可验篡改。
+
+## 7. 审计与 WORM（⛳ 门禁增补）
+
+- L1 全部事件（proposed/confirmed/dispatched/failed/expired）+ verifier 验签结果
+  都进 AuditService（SHA-256 链）→ WORM 副本；
+- **新增门禁：任一 L1 事件缺 WORM 记录即 FAIL**（出事后能从 WORM 重放整条链取证）；
+- 跨租户代确认单独事件类型 `action_confirmed_proxy`。
+
+## 8. 审计事件（ev=）
 
 | 事件 | 关键字段 |
 |---|---|
 | `action_proposed` | op_id/ref/command(逐字)/action_class/proposed_by |
-| `action_confirmed` | op_id/confirmed_by/latency_ms（提案→确认耗时，看确认疲劳） |
+| `action_confirmed` | op_id/confirmed_by(≠proposed_by)/latency_ms |
+| `action_confirmed_proxy` | op_id/确认人/被代确认人（跨租户代确认专用） |
 | `action_expired` | op_id |
 | `action_dispatched` | op_id/target/payload_sha256 |
-| `action_result` | op_id/exit_status/duration_ms（自动化回调） |
+| `action_result` | op_id/exit_status/duration_ms |
 | `action_rejected` | op_id/reject_stage(classify|verify)/reason |
+| `action_verify_rejected` | op_id/阶段(401|422|410|409)（verifier 侧） |
 
 全部走既有 AuditService（SHA-256 链 + WORM 副本）——L1 的每一步都在不可变审计里。
 
-## 6. 红队扩写清单（实现前必须先行合入并全过）
+## 9. 实现顺序（⛔ 评审修正：verifier 与派发**同步交付**）
+
+~~~
+红队操作面用例先行写好（含 verifier 靶子用例：重放/篡改/过期——verifier 可后到）
+  → schema/状态机/双白名单（含 confirmer≠proposer 守卫、幂等共享存储）
+  → 确认入口（面板；一次性 token + 会话绑定）
+  → 签名派发 + reference verifier（同步——verifier 既是派发的验收目标也是红队靶子）
+  → 灰度：rollout restart 一族 + ⛳ 目标资源 label 白名单
+~~~
+
+⛳ **灰度额外收敛**：目标资源必须带指定 label（如 `opshield-l1=true`）才允许 L1 契约——
+避免一个手滑重启整个 namespace。成本极低、收益极高。
+
+## 10. 红队扩写清单（实现前必须先行合入并全过）
 
 | 类别 | 用例 | 判据 |
 |---|---|---|
-| 重放 | 同 op_id 二次 confirm/dispatch | 拒（幂等） |
-| 过期 | 窗口外 confirm / expires_at 外验签 | 拒 |
-| 篡改 | 确认后 payload 改一字符 | 验签失败 |
-| 越权确认 | L1 用户 confirm L3 文档的提案 | 拒 |
-| 注入不自动确认 | 注入 prompt 直接打 propose/confirm 链路 | 永远停在 proposed，无人在环推不动 |
+| 重放 | 同 op_id 二次 confirm/dispatch | 409 |
+| 过期 | 窗口外 confirm / expires_at 外验签 | 拒（confirm=4xx / verify=410） |
+| 篡改 | 确认后 payload 改一字符 | verify 422 |
+| 签名 | 错 key 签名 | verify 401 |
+| 越权确认 | 同 principal 自确认 / L1 用户 confirm L3 提案 | 状态机拒 |
+| 注入不自动确认 | 注入 prompt 直接打 propose/confirm 链路 | 永远停在 proposed（无人在环推不动） |
 | 契约注入 | 语料 L1 小节里藏第二命令/管道 | 四层判定拒；只放白名单前缀本体 |
 
-## 7. 开放问题（实现前须裁决）
+## 11. 开放问题 → 已全部裁决（2026-10-25）
 
-1. **确认入口**：v1 先面板按钮还是先 IM（飞书卡片）？IM 更贴值班动线，但要多一跳凭据；
-2. **自动化系统对接顺序**：先通用 webhook（沙箱用 echo server）还是直接绑定 Rundeck？
-3. **状态机存储**：单机 H2 够（与 users 同库）；多副本时迁 Postgres——现在建表就按可迁移设计；
-4. **L1 白名单治理**：白名单本身入库版本化，变更走 ADR（哪怕一行）；
-5. **MCP propose_action 的返回形态**：确认 URL 放 tool 结果文本里给 Agent 转述给人——
-   Agent 拿不到确认凭据，但 URL 本身是"能力"——是否绑 IP/一次性？
+~~确认入口 / 对接顺序 / 确认 URL~~ → 见 §0 裁决表。新增开放问题（若有）在此追加。
