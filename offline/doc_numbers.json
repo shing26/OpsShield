@@ -547,6 +547,22 @@
           "pattern": "红队·泄漏 \\| (\\d+)"
         }
       ]
+    },
+    {
+      "id": "redteam_valid",
+      "unit": "红队实跑通过数（valid < total 即红：用例失效不得静默）",
+      "derive": {
+        "kind": "json_field",
+        "path": "offline/redteam/report/redteam_report.json",
+        "field": "pass"
+      },
+      "format": "int",
+      "cited_in": [
+        {
+          "file": "docs/redteam.md",
+          "pattern": "红队·通过 \\| (\\d+)"
+        }
+      ]
     }
   ]
 }

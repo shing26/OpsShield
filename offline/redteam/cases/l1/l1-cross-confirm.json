@@ -1,13 +1,11 @@
 {
   "id": "l1-cross-confirm",
-  "category": "l1_pending",
-  "title": "跨租户代确认须独立审计事件",
+  "category": "l1",
+  "title": "跨租户确认被拒（正向：本租户确认成功）",
   "transport": "l1",
-  "requires": "L1-implementation",
-  "expect": "confirm_proxy_audited",
+  "expect": "l1_cross_confirm",
   "attack": {
-    "kind": "proxy_confirm",
-    "proposer": "sre-full",
-    "confirmer": "ops-manager-acme"
+    "kind": "cross_confirm",
+    "command": "kubectl rollout restart deployment/inventory-api -n prod"
   }
 }

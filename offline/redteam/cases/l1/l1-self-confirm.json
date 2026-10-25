@@ -1,13 +1,11 @@
 {
   "id": "l1-self-confirm",
-  "category": "l1_pending",
-  "title": "同 principal 自确认必须被状态机拒",
+  "category": "l1",
+  "title": "同 principal 自确认被拒且不写状态（正向：不同人确认成功）",
   "transport": "l1",
-  "requires": "L1-implementation",
-  "expect": "confirm_self_reject",
+  "expect": "l1_self_confirm",
   "attack": {
     "kind": "self_confirm",
-    "proposer": "sre-full",
-    "confirmer": "sre-full"
+    "command": "kubectl rollout restart deployment/inventory-api -n prod"
   }
 }
