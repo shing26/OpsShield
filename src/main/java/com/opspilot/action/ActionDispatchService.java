@@ -67,6 +67,13 @@ public class ActionDispatchService {
         return l1Enabled && dispatchKey != null && webhookUrl != null;
     }
 
+    /** 回调豁免 l1 开关（2026-10-25 评裁决 1·选 A）：开关只管 propose/confirm/dispatch
+     * 三个**发起入口**；回调是收尾通道——误伤会让在途 dispatched 永久悬挂、审计链断裂。
+     * 回调的安全边界 = HMAC + 时间窗 + nonce + 状态机，不靠开关。 */
+    public boolean callbackEnabled() {
+        return dispatchKey != null;
+    }
+
     public boolean l1Enabled() {
         return l1Enabled;
     }
@@ -179,18 +186,19 @@ public class ActionDispatchService {
         return l.isEmpty() ? "absent" : l.get(0);
     }
 
-    /** 回调时间窗（±300s）与 nonce 一生一次（契约 2）。 */
-    public boolean callbackFresh(long ts, String nonce) {
+    /** 回调时间窗与 nonce（契约 2）。→ null=通过；否则返回分层 reject_reason：
+     * ts_out_of_window / nonce_reused——两个 401 打不同层，红队按 reason 断言防假绿。 */
+    public String callbackFreshnessReason(long ts, String nonce) {
         long now = Instant.now(clock).getEpochSecond();
         if (Math.abs(now - ts) > CALLBACK_WINDOW_S) {
-            return false;
+            return "ts_out_of_window";
         }
         try {
             jdbc.update("INSERT INTO dispatch_nonces (nonce, seen_at) VALUES (?, ?)",
                     nonce, java.sql.Timestamp.from(Instant.now(clock)));
-            return true;                                      // 首见即占坑
+            return null;                                      // 首见即占坑
         } catch (org.springframework.dao.DuplicateKeyException e) {
-            return false;                                     // nonce 重放
+            return "nonce_reused";                            // nonce 重放
         }
     }
 

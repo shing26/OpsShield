@@ -99,6 +99,14 @@ def classify(command_text, chunk_meta):
 
 另：灰度总开关 `opspilot.l1.enabled` **默认 false**（红队全绿前任何环境不默认开）；webhook connect 3s / read 5s、不跟随重定向（3xx 即 failed）。
 
+### 实现层再钉三钉（2026-10-25 第二轮评审）
+
+| # | 裁决 | 落点 |
+|---|---|---|
+| callback 开关作用域 | **选 A：回调完全豁免 l1.enabled** | 开关只管 propose/confirm/dispatch 三个**发起入口**；回调是收尾通道——误伤会让在途 dispatched 永久悬挂、审计链断。回调安全边界 = HMAC + 时间窗 + nonce + 状态机。有测试钉死（关闭开关后 dispatched 仍能落 executed） |
+| 红队用例数 | **7 条**（非 5） | 状态机/权限 5 条 + verifier 层 2 条（nonce 重放、ts 超窗）。两个 401 打不同层：回调返回分层 `reject_reason`（bad_signature / ts_out_of_window / nonce_reused），红队按 reason 断言防假绿 |
+| 守卫顺序 | l1_disabled → self_confirm → confirmer_not_authorized → state → token → CAS | **前三步不写状态**（只审计）——否则审计链出现"合法 confirmed 但无人派发"。有测试：自确认被拒后 op 停在 proposed，不同 principal 仍可确认（正向对照） |
+
 ### 实现层四决断（2026-10-25，契约层的顺序/作用域补钉）
 
 | # | 决断 | 落点 |

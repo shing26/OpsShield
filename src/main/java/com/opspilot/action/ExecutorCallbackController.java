@@ -33,9 +33,9 @@ public class ExecutorCallbackController {
     @PostMapping("/api/v1/integrations/executor/callback")
     public ResponseEntity<Map<String, String>> callback(@RequestBody CallbackReq req,
             @RequestHeader(value = "X-Dispatch-Signature", required = false) String sig) {
-        if (!dispatch.dispatchEnabled()) {
+        if (!dispatch.callbackEnabled()) {          // 豁免 l1 开关：只有缺 key 才 503
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                    .body(Map.of("code", "DISPATCH_DISABLED"));
+                    .body(Map.of("code", "DISPATCH_KEY_MISSING"));
         }
         if (req.opId() == null || req.ts() == null || req.nonce() == null || req.status() == null) {
             return ResponseEntity.badRequest().body(Map.of("code", "MISSING_FIELDS"));
@@ -47,12 +47,13 @@ public class ExecutorCallbackController {
         if (sig == null || !MessageDigest.isEqual(
                 sig.getBytes(StandardCharsets.UTF_8), expected.getBytes(StandardCharsets.UTF_8))) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(Map.of("code", "BAD_SIGNATURE"));
+                    .body(Map.of("code", "UNAUTHORIZED", "reject_reason", "bad_signature"));
         }
-        // 2) 时间窗 + nonce 一生一次
-        if (!dispatch.callbackFresh(req.ts(), req.nonce())) {
+        // 2) 时间窗 + nonce 一生一次（分层 reject_reason：两个 401 打不同层）
+        String reason = dispatch.callbackFreshnessReason(req.ts(), req.nonce());
+        if (reason != null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(Map.of("code", "STALE_OR_REPLAYED"));
+                    .body(Map.of("code", "UNAUTHORIZED", "reject_reason", reason));
         }
         // 3) 终态（契约 1·选 A）：首次定终态；后续 409 + 冲突审计（不静默）
         boolean first = dispatch.callback(req.opId(), req.status(), req.detail());

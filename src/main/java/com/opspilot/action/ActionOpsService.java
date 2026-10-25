@@ -101,12 +101,9 @@ public class ActionOpsService {
         var row = jdbc.queryForMap(
                 "SELECT state, proposed_by, tenant, auth_level, confirm_token_hash, confirm_expires_at, "
                 + "command, ref FROM action_ops WHERE op_id = ?", opId);
-        if (!"proposed".equals(row.get("state"))) {
-            throw rejection(confirmer, opId, "state_" + row.get("state"),
-                    "op 状态已是 " + row.get("state") + "（不可推进）");
-        }
-        if (!confirmer.sub().equals(row.get("proposed_by"))) { /* 不同 principal——这是核心守卫 */ }
-        else {
+        // 守卫顺序钉死（2026-10-25 评裁决 3）：身份守卫在状态检查之前，且都不写状态——
+        // 否则审计链会出现"合法 confirmed 但无人派发"的诡异记录。
+        if (confirmer.sub().equals(row.get("proposed_by"))) {   // 守卫 2：不同 principal
             throw rejection(confirmer, opId, "self_confirm",
                     "确认人不得与提案人相同（防 Agent 自提案自确认）");
         }
@@ -114,6 +111,10 @@ public class ActionOpsService {
                 || confirmer.authLevel() < ((Number) row.get("auth_level")).intValue()) {
             throw rejection(confirmer, opId, "confirmer_not_authorized",
                     "确认人租户或密级不匹配");
+        }
+        if (!"proposed".equals(row.get("state"))) {             // 守卫 4：状态机位置
+            throw rejection(confirmer, opId, "state_" + row.get("state"),
+                    "op 状态已是 " + row.get("state") + "（不可推进）");
         }
         String storedHash = (String) row.get("confirm_token_hash");
         if (storedHash == null || !MessageDigest.isEqual(

@@ -100,13 +100,15 @@ class ActionDispatchServiceTest {
     }
 
     @Test
-    void callbackFreshWindowAndNonceReplay() {
+    void callbackFreshnessReasonIsLayered() {
         long now = java.time.Instant.now().getEpochSecond();
         String nonce = "n-" + System.nanoTime();
-        assertTrue(dispatch.callbackFresh(now, nonce), "窗口内首见 nonce 应通过");
-        assertFalse(dispatch.callbackFresh(now, nonce), "同 nonce 二次必须拒（重放）");
-        assertFalse(dispatch.callbackFresh(now - 400, "n-old-" + System.nanoTime()),
-                "超出 ±300s 时间窗必须拒");
+        assertNull(dispatch.callbackFreshnessReason(now, nonce), "窗口内首见 nonce 应通过");
+        assertEquals("nonce_reused", dispatch.callbackFreshnessReason(now, nonce),
+                "同 nonce 二次必须拒且 reason 分层（红队用例 6 断言点）");
+        assertEquals("ts_out_of_window",
+                dispatch.callbackFreshnessReason(now - 400, "n-old-" + System.nanoTime()),
+                "超 ±300s 必须拒且 reason 分层（红队用例 7 断言点）");
     }
 
     @Test
@@ -150,8 +152,37 @@ class ActionDispatchServiceTest {
                 new ExecutorCallbackController.CallbackReq("act_x", "executed", "d", now, nonce),
                 "deadbeef");                                     // 坏签名
         assertEquals(401, resp.getStatusCode().value());
-        assertTrue(dispatch.callbackFresh(now, nonce),
+        assertNull(dispatch.callbackFreshnessReason(now, nonce),
                 "坏签名请求不得消耗 nonce——同 nonce 首个合法请求仍应通过");
+    }
+
+    /** 裁决 1·A：callback 豁免 l1 开关——l1.enabled=false 时在途 dispatched 仍能落终态。 */
+    @Test
+    void callbackExemptFromL1Switch() {
+        var jdbc = ctx.getBean(org.springframework.jdbc.core.JdbcTemplate.class);
+        // 直接构造"开关关闭但 key 在"的派发服务（回调用），并把一个 op 置为 dispatched
+        var disabled = new ActionDispatchService(jdbc, "bd".repeat(32), null, false);
+        assertFalse(disabled.dispatchEnabled(), "发起入口全关");
+        assertTrue(disabled.callbackEnabled(), "回调通道豁免开关");
+        loadL1Chunk();
+        var p = ops.propose(PROPOSER, "rb-l1d::恢复动作", CMD);
+        jdbc.update("UPDATE action_ops SET state='dispatched' WHERE op_id=?", p.opId());
+        assertTrue(disabled.callback(p.opId(), "executed", "exit 0"),
+                "关闭开关后已 dispatched 的 op 仍能回调落 executed——收尾通道不被发起开关误伤");
+    }
+
+    /** 守卫顺序：自确认被拒后 op 停在 proposed（无 confirmed 事件、无状态写入）。 */
+    @Test
+    void selfConfirmRejectionWritesNoState() {
+        loadL1Chunk();
+        var p = ops.propose(PROPOSER, "rb-l1d::恢复动作", CMD);
+        var e = assertThrows(ActionOpsService.ActionRejectedException.class,
+                () -> ops.confirm(PROPOSER, p.opId(), p.confirmToken()));
+        assertEquals("self_confirm", e.stage);
+        assertEquals("proposed", ops.status(PROPOSER, p.opId()).state(),
+                "身份守卫不写状态——被拒后仍是 proposed，可由合法确认人完成");
+        // 正向对照：不同 principal 确认仍成功（通路活着，不是兜底 403）
+        assertEquals("dispatched", ops.confirm(CONFIRMER, p.opId(), p.confirmToken()).state());
     }
 
     /** 决断 3：confirm 同步完成派发——返回态即终态，不存在"确认了但不知派没派"的中间态。 */
