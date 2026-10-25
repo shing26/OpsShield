@@ -116,6 +116,30 @@ public final class ControlledCommandPolicy {
         return args.length == 1 && SYSTEMCTL_UNITS.contains(args[0]);
     }
 
+    /**
+     * 抽取 L1 命令的目标（灰度白名单用）：kubectl → deployment/order-api；systemctl → unit。
+     * 抽不出返回 null（调用方按"不在白名单"处理 = 拒）。
+     */
+    public static String targetOf(String command) {
+        if (command == null || command.isBlank()) {
+            return null;
+        }
+        String lower = command.trim().toLowerCase(Locale.ROOT);
+        String[] args = lower.split("\\s+");
+        if (lower.startsWith("kubectl")) {
+            for (int i = 3; i < args.length; i++) {          // kubectl rollout <verb> <target>
+                if (!args[i].startsWith("-") && isPlainToken(args[i])) {
+                    return args[i];
+                }
+            }
+            return null;
+        }
+        if (lower.startsWith("systemctl restart")) {
+            return args.length == 3 && isPlainToken(args[2]) ? args[2] : null;
+        }
+        return null;
+    }
+
     /** 资源名/namespace 的安全字符集：小写字母、数字、点、斜杠、连字符。 */
     private static boolean isPlainToken(String token) {
         return token.matches("[a-z0-9][a-z0-9./-]*");

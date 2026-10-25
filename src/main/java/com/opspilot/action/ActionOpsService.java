@@ -10,6 +10,7 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import com.opspilot.auth.UserContext;
@@ -40,12 +41,21 @@ public class ActionOpsService {
     private final AuditService audit;
     private final ActionDispatchService dispatch;   // confirm 成功后自动派发（未启用则停在 confirmed）
 
+    /** 灰度目标白名单（2026-10-25 评裁决 4·A）：配置定义而非 K8s label——
+     * 任何有 RBAC 的人都能打 label，白名单形同虚设；配置变更走 OpsShield 审计。
+     * 空 = 全拒（fail-closed：写面灰度默认不许任何目标）。 */
+    private final java.util.Set<String> allowedTargets;
+
     public ActionOpsService(JdbcTemplate jdbc, InMemoryIndex index, AuditService audit,
-                            ActionDispatchService dispatch) {
+                            ActionDispatchService dispatch,
+                            @Value("${opspilot.l1.allowed-targets:}") String allowedTargetsCsv) {
         this.jdbc = jdbc;
         this.index = index;
         this.audit = audit;
         this.dispatch = dispatch;
+        this.allowedTargets = java.util.Arrays.stream(allowedTargetsCsv.split(","))
+                .map(String::trim).filter(t -> !t.isEmpty())
+                .collect(java.util.stream.Collectors.toUnmodifiableSet());
     }
 
     public record ProposeResult(String opId, String confirmToken, String expiresAt) {}
@@ -74,6 +84,11 @@ public class ActionOpsService {
         if (verdict != ControlledCommandPolicy.Verdict.L1_WRITE_LOW) {
             reject(proposer, chunkId, "policy_" + verdict.name().toLowerCase(Locale.ROOT),
                     "判定为 " + verdict + "，非 L1-write-low");
+        }
+        String target = ControlledCommandPolicy.targetOf(command);
+        if (target == null || !allowedTargets.contains(target)) {
+            reject(proposer, chunkId, "target_not_allowed",
+                    "目标 " + target + " 不在灰度白名单（opspilot.l1.allowed-targets）");
         }
         String opId = "act_" + HexFormat.of().formatHex(random(10));
         byte[] tokenBytes = random(32);

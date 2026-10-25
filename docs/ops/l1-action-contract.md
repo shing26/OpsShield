@@ -177,6 +177,16 @@ OpsShield：payload + HMAC → POST 自动化系统 webhook（ev=action_dispatch
 
 全部走既有 AuditService（SHA-256 链 + WORM 副本）——L1 的每一步都在不可变审计里。
 
+## 8.5 灰度配置（2026-10-25 落地，默认全关）
+
+| 项 | 落点 | 语义 |
+|---|---|---|
+| 总开关 | `OPSPILOT_L1_ENABLED` 默认 **false** | propose/confirm/dispatch 全拒；**回调豁免**（在途 op 仍收尾） |
+| 目标白名单 | `OPSPILOT_L1_ALLOWEDTARGETS`（配置定义） | **选 A**：不用 K8s label（谁都能打，形同虚设）；改白名单走 OpsShield 配置审计。**空=全拒**（fail-closed）；命令目标由 `ControlledCommandPolicy.targetOf` 抽取 |
+| 派发 webhook | `OPSPILOT_L1_DISPATCHWEBHOOK` | 未配置=派发挂起在 confirmed（不假装已派发） |
+| 密钥卫生 | `OPSPILOT_DISPATCH_KEY_FILE` 优先 | 生产读挂载 Secret（K8s/600 文件）；环境变量明文仅限开发 |
+| 密钥轮换 | `OPSPILOT_DISPATCH_KEY_PREVIOUS_FILE` | 旧 key **只验不签**，窗口内回调不断流；轮换完成后清空 |
+
 ## 9. 实现顺序（⛔ 评审修正：verifier 与派发**同步交付**）
 
 ~~~

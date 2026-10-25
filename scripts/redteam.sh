@@ -75,6 +75,7 @@ STORAGE_MODE=memory DASHSCOPE_MODE=mock SERVER_PORT="$PORT" SERVER_ADDRESS=127.0
 JWT_SECRET="$(head -c 48 /dev/urandom | base64 | tr -dc a-zA-Z0-9)" DASHSCOPE_API_KEY="" \
 OPSPILOT_L1_ENABLED=true OPSPILOT_DISPATCH_KEY="$DISPATCH_KEY" \
 OPSPILOT_L1_DISPATCHWEBHOOK="http://127.0.0.1:18104/exec" \
+OPSPILOT_L1_ALLOWEDTARGETS="deployment/inventory-api" \
 "$JAVA_BIN" -Xms128m -Xmx512m -jar app.jar >app.log 2>&1 &
 PID=$!
 cd "$ROOT"

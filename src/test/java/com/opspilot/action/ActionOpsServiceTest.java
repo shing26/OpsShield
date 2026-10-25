@@ -16,6 +16,7 @@ import static org.junit.jupiter.api.Assertions.*;
         "opspilot.storage.mode=memory", "opspilot.dashscope.mode=mock",
         "opspilot.probes.enabled=false",
         "opspilot.l1.enabled=true",
+        "opspilot.l1.allowed-targets=deployment/order-api,deployment/inventory-api",
         "spring.datasource.url=jdbc:h2:mem:actionops;MODE=PostgreSQL;DB_CLOSE_DELAY=-1",
         "spring.datasource.username=sa", "spring.datasource.password=",
         "spring.flyway.clean-disabled=true"})
@@ -81,6 +82,20 @@ class ActionOpsServiceTest {
                 () -> ops.propose(PROPOSER, "rb-l1::恢复动作",
                         "kubectl rollout restart deployment/evil -n prod"));
         assertEquals("not_verbatim", e.stage);   // 服务端重验逐字性，不信任客户端
+    }
+
+    /** 灰度白名单：不在 allowed-targets 的目标必须拒（空配置=全拒，fail-closed）。 */
+    @Test
+    void targetOutsideAllowlistRejected() {
+        String evil = "kubectl rollout restart deployment/evil-svc -n prod";
+        Chunk.Metadata m = new Chunk.Metadata("order-service", null, null,
+                List.of("50012_DB_TIMEOUT"), 3, "prod", "tenant-internal", "L1-write-low");
+        Chunk c = new Chunk("rb-evil::恢复动作", "rb-evil", "runbook_step",
+                "## 恢复动作\n" + evil + "\n", "rb-evil > 恢复", m);
+        index.load(List.of(c), null);
+        var e = assertThrows(ActionOpsService.ActionRejectedException.class,
+                () -> ops.propose(PROPOSER, "rb-evil::恢复动作", evil));
+        assertEquals("target_not_allowed", e.stage);
     }
 
     @Test

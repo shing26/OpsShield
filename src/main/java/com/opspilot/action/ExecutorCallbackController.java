@@ -1,7 +1,6 @@
 package com.opspilot.action;
 
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -43,9 +42,7 @@ public class ExecutorCallbackController {
         // 1) 签名（契约 2：callback: 前缀 + ts + nonce，常量时间比较）
         String material = ActionDispatchService.callbackSignatureMaterial(
                 req.opId(), req.status(), req.ts(), req.nonce());
-        String expected = ActionDispatchService.hmac(dispatch.dispatchKeyForVerify(), material);
-        if (sig == null || !MessageDigest.isEqual(
-                sig.getBytes(StandardCharsets.UTF_8), expected.getBytes(StandardCharsets.UTF_8))) {
+        if (sig == null || !dispatch.signatureMatches(sig, material)) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(Map.of("code", "UNAUTHORIZED", "reject_reason", "bad_signature"));
         }

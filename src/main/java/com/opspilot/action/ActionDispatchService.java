@@ -42,7 +42,8 @@ public class ActionDispatchService {
     static final long CALLBACK_WINDOW_S = 300;        // 回调时间窗 ±5 分钟
 
     private final JdbcTemplate jdbc;
-    private final byte[] dispatchKey;                 // hex；未配置=null（派发挂起）
+    private final byte[] dispatchKey;                 // 当前签名 key；未配置=null（派发挂起）
+    private final byte[] previousKey;                 // 轮换窗口内仍接受的旧 key（只验不签）
     private final String webhookUrl;
     private final boolean l1Enabled;                  // 灰度开关，默认 false（红队全绿前不开）
     private final HttpClient http = HttpClient.newBuilder()
@@ -53,14 +54,57 @@ public class ActionDispatchService {
     /** 测试/红队注入时间机器；生产恒 systemUTC。 */
     Clock clock = Clock.systemUTC();
 
+    @org.springframework.beans.factory.annotation.Autowired
     public ActionDispatchService(JdbcTemplate jdbc,
                                  @Value("${OPSPILOT_DISPATCH_KEY:}") String keyHex,
+                                 @Value("${OPSPILOT_DISPATCH_KEY_FILE:}") String keyFile,
+                                 @Value("${OPSPILOT_DISPATCH_KEY_PREVIOUS_FILE:}") String prevKeyFile,
                                  @Value("${opspilot.l1.dispatch-webhook:}") String webhookUrl,
                                  @Value("${opspilot.l1.enabled:false}") boolean l1Enabled) {
         this.jdbc = jdbc;
-        this.dispatchKey = keyHex == null || keyHex.isBlank() ? null : HexFormat.of().parseHex(keyHex);
+        this.dispatchKey = loadKey(keyHex, keyFile, "DISPATCH_KEY");
+        this.previousKey = loadKey("", prevKeyFile, "DISPATCH_KEY_PREVIOUS_FILE");
         this.webhookUrl = webhookUrl == null || webhookUrl.isBlank() ? null : webhookUrl;
         this.l1Enabled = l1Enabled;
+        if (this.dispatchKey != null && this.previousKey != null) {
+            log.info("L1 派发密钥轮换窗口开启：新 key 签名，旧 key 仍可验（回调不断流）");
+        }
+    }
+
+    /** 测试/嵌入用：直接给 key（不读文件）。 */
+    ActionDispatchService(JdbcTemplate jdbc, String keyHex, String webhookUrl, boolean l1Enabled) {
+        this(jdbc, keyHex, "", "", webhookUrl, l1Enabled);
+    }
+
+    /**
+     * 密钥来源（基本卫生）：环境变量明文仅限开发；生产用 _FILE 读挂载 Secret。
+     * 两处都配 → 环境变量优先（便于紧急轮换），但日志会提示并存。
+     */
+    private static byte[] loadKey(String hex, String file, String label) {
+        try {
+            if (hex != null && !hex.isBlank()) {
+                return HexFormat.of().parseHex(hex.trim());
+            }
+            if (file != null && !file.isBlank()) {
+                return HexFormat.of().parseHex(
+                        java.nio.file.Files.readString(java.nio.file.Path.of(file.trim())).trim());
+            }
+        } catch (Exception e) {
+            throw new IllegalStateException(label + " 读取/解析失败: " + e.getMessage(), e);
+        }
+        return null;
+    }
+
+    /** 签名比对：当前 key 或（轮换窗口内）旧 key——常量时间比较。 */
+    boolean signatureMatches(String signature, String material) {
+        if (dispatchKey != null && MessageDigest.isEqual(
+                signature.getBytes(StandardCharsets.UTF_8),
+                hmac(dispatchKey, material).getBytes(StandardCharsets.UTF_8))) {
+            return true;
+        }
+        return previousKey != null && MessageDigest.isEqual(
+                signature.getBytes(StandardCharsets.UTF_8),
+                hmac(previousKey, material).getBytes(StandardCharsets.UTF_8));
     }
 
     public boolean dispatchEnabled() {

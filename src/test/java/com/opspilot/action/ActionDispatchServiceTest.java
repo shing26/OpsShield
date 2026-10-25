@@ -22,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.*;
         "opspilot.storage.mode=memory", "opspilot.dashscope.mode=mock",
         "opspilot.probes.enabled=false",
         "opspilot.l1.enabled=true",
+        "opspilot.l1.allowed-targets=deployment/order-api,deployment/inventory-api",
         "spring.datasource.url=jdbc:h2:mem:actiondispatch;MODE=PostgreSQL;DB_CLOSE_DELAY=-1",
         "spring.datasource.username=sa", "spring.datasource.password="})
 class ActionDispatchServiceTest {
@@ -154,6 +155,20 @@ class ActionDispatchServiceTest {
         assertEquals(401, resp.getStatusCode().value());
         assertNull(dispatch.callbackFreshnessReason(now, nonce),
                 "坏签名请求不得消耗 nonce——同 nonce 首个合法请求仍应通过");
+    }
+
+    /** 密钥轮换：新 key 签名、旧 key 在窗口内仍可验（回调不断流）。 */
+    @Test
+    void previousKeyStillVerifiesDuringRotation() throws Exception {
+        var jdbc = ctx.getBean(org.springframework.jdbc.core.JdbcTemplate.class);
+        byte[] prev = java.util.HexFormat.of().parseHex("cd".repeat(32));
+        var f = java.nio.file.Files.createTempFile("prevkey", ".txt");
+        java.nio.file.Files.writeString(f, java.util.HexFormat.of().formatHex(prev));
+        var rotated = new ActionDispatchService(jdbc, "", "", f.toString(), null, true);
+        String material = "callback:act_x:executed:1:n1";
+        String prevSig = ActionDispatchService.hmac(prev, material);
+        assertTrue(rotated.signatureMatches(prevSig, material), "旧 key 签名在窗口内必须通过");
+        assertFalse(rotated.signatureMatches("00".repeat(32), material), "错 key 必须拒");
     }
 
     /** 裁决 1·A：callback 豁免 l1 开关——l1.enabled=false 时在途 dispatched 仍能落终态。 */
