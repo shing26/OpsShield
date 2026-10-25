@@ -38,11 +38,14 @@ public class ActionOpsService {
     private final JdbcTemplate jdbc;
     private final InMemoryIndex index;              // memory 模式；live 模式的 ES byId 后续接
     private final AuditService audit;
+    private final ActionDispatchService dispatch;   // confirm 成功后自动派发（未启用则停在 confirmed）
 
-    public ActionOpsService(JdbcTemplate jdbc, InMemoryIndex index, AuditService audit) {
+    public ActionOpsService(JdbcTemplate jdbc, InMemoryIndex index, AuditService audit,
+                            ActionDispatchService dispatch) {
         this.jdbc = jdbc;
         this.index = index;
         this.audit = audit;
+        this.dispatch = dispatch;
     }
 
     public record ProposeResult(String opId, String confirmToken, String expiresAt) {}
@@ -123,6 +126,7 @@ public class ActionOpsService {
             throw rejection(confirmer, opId, "cas_conflict", "确认已被并发消费");
         }
         auditEvent(confirmer, "action_confirmed", opId);
+        dispatch.dispatchConfirmed(opId);           // §2：confirmed→dispatched 系统自动
         return status(confirmer, opId);
     }
 
