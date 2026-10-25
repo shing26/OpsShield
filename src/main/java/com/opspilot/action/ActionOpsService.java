@@ -95,6 +95,9 @@ public class ActionOpsService {
      * token 一次性：哈希校验通过后立刻置 NULL——同 token 二次确认必然失败。
      */
     public StatusResult confirm(UserContext confirmer, String opId, String token) {
+        if (!dispatch.l1Enabled()) {                 // 开关覆盖全链路：关闭后 confirm 也拒
+            throw rejection(confirmer, opId, "l1_disabled", "L1 未启用（opspilot.l1.enabled）");
+        }
         var row = jdbc.queryForMap(
                 "SELECT state, proposed_by, tenant, auth_level, confirm_token_hash, confirm_expires_at, "
                 + "command, ref FROM action_ops WHERE op_id = ?", opId);

@@ -139,6 +139,31 @@ class ActionDispatchServiceTest {
     @org.springframework.beans.factory.annotation.Autowired
     org.springframework.context.ApplicationContext ctx;
 
+    /** 决断 1：nonce 占坑必须在验签之后——坏签名不消耗 nonce（防匿名 DoS 占坑表）。 */
+    @Test
+    void badSignatureDoesNotConsumeNonce() {
+        var audit = ctx.getBean(com.opspilot.metrics.AuditService.class);
+        var ctl = new ExecutorCallbackController(dispatch, audit);
+        long now = java.time.Instant.now().getEpochSecond();
+        String nonce = "pin-" + System.nanoTime();
+        var resp = ctl.callback(
+                new ExecutorCallbackController.CallbackReq("act_x", "executed", "d", now, nonce),
+                "deadbeef");                                     // 坏签名
+        assertEquals(401, resp.getStatusCode().value());
+        assertTrue(dispatch.callbackFresh(now, nonce),
+                "坏签名请求不得消耗 nonce——同 nonce 首个合法请求仍应通过");
+    }
+
+    /** 决断 3：confirm 同步完成派发——返回态即终态，不存在"确认了但不知派没派"的中间态。 */
+    @Test
+    void confirmReturnStateIsTerminalNoInbetween() {
+        loadL1Chunk();
+        var p = ops.propose(PROPOSER, "rb-l1d::恢复动作", CMD);
+        var st = ops.confirm(CONFIRMER, p.opId(), p.confirmToken());
+        assertTrue(List.of("dispatched", "failed", "confirmed").contains(st.state()),
+                "confirm 返回必须是三态之一（派发成功/派发失败/派发未启用），无中间态；实际=" + st.state());
+    }
+
     private void loadL1Chunk() {
         Chunk.Metadata m = new Chunk.Metadata("inventory-service", null, null,
                 List.of("50012_DB_TIMEOUT"), 3, "prod", "tenant-internal", "L1-write-low");

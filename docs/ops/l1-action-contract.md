@@ -99,6 +99,15 @@ def classify(command_text, chunk_meta):
 
 另：灰度总开关 `opspilot.l1.enabled` **默认 false**（红队全绿前任何环境不默认开）；webhook connect 3s / read 5s、不跟随重定向（3xx 即 failed）。
 
+### 实现层四决断（2026-10-25，契约层的顺序/作用域补钉）
+
+| # | 决断 | 落点 |
+|---|---|---|
+| 1 | **nonce 占坑在验签之后** | 回调校验顺序固定：签名(401) → 时间窗+nonce(401) → 终态(409)。坏签名请求不触碰 nonce 表——匿名流量无法灌占坑表（DoS 面）。有测试钉序 |
+| 2 | **开关覆盖全链路** | `l1.enabled=false` 时 propose、confirm 一律拒（stage=l1_disabled），dispatch/callback 走 `dispatchEnabled()`（含同开关）——不存在"关了 propose 还能 confirm 已有提案"的绕过 |
+| 3 | **confirm 同步写死** | confirm 在返回前同步完成盖章 + 派发尝试；**返回态即终态三选一**：dispatched（派发成功）/ failed（webhook 投递失败）/ confirmed（派发未启用，诚实挂起）。无"确认了但不知派没派"的中间态——面板与调用方不需要轮询消歧 |
+| 4 | **两个 expires 各管一段** | `confirm_expires_at`（propose+15min）：人没点确认就过期 → expired，恢复=重新提案；`dispatch_expires_at`（confirm+15min）：确认了但派发未启用/未就绪的挂起上限 → 过期转 expired，恢复=**新 op_id + 重新人确认**（不是重派旧 op）。运维口诀：过期一律重新走人，没有"续期" |
+
 ## 4. 幂等与确认存储（⛳ 评审增补）
 
 - op_id 幂等键需要**持久化 + 共享后端**：单机 H2 起步，多副本部署迁 Redis/Postgres
