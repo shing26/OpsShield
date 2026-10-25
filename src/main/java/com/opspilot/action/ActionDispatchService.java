@@ -6,10 +6,10 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HexFormat;
-import java.util.Map;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.slf4j.Logger;
@@ -19,55 +19,76 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 /**
- * L1 签名派发（ADR-0028 规格 §6/§9）：confirmed → dispatched 系统自动完成。
+ * L1 签名派发（ADR-0028 规格 §6/§9 + 2026-10-25 评裁决三条契约）。
  *
- * <p><b>签名材料与 reference verifier 完全一致</b>（跨语言契约由 ActionDispatchServiceTest
- * 里的固定向量钉死——Java 签 ↔ Python 验）：
- * {@code HMAC-SHA256(key, op_id + "." + payload_sha256 + "." + expires_at)}。
- * payload = 命令原文的 UTF-8 字节；常量时间比较只存在于验签侧（verifier），签发侧是纯计算。
+ * <p><b>契约 1（回调终态语义，选 A）</b>：执行系统只发一次终态回调，由执行侧保证。
+ * OpsShield 首次回调定终态；后续回调（含 failed-to-executed 修正）一律 409，
+ * <b>并落审计 action_callback_conflict</b>——被拒的回调不是黑洞，事件里带着现有终态。
  *
- * <p><b>失败语义（规格 §2 评审增补 3）</b>：webhook 投递失败 → state=failed，
- * **不自动重试**（自动重试 = 绕过人确认的后门）；重新执行须新 op_id 重新提案 + 重新人确认。
- * webhook 未配置时 op 停在 confirmed（派发挂起，面板可见），不假装已派发。
+ * <p><b>契约 2（防重放 + domain separation）</b>：回调 HMAC 消息为
+ * callback:op_id:status:ts:nonce；ts 窗口 ±300s，nonce 一生一次（dispatch_nonces 表）。
+ * 派发签名消息加 dispatch: 前缀——两个方向的签名即使共用 key 也不可互换。
+ *
+ * <p><b>契约 3（dispatch 期限在 confirm 时定）</b>：confirm 即写 dispatch_expires_at
+ *（confirmed_at + 窗口），过期后不可再派发（惰性转 expired，须新 op_id 重新人确认）。
+ *
+ * <p>Clock 可注入（红队重放/过期用例的时间机器）；webhook connect 3s / read 5s、
+ * 不跟随重定向（3xx 即 failed）；投递失败不自动重试（规格 §2）。
  */
 @Service
 public class ActionDispatchService {
 
     private static final Logger log = LoggerFactory.getLogger(ActionDispatchService.class);
+    static final long CALLBACK_WINDOW_S = 300;        // 回调时间窗 ±5 分钟
 
     private final JdbcTemplate jdbc;
-    private final byte[] dispatchKey;        // hex；未配置=null（派发挂起）
-    private final String webhookUrl;         // 未配置=null
+    private final byte[] dispatchKey;                 // hex；未配置=null（派发挂起）
+    private final String webhookUrl;
+    private final boolean l1Enabled;                  // 灰度开关，默认 false（红队全绿前不开）
     private final HttpClient http = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(5)).build();
+            .connectTimeout(Duration.ofSeconds(3))
+            .followRedirects(HttpClient.Redirect.NEVER)
+            .build();
+
+    /** 测试/红队注入时间机器；生产恒 systemUTC。 */
+    Clock clock = Clock.systemUTC();
 
     public ActionDispatchService(JdbcTemplate jdbc,
                                  @Value("${OPSPILOT_DISPATCH_KEY:}") String keyHex,
-                                 @Value("${opspilot.l1.dispatch-webhook:}") String webhookUrl) {
+                                 @Value("${opspilot.l1.dispatch-webhook:}") String webhookUrl,
+                                 @Value("${opspilot.l1.enabled:false}") boolean l1Enabled) {
         this.jdbc = jdbc;
         this.dispatchKey = keyHex == null || keyHex.isBlank() ? null : HexFormat.of().parseHex(keyHex);
         this.webhookUrl = webhookUrl == null || webhookUrl.isBlank() ? null : webhookUrl;
-        if ((dispatchKey == null) != (this.webhookUrl == null)) {
-            log.warn("L1 派发半配置：key 与 webhook 必须同时设置才启用（当前 key={} webhook={}）",
-                    dispatchKey != null, this.webhookUrl != null);
-        }
+        this.l1Enabled = l1Enabled;
     }
 
-    /** 回调验签用（同 key 只读暴露给同包端点；不做拷贝，避免再一份密钥生命周期）。 */
+    public boolean dispatchEnabled() {
+        return l1Enabled && dispatchKey != null && webhookUrl != null;
+    }
+
+    public boolean l1Enabled() {
+        return l1Enabled;
+    }
+
     byte[] dispatchKeyForVerify() {
         return dispatchKey;
     }
 
-    public boolean enabled() {
-        return dispatchKey != null && webhookUrl != null;
+    /** 与 reference_verifier.expected_signature 同材料（dispatch: 前缀，跨语言向量钉死）。 */
+    public static String expectedSignature(byte[] key, String opId, String payloadSha, String expiresAt) {
+        return hmac(key, "dispatch:" + opId + "." + payloadSha + "." + expiresAt);
     }
 
-    /** 与 reference_verifier.expected_signature 同材料（跨语言向量钉死）。 */
-    public static String expectedSignature(byte[] key, String opId, String payloadSha, String expiresAt) {
+    /** 回调方向的消息（callback: 前缀 + ts + nonce——与派发签名不可互换）。 */
+    public static String callbackSignatureMaterial(String opId, String status, long ts, String nonce) {
+        return "callback:" + opId + ":" + status + ":" + ts + ":" + nonce;
+    }
+
+    static String hmac(byte[] key, String msg) {
         try {
             Mac mac = Mac.getInstance("HmacSHA256");
             mac.init(new SecretKeySpec(key, "HmacSHA256"));
-            String msg = opId + "." + payloadSha + "." + expiresAt;
             return HexFormat.of().formatHex(mac.doFinal(msg.getBytes(StandardCharsets.UTF_8)));
         } catch (Exception e) {
             throw new IllegalStateException(e);
@@ -83,43 +104,55 @@ public class ActionDispatchService {
         }
     }
 
-    /** confirmed op 的自动派发：签名 → 落库 dispatched → POST webhook → 回填结果。 */
+    /** confirm 成功即写派发期限（契约 3）：confirmed_at + 窗口——过期不可派发。 */
+    void stampDispatchDeadline(String opId) {
+        jdbc.update("UPDATE action_ops SET dispatch_expires_at=? "
+                        + "WHERE op_id=? AND state='confirmed'",
+                java.sql.Timestamp.from(Instant.now(clock).plusSeconds(15 * 60)), opId);
+    }
+
+    /** confirmed op 的自动派发：期限检查 → 签名 → CAS dispatched → POST webhook。 */
     public void dispatchConfirmed(String opId) {
-        if (!enabled()) {
-            log.info("L1 派发未启用（缺 key 或 webhook）：op {} 停在 confirmed", opId);
+        if (!dispatchEnabled()) {
+            log.info("L1 派发未启用（开关/key/webhook 任缺）：op {} 停在 confirmed", opId);
             return;
         }
         var row = jdbc.queryForMap(
-                "SELECT state, command, tenant FROM action_ops WHERE op_id = ?", opId);
+                "SELECT state, command, dispatch_expires_at FROM action_ops WHERE op_id = ?", opId);
         if (!"confirmed".equals(row.get("state"))) {
-            return;                      // 幂等：只派发 confirmed
+            return;                                          // 幂等：只派发 confirmed
+        }
+        java.sql.Timestamp deadline = (java.sql.Timestamp) row.get("dispatch_expires_at");
+        if (deadline == null || Instant.now(clock).isAfter(deadline.toInstant())) {
+            // 契约 3：过期不可派发——惰性转 expired，重跑须新 op_id + 重新人确认
+            jdbc.update("UPDATE action_ops SET state='expired' WHERE op_id=? AND state='confirmed'", opId);
+            log.warn("L1 派发期限已过：{} 转 expired（须重新提案）", opId);
+            return;
         }
         String command = (String) row.get("command");
         String payloadSha = sha256Hex(command);
-        Instant expires = Instant.now().plusSeconds(15 * 60);
-        String expiresAt = expires.toString();
-        String hmac = expectedSignature(dispatchKey, opId, payloadSha, expiresAt);
+        String expiresAt = deadline.toInstant().toString();
+        String sig = expectedSignature(dispatchKey, opId, payloadSha, expiresAt);
         int updated = jdbc.update(
                 "UPDATE action_ops SET state='dispatched', dispatch_target=?, dispatch_payload_sha256=?, "
-                + "dispatch_hmac=?, dispatch_expires_at=?, dispatched_at=? "
+                + "dispatch_hmac=?, dispatched_at=? "
                 + "WHERE op_id=? AND state='confirmed'",
-                webhookUrl, payloadSha, hmac, java.sql.Timestamp.from(expires),
-                java.sql.Timestamp.from(Instant.now()), opId);
+                webhookUrl, payloadSha, sig, java.sql.Timestamp.from(Instant.now(clock)), opId);
         if (updated != 1) {
-            return;                      // 并发保护：CAS 只派发一次
+            return;                                          // 并发保护：CAS 只派发一次
         }
         String body = "{\"op_id\":\"" + opId + "\",\"command\":\"" + jsonEscape(command)
                 + "\",\"payload_sha256\":\"" + payloadSha + "\",\"expires_at\":\"" + expiresAt
-                + "\",\"hmac\":\"" + hmac + "\"}";
+                + "\",\"hmac\":\"" + sig + "\"}";
         try {
             HttpResponse<String> resp = http.send(HttpRequest.newBuilder()
                             .uri(URI.create(webhookUrl))
-                            .timeout(Duration.ofSeconds(10))
+                            .timeout(Duration.ofSeconds(5))       // read 5s；connect 3s 已在 client
                             .header("Content-Type", "application/json")
                             .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
                             .build(),
                     HttpResponse.BodyHandlers.ofString());
-            if (resp.statusCode() / 100 != 2) {
+            if (resp.statusCode() / 100 != 2) {                 // 3xx 不跟随：直接 failed
                 fail(opId, "webhook HTTP " + resp.statusCode());
             }
         } catch (Exception e) {
@@ -127,16 +160,42 @@ public class ActionDispatchService {
         }
     }
 
-    /** 执行侧回调：dispatched → executed|failed（终态；幂等保护由 WHERE state 带上）。 */
+    /**
+     * 执行侧回调（契约 1·选 A）：首次定终态 executed|failed；任何后续回调（含
+     * failed-to-executed 修正）→ false（409），不静默——controller 落审计
+     * action_callback_conflict（带现有终态），运维能看到被拒的修正请求。
+     */
     public boolean callback(String opId, String status, String detail) {
         String target = "executed".equals(status) ? "executed" : "failed";
         return jdbc.update("UPDATE action_ops SET state=?, dispatch_result=? "
                         + "WHERE op_id=? AND state='dispatched'",
-                target, detail == null ? "" : detail.substring(0, Math.min(detail.length(), 500)), opId) == 1;
+                target, detail == null ? "" : detail.substring(0, Math.min(detail.length(), 500)),
+                opId) == 1;
+    }
+
+    /** 冲突审计用：op 当前状态（不存在返回 absent）。 */
+    public String existingState(String opId) {
+        var l = jdbc.queryForList("SELECT state FROM action_ops WHERE op_id = ?", String.class, opId);
+        return l.isEmpty() ? "absent" : l.get(0);
+    }
+
+    /** 回调时间窗（±300s）与 nonce 一生一次（契约 2）。 */
+    public boolean callbackFresh(long ts, String nonce) {
+        long now = Instant.now(clock).getEpochSecond();
+        if (Math.abs(now - ts) > CALLBACK_WINDOW_S) {
+            return false;
+        }
+        try {
+            jdbc.update("INSERT INTO dispatch_nonces (nonce, seen_at) VALUES (?, ?)",
+                    nonce, java.sql.Timestamp.from(Instant.now(clock)));
+            return true;                                      // 首见即占坑
+        } catch (org.springframework.dao.DuplicateKeyException e) {
+            return false;                                     // nonce 重放
+        }
     }
 
     private void fail(String opId, String reason) {
-        // 不自动重试（规格 §2）：失败留痕，重新执行须新 op_id + 重新人确认
+        // 不自动重试（规格 §2）：失败留痕 + 日志告警面（Alertmanager 规则接盲点 4）
         jdbc.update("UPDATE action_ops SET state='failed', dispatch_result=? "
                 + "WHERE op_id=? AND state='dispatched'", reason, opId);
         log.warn("L1 派发失败（不自动重试）：{} {}", opId, reason);

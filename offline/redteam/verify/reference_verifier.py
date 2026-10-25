@@ -31,9 +31,14 @@ def payload_sha256(payload: bytes) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
+# domain separation（2026-10-25 评裁决）：派发与回调共用 key，但两个方向的签名
+# 材料加不同前缀——dispatch: 与 callback:，签名不可互换（零成本防跨面重用）。
+DOMAIN = "dispatch:"
+
+
 def expected_signature(key: bytes, op_id: str, declared_sha: str, expires_at: str) -> str:
-    """签名材料与规格一致：HMAC-SHA256(key, op_id + "." + payload_sha256 + "." + expires_at)。"""
-    msg = f"{op_id}.{declared_sha}.{expires_at}".encode("utf-8")
+    """签名材料：HMAC-SHA256(key, "dispatch:" + op_id + "." + payload_sha256 + "." + expires_at)。"""
+    msg = f"{DOMAIN}{op_id}.{declared_sha}.{expires_at}".encode("utf-8")
     return hmac.new(key, msg, hashlib.sha256).hexdigest()
 
 

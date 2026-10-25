@@ -89,6 +89,16 @@ def classify(command_text, chunk_meta):
 要点：**L1 不是 L0 的放宽，是另一条更窄的通道**——注入判定两层全过是共同前提；
 文档声明解决"这条写命令是有意的恢复动作"的语义确认；前缀闭集解决"写到什么程度"的边界。
 
+## 3.5 三条契约裁决（2026-10-25 签名派发评审）
+
+| # | 契约 | 裁决 |
+|---|---|---|
+| 1 | 回调终态语义 | **选 A**：执行系统只发一次终态回调（执行侧保证）；OpsShield 首次定终态，后续回调（含 failed→executed 修正）一律 409 **并落审计 `action_callback_conflict`**（带现有终态，不静默） |
+| 2 | 回调防重放 | HMAC 消息 = `callback:op_id:status:ts:nonce`；ts 窗 ±300s、nonce 一生一次（dispatch_nonces 表）；**domain separation**：派发签名加 `dispatch:` 前缀——两方向签名不可互换 |
+| 3 | 派发期限 | **confirm 时即写 dispatch_expires_at**（confirmed_at + 15min）；过期不可派发（惰性转 expired，须新 op_id + 重新人确认）——不许"诚实停在 confirmed"变成"静默堆积" |
+
+另：灰度总开关 `opspilot.l1.enabled` **默认 false**（红队全绿前任何环境不默认开）；webhook connect 3s / read 5s、不跟随重定向（3xx 即 failed）。
+
 ## 4. 幂等与确认存储（⛳ 评审增补）
 
 - op_id 幂等键需要**持久化 + 共享后端**：单机 H2 起步，多副本部署迁 Redis/Postgres

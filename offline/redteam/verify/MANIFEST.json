@@ -1,9 +1,9 @@
-{
-  "generated_at": "2026-10-25T04:05:00+00:00",
-  "note": "verifier 是红队靶子——靶子必须可验篡改；hash 不符 = 靶子被改，先人审再跑",
-  "files": {
-    "reference_verifier.py": {
-      "sha256": "E0F1BAEFEA236A72F2D106C268BFCA797DD913FB2E1C6459C799AF374A54D808"
-    }
-  }
+﻿{
+    "generated_at":  "2026-10-25T08:40:00+00:00",
+    "note":  "verifier 鏄孩闃熼澏瀛愨€斺€旈澏瀛愬繀椤诲彲楠岀鏀癸紱hash 涓嶇 = 闈跺瓙琚敼锛屽厛浜哄鍐嶈窇",
+    "files":  {
+                  "reference_verifier.py":  {
+                                                "sha256":  "976338a61e43c318653b90480d116bb2df1571468ee49a5062fa89b949dca4ec"
+                                            }
+              }
 }

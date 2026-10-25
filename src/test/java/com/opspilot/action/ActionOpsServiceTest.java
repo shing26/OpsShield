@@ -15,6 +15,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @SpringBootTest(properties = {
         "opspilot.storage.mode=memory", "opspilot.dashscope.mode=mock",
         "opspilot.probes.enabled=false",
+        "opspilot.l1.enabled=true",
         "spring.datasource.url=jdbc:h2:mem:actionops;MODE=PostgreSQL;DB_CLOSE_DELAY=-1",
         "spring.datasource.username=sa", "spring.datasource.password=",
         "spring.flyway.clean-disabled=true"})

@@ -21,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @SpringBootTest(properties = {
         "opspilot.storage.mode=memory", "opspilot.dashscope.mode=mock",
         "opspilot.probes.enabled=false",
+        "opspilot.l1.enabled=true",
         "spring.datasource.url=jdbc:h2:mem:actiondispatch;MODE=PostgreSQL;DB_CLOSE_DELAY=-1",
         "spring.datasource.username=sa", "spring.datasource.password="})
 class ActionDispatchServiceTest {
@@ -75,18 +76,19 @@ class ActionDispatchServiceTest {
         String payload = "kubectl rollout restart deployment/order-api -n prod";
         String sha = dispatch.sha256Hex(payload);
         assertEquals("2ce168965f22f9b686b846830dd45b39d06db428f2f9dbd8a0c1a7d5629ac7e3", sha);
-        assertEquals("bf017c5a50d6d0068d388410abcddc955dd2b8c394ba60db0fd2a4f757f5d591",
+        assertEquals("f143da957ef3a4aefd7aa1844cae4f80d27ce1cd56b15763ffeeffc3a7f7abdb",
                 dispatch.expectedSignature(key, "act_vector01", sha, "2026-10-25T12:00:00+00:00"));
     }
 
     @Test
     void confirmAutoDispatchesAndCallbackFinalizes() {
+        int before = hits.get();                    // 静态计数器跨测试共享：断言用增量
         loadL1Chunk();
         var p = ops.propose(PROPOSER, "rb-l1d::恢复动作", CMD);
         var s = ops.confirm(CONFIRMER, p.opId(), p.confirmToken());
         // confirm 成功 → 自动派发（webhook 已收到 202）
         assertEquals("dispatched", s.state());
-        assertEquals(1, hits.get(), "webhook 应收到一次派发");
+        assertEquals(before + 1, hits.get(), "webhook 应收到一次派发");
         String body = LastDispatch.body;
         assertTrue(body.contains(p.opId()) && body.contains(CMD), "派发体含 op 与命令");
         assertTrue(body.contains("\"hmac\":"), "派发体含 HMAC");
@@ -96,6 +98,46 @@ class ActionDispatchServiceTest {
         // 终态不可再变：二次回调 409 语义（false）
         assertFalse(dispatch.callback(p.opId(), "failed", "again"));
     }
+
+    @Test
+    void callbackFreshWindowAndNonceReplay() {
+        long now = java.time.Instant.now().getEpochSecond();
+        String nonce = "n-" + System.nanoTime();
+        assertTrue(dispatch.callbackFresh(now, nonce), "窗口内首见 nonce 应通过");
+        assertFalse(dispatch.callbackFresh(now, nonce), "同 nonce 二次必须拒（重放）");
+        assertFalse(dispatch.callbackFresh(now - 400, "n-old-" + System.nanoTime()),
+                "超出 ±300s 时间窗必须拒");
+    }
+
+    @Test
+    void expiredConfirmedOpCannotDispatch() {
+        loadL1Chunk();
+        // 时间机器：confirm 时刻 + 16 分钟 > 15 分钟窗口 → 派发必须被拒并转 expired
+        java.time.Clock real = dispatch.clock;
+        try {
+            var p = ops.propose(PROPOSER, "rb-l1d::恢复动作", CMD);
+            // 先用真时钟完成 confirm（stampDispatchDeadline 用真时钟盖章）
+            dispatch.clock = real;
+            ops.confirm(CONFIRMER, p.opId(), p.confirmToken());
+            assertEquals("dispatched", ops.status(PROPOSER, p.opId()).state(),
+                    "webhook 在线时立即派发");
+        } finally {
+            dispatch.clock = real;
+        }
+        // 直接构造一个"confirmed 未派发"的 op 测期限：关掉派发再 confirm——
+        // 简化路径：用新 op，把时钟拨到 16 分钟后 confirm 会因确认窗口(900s)过期而拒，
+        // 所以期限测试走 dispatchConfirmed 的惰性检查分支：注入过期 deadline。
+        var p2 = ops.propose(PROPOSER, "rb-l1d::恢复动作", CMD);
+        org.springframework.jdbc.core.JdbcTemplate jdbc = ctx.getBean(org.springframework.jdbc.core.JdbcTemplate.class);
+        jdbc.update("UPDATE action_ops SET state='confirmed', dispatch_expires_at=? WHERE op_id=?",
+                java.sql.Timestamp.from(java.time.Instant.now().minusSeconds(1)), p2.opId());
+        dispatch.dispatchConfirmed(p2.opId());
+        assertEquals("expired", ops.status(PROPOSER, p2.opId()).state(),
+                "过期 confirmed 必须转 expired，不可派发（契约 3）");
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    org.springframework.context.ApplicationContext ctx;
 
     private void loadL1Chunk() {
         Chunk.Metadata m = new Chunk.Metadata("inventory-service", null, null,

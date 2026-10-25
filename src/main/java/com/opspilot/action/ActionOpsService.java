@@ -55,6 +55,9 @@ public class ActionOpsService {
 
     /** L1 提案：全部服务端复核通过后落库，返回一次性确认 token（明文只出现这一次）。 */
     public ProposeResult propose(UserContext proposer, String chunkId, String command) {
+        if (!dispatch.l1Enabled()) {                 // 灰度总开关：红队全绿前任何环境不开
+            reject(proposer, chunkId, "l1_disabled", "L1 未启用（opspilot.l1.enabled）");
+        }
         if (proposer.authLevel() < 2) {
             reject(proposer, chunkId, "proposer_level", "提案需 level>=2");
         }
@@ -126,6 +129,7 @@ public class ActionOpsService {
             throw rejection(confirmer, opId, "cas_conflict", "确认已被并发消费");
         }
         auditEvent(confirmer, "action_confirmed", opId);
+        dispatch.stampDispatchDeadline(opId);       // 契约 3：confirm 即定派发期限
         dispatch.dispatchConfirmed(opId);           // §2：confirmed→dispatched 系统自动
         return status(confirmer, opId);
     }
