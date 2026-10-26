@@ -83,3 +83,39 @@ def test_reingest_timestamp_is_display_formatted() -> None:
     html = _html()
     assert "fmtTs(ri.last)" in html, "reingest 时间必须走 fmtTs 显示层格式化"
     assert "fmtTs" in html and "replace(/(\\d{4}" in html, "fmtTs 必须真的截掉小数秒"
+
+def test_markdown_renders_tables_and_ordered_lists() -> None:
+    """#26：答案渲染器要支持表格/有序列表，链接只放行 http(s)。"""
+    html = _html()
+    assert "function mdCells" in html, "表格解析缺失（mdCells）"
+    assert "md-oli" in html and "md-no" in html, "有序列表必须保留编号（#26）"
+    assert 'table class=\"md-t\"' in html, "表格必须渲染成 <table>（不是原样竖线）"
+    assert "noopener noreferrer nofollow" in html, "外链必须 noopener/nofollow（模型输出不可信）"
+
+
+def test_clarify_card_hides_retrieval_metrics() -> None:
+    """#29：clarify 是零检索分支，不能显示 精排/检索 0ms/TTFT 0ms。"""
+    html = _html()
+    assert "(r.meta.gate || 'none') !== 'clarify'" in html, "检索类胶囊必须按 gate 过滤（#29）"
+    assert "未做检索" in html, "clarify 的空命令文案要说明「未检索」，不能套用引用集话术"
+
+
+def test_dialogs_are_keyboard_dismissible() -> None:
+    """#30：弹层/抽屉/遮罩要能 Esc 关闭、Tab 不逃逸、有 dialog 语义。"""
+    html = _html()
+    assert "addEventListener('keydown'" in html and "Escape" in html, "缺 Esc 关闭（#30）"
+    assert "trapTab" in html, "缺 Tab 焦点陷阱（浮层内循环）"
+    assert 'aria-modal="true"' in html, "抽屉/遮罩需要 aria-modal 语义"
+
+
+def test_answer_region_announces_updates() -> None:
+    """#30：流式答案区必须是 live region，读屏才能听到增量。"""
+    html = _html()
+    assert 'aria-live="polite"' in html, "答案区缺 aria-live（#30）"
+
+
+def test_form_labels_are_associated() -> None:
+    """#30：label 必须与控件关联，不能是孤儿 label。"""
+    html = _html()
+    assert '<label for="q">' in html, "排障输入 label 需要 for=q"
+    assert "-user\" data-bind=" in html, "身份输入框需要 id（label for 才能工作）"

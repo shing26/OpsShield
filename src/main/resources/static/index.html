@@ -120,7 +120,7 @@
   .railhead b{font-size:13px}
   .railhead span{font-size:11px;color:var(--muted)}
   .fld{display:flex;flex-direction:column;gap:4px}
-  .fld label{font-size:11px;color:var(--muted)}
+  .fld label,.fld .lbl{font-size:11px;color:var(--muted)}
   .fld input,.fld textarea{background:var(--bg);color:var(--txt);border:1px solid var(--line);
                            border-radius:6px;padding:8px 10px;font:inherit;font-size:13px;width:100%}
   .fld textarea{resize:vertical;min-height:76px;line-height:1.6}
@@ -196,6 +196,13 @@
   .md .md-h{font-weight:600;font-size:14px;margin:14px 0 6px}
   .md .md-h:first-child{margin-top:0}
   .md .md-li{padding-left:15px;text-indent:-15px}
+  .md .md-oli{padding-left:0;text-indent:0}
+  .md .md-no{font-family:var(--mono);color:var(--muted);margin-right:5px}
+  .md .md-quote{border-left:3px solid var(--line);padding:2px 10px;margin:6px 0;color:var(--txt-2)}
+  .md .md-t{border-collapse:collapse;margin:8px 0;font-size:12.5px;width:100%}
+  .md .md-t th,.md .md-t td{border:1px solid var(--line-soft);padding:5px 8px;text-align:left;vertical-align:top}
+  .md .md-t th{background:var(--surface-2);color:var(--txt-2);font-weight:600}
+  .md a{color:var(--accent);text-decoration:none} .md a:hover{text-decoration:underline}
   .md .md-gap{height:8px}
   .md code{font-family:var(--mono);font-size:12px;background:var(--surface-2);padding:1px 5px;border-radius:4px}
   .md strong{font-weight:600}
@@ -382,8 +389,10 @@
 <header class="topbar">
   <div class="brand"><b>OpsShield</b><span>统一工作台</span></div>
   <nav class="tabs" role="tablist" aria-label="视图">
-    <button class="on" data-view="trouble" role="tab" aria-selected="true">排障台</button>
-    <button data-view="panel" role="tab" aria-selected="false">运行面板</button>
+    <button id="tab-trouble" class="on" data-view="trouble" role="tab" aria-selected="true"
+            aria-controls="v-trouble" tabindex="0">排障台</button>
+    <button id="tab-panel" data-view="panel" role="tab" aria-selected="false"
+            aria-controls="v-panel" tabindex="-1">运行面板</button>
   </nav>
   <span class="spacer"></span>
   <span id="fingerprint" class="num">build —</span>
@@ -394,17 +403,17 @@
     高级 · 权限隔离演练</button>
 </header>
 
-<div class="pop" id="acctpop" data-pop hidden></div>
-<div class="pop" id="advpop" data-pop hidden></div>
+<div class="pop" id="acctpop" data-pop role="dialog" aria-label="身份接入" hidden></div>
+<div class="pop" id="advpop" data-pop role="dialog" aria-label="高级 · 权限隔离演练" hidden></div>
 <div class="scrim" id="scrim" data-act="closedrawer" hidden></div>
-<div class="drawer" id="drawer" hidden>
+<div class="drawer" id="drawer" role="dialog" aria-modal="true" aria-label="运行态" hidden>
   <div class="drawer-hd"><b>运行态</b>
-    <button class="x" data-act="closedrawer" title="关闭">✕</button></div>
+    <button class="x" data-act="closedrawer" title="关闭" aria-label="关闭运行态抽屉">✕</button></div>
   <div class="drawer-bd" id="drawerbody"></div>
 </div>
 
 <!-- ==================== 视图一：排障台（默认） ==================== -->
-<div id="v-trouble" class="view ts-app">
+<div id="v-trouble" class="view ts-app" role="tabpanel" aria-labelledby="tab-trouble">
   <aside id="rail"></aside>
   <main>
     <div id="canvas" class="canvas"></div>
@@ -413,7 +422,7 @@
 </div>
 
 <!-- ==================== 视图二：运行面板 ==================== -->
-<div id="v-panel" class="view" hidden>
+<div id="v-panel" class="view" role="tabpanel" aria-labelledby="tab-panel" hidden>
   <div id="panel-lock" hidden></div>
   <div class="panel-main" id="panel-main">
     <div class="kpis" id="kpis"></div>
@@ -486,8 +495,8 @@
 
 <footer><span id="pollstate">idle</span><span id="lastts" class="num"></span></footer>
 
-<div id="auth"><div class="card">
-  <b style="font-size:15px">凭证已失效</b>
+<div id="auth" role="dialog" aria-modal="true" aria-labelledby="authtitle"><div class="card">
+  <b id="authtitle" style="font-size:15px">凭证已失效</b>
   <div class="msg" id="authmsg"></div>
   <p>工作台不弹独立登录窗——右上角账号胶囊里填用户名与口令即可。此遮罩只在 token 失效（401）时出现。</p>
   <p style="margin-top:14px"><button class="btn" id="authgo">去右上角重新接入</button></p>
@@ -546,15 +555,21 @@ function inline(t) {
   return t
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/`([^`]+)`/g, '<code>$1</code>')
-    .replace(/\[参考\s*(\d+)\]/g, '<span class="ref-badge" data-ref="$1">参考$1</span>');
+    .replace(/\[参考\s*(\d+)\]/g, '<span class="ref-badge" data-ref="$1">参考$1</span>')
+    // #26：链接只放行 http(s)——模型输出不可信，javascript:/data: 一律按原文显示
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
+      '<a href="$2" target="_blank" rel="noopener noreferrer nofollow">$1</a>');
 }
 
 /* 极小 markdown 子集。答案由模型产出、以 markdown 形态落库，原页面把它当纯文本吐出
    （`## 问题定位` / `**粗体**` 原样可见）——那是"简陋"感的主要来源，不是布局问题。 */
 function md(s) {
+  // #26：有序列表保留编号；补表格/引用块；围栏与行内标记规则不变（先 esc 再套标签）。
+  const lines = esc(s).split('\n');
   const out = [];
   let inFence = false, buf = [];
-  for (const line of esc(s).split('\n')) {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
     if (/^\s*```/.test(line)) {                 // 围栏行本身不输出（语言标也丢，只留代码）
       if (inFence) { out.push('<pre class="md-code">' + buf.join('\n') + '</pre>'); buf = []; }
       inFence = !inFence;
@@ -562,14 +577,35 @@ function md(s) {
     }
     if (inFence) { buf.push(line); continue; }  // 围栏内一律原文，不做行内标记
     let m;
+    // 表格：当前行是表头，且下一行是 |---|---| 分隔行（模型常用形态）
+    if (/^\s*\|.*\|\s*$/.test(line) && i + 1 < lines.length
+        && /^\s*\|[\s:|-]+\|\s*$/.test(lines[i + 1])) {
+      const head = mdCells(line);
+      i += 2;
+      const rows = [];
+      while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) { rows.push(mdCells(lines[i])); i++; }
+      i--;
+      out.push('<table class="md-t"><thead><tr>'
+        + head.map(h => '<th>' + inline(h) + '</th>').join('')
+        + '</tr></thead><tbody>'
+        + rows.map(r => '<tr>' + head.map((_, ci) => '<td>' + inline(r[ci] || '') + '</td>').join('') + '</tr>').join('')
+        + '</tbody></table>');
+      continue;
+    }
     if ((m = line.match(/^\s*#{2,4}\s+(.+)$/))) out.push('<div class="md-h">' + inline(m[1]) + '</div>');
+    else if ((m = line.match(/^\s*&gt;\s?(.*)$/))) out.push('<div class="md-quote">' + inline(m[1]) + '</div>');   // esc() 后 > 已是 &gt;
     else if ((m = line.match(/^\s*[-*]\s+(.+)$/))) out.push('<div class="md-li">· ' + inline(m[1]) + '</div>');
-    else if ((m = line.match(/^\s*\d+[.)]\s+(.+)$/))) out.push('<div class="md-li">· ' + inline(m[1]) + '</div>');
+    else if ((m = line.match(/^\s*(\d+)[.)]\s+(.+)$/))) out.push('<div class="md-li md-oli"><span class="md-no">' + m[1] + '.</span> ' + inline(m[2]) + '</div>');
     else if (!line.trim()) out.push('<div class="md-gap"></div>');
     else out.push('<div>' + inline(line) + '</div>');
   }
   if (inFence) out.push('<pre class="md-code">' + buf.join('\n') + '</pre>');  // 流式中途未闭合
   return out.join('');
+}
+
+/* 表格行 → 单元格（去掉首尾竖线后按 | 切；单元格内的 inline 标记仍走 inline()）。 */
+function mdCells(line) {
+  return line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(x => x.trim());
 }
 
 /* ==================== 数据层 ====================
@@ -762,11 +798,15 @@ function metrics(r) {
     out.push('<span class="pill' + (c === 'L1' || c === 'L2' ? ' ok' : '') + '">cache ' + esc(c) + '</span>');
     const d = r.meta.degradation_level || 'L0';
     out.push('<span class="pill' + (d === 'L0' ? ' ok' : ' warn') + '">' + esc(d) + '</span>');
-    out.push('<span class="pill">' + (r.meta.fast_path ? '快路径' : '精排') + '</span>');
-    if (r.meta.deduplicated) out.push('<span class="pill">去重</span>');
-    out.push('<span class="pill">检索 ' + (r.meta.retrieval_ms | 0) + 'ms</span>');
+    // #29：clarify 是零检索/零 LLM 分支，别拿 0ms 的「精排/检索/TTFT」冒充耗时
+    if ((r.meta.gate || 'none') !== 'clarify') {
+      out.push('<span class="pill">' + (r.meta.fast_path ? '快路径' : '精排') + '</span>');
+      if (r.meta.deduplicated) out.push('<span class="pill">去重</span>');
+      out.push('<span class="pill">检索 ' + (r.meta.retrieval_ms | 0) + 'ms</span>');
+    }
   }
-  if (r.ttft != null) out.push('<span class="pill">TTFT ' + (r.ttft | 0) + 'ms</span>');
+  if (r.ttft != null && !(r.meta && r.meta.gate === 'clarify'))
+    out.push('<span class="pill">TTFT ' + (r.ttft | 0) + 'ms</span>');
   if (r.ms != null) out.push('<span class="pill">总耗时 ' + r.ms + 'ms</span>');
   return out.join('');
 }
@@ -779,9 +819,16 @@ const EMPTY_CONTRACT_TIP = '命令若在语料里，它住在「排查步骤 > �
 function contract(r) {
   const acts = r.actions || [];
   if (!acts.length) {
-    return '<div class="contract-empty" title="' + esc(EMPTY_CONTRACT_TIP) + '">'
+    // #29：需澄清 / 拒答是本轮**没有检索**，不是「检索了但引用里没代码块」——文案必须区分
+    const gate = r.meta && r.meta.gate;
+    const txt = gate === 'clarify'
+      ? '本条提问依赖上文、未做检索——因此没有命令清单（补上服务名/错误码后重问）'
+      : (gate === 'refuse'
+        ? '本轮未检索到可用文档（拒答）——因此没有命令清单'
+        : '本次引用切片不含可执行代码围栏——<strong>属引用集物理性质，非链路故障</strong>');
+    return '<div class="contract-empty" title="' + esc(gate === 'clarify' ? 'clarify：单轮系统无法据此检索' : EMPTY_CONTRACT_TIP) + '">'
       + '<span class="ic">ℹ️</span>'
-      + '<span class="txt">本次引用切片不含可执行代码围栏——<strong>属引用集物理性质，非链路故障</strong></span></div>';
+      + '<span class="txt">' + txt + '</span></div>';
   }
   return '<div class="contract">' + acts.map(a =>
     '<div class="act">'
@@ -814,7 +861,8 @@ function answer(r, k) {
     }
   }
   html += r.answer
-    ? '<div class="md" id="ans-' + k + '">' + md(r.answer)
+    ? '<div class="md" id="ans-' + k + '" aria-live="polite" aria-atomic="false"'
+      + (r.state === 'streaming' ? ' aria-busy="true"' : '') + '>' + md(r.answer)
       + (r.state === 'streaming' ? '<span class="cursor"></span>' : '') + '</div>'
     : '<div class="empty">等待首个 token…</div>';
   return html;
@@ -949,16 +997,16 @@ function diffTable(ra, rb) {
 function idBlock(k, label) {
   const s = S[k];
   if (!s.open && s.token) {
-    return '<div class="fld"><label>' + label + '</label>'
+    return '<div class="fld"><div class="lbl">' + label + '</div>'
       + '<div class="idbar"><span class="dot on"></span>'
       + '<span class="who">' + esc(s.tokenUser || s.user) + '</span>'
       + '<span class="pill ok">已接入</span>'
       + '<button class="sw" data-act="reopen:' + k + '">切换</button></div></div>';
   }
-  return '<div class="fld"><label>' + label + '</label>'
+  return '<div class="fld"><label for="' + k + '-user">' + label + '</label>'
     + '<div style="display:flex;gap:6px">'
-    + '<input data-bind="' + k + '.user" list="users" value="' + esc(s.user) + '" style="flex:1">'
-    + '<input data-bind="' + k + '.pass" type="password" placeholder="口令" value="" style="flex:1">'
+    + '<input id="' + k + '-user" data-bind="' + k + '.user" list="users" value="' + esc(s.user) + '" style="flex:1">'
+    + '<input id="' + k + '-pass" data-bind="' + k + '.pass" type="password" placeholder="口令" aria-label="口令" value="" style="flex:1">'
     + '</div>'
     + '<div style="display:flex;gap:6px;align-items:center;margin-top:6px">'
     + '<button class="btn ghost" data-act="login:' + k + '"' + (s.busy ? ' disabled' : '') + '>接入</button>'
@@ -1036,8 +1084,8 @@ function renderRail() {
                : '<button class="sw" data-act="openacct">接入</button>')
     + (S.compare ? '<span class="pill acc">对照中</span>' : '')
     + '</div>';
-  h += '<div class="fld"><label>排障输入</label>'
-    + '<textarea data-bind="q" placeholder="粘贴报错堆栈或口语化描述">' + esc(S.q) + '</textarea></div>';
+  h += '<div class="fld"><label for="q">排障输入</label>'
+    + '<textarea id="q" data-bind="q" placeholder="粘贴报错堆栈或口语化描述">' + esc(S.q) + '</textarea></div>';
   h += '<div class="chips">'
     + PRESETS.map((p, i) => '<button class="chip" data-preset="' + i + '">' + esc(p.label) + '</button>').join('')
     + '</div>';
@@ -1108,10 +1156,77 @@ function renderAdv() {
   $('advpop').innerHTML = h;
 }
 
+/* ==================== 焦点管理（#30）====================
+   浮层要能「键盘进得去、Esc 出得来、关掉回原位」，否则纯键盘用户打开抽屉后无法关闭
+   （打开按钮被 scrim 盖住），Tab 还会跑到遮罩后面的页面控件上。 */
+let focusReturn = null;
+
+function isVisible(el) {
+  return !!el && el.offsetParent !== null;
+}
+
+function focusables(box) {
+  if (!box) return [];
+  return [...box.querySelectorAll(
+    'a[href],button:not([disabled]),input:not([disabled]),textarea:not([disabled]),select:not([disabled]),summary,[tabindex]:not([tabindex="-1"])'
+  )].filter(isVisible);
+}
+
+function openDialogFocus(box) {
+  if (!box) return;
+  focusReturn = document.activeElement;
+  const f = focusables(box)[0];
+  if (f) f.focus();
+}
+
+function restoreFocus() {
+  if (focusReturn && focusReturn.isConnected && isVisible(focusReturn)) focusReturn.focus();
+  focusReturn = null;
+}
+
+/* Tab 焦点陷阱：只在当前浮层内循环 */
+function trapTab(e, box) {
+  const f = focusables(box);
+  if (!f.length) { e.preventDefault(); return; }
+  const first = f[0], last = f[f.length - 1];
+  if (!box.contains(document.activeElement)) { e.preventDefault(); first.focus(); return; }
+  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+}
+
+/* 当前处于最上层的浮层（Esc/陷阱的作用域） */
+function currentModal() {
+  if ($('auth').style.display === 'grid') return $('auth');
+  if (!$('drawer').hidden) return $('drawer');
+  return document.querySelector('[data-pop]:not([hidden])');
+}
+
+function openDrawer() {
+  closePops();
+  $('scrim').hidden = false;
+  $('drawer').hidden = false;
+  renderDrawer();
+  openDialogFocus($('drawer'));
+}
+
+function closeDrawer() {
+  $('scrim').hidden = true;
+  $('drawer').hidden = true;
+  restoreFocus();
+}
+
+function closeAuth() {
+  $('auth').style.display = 'none';
+  document.body.classList.remove('sat');
+  restoreFocus();
+}
+
 function openPop(id) {
+  const el = $(id);
   document.querySelectorAll('[data-pop]').forEach(p => { p.hidden = p.id !== id; });
   $('acct').setAttribute('aria-expanded', String(id === 'acctpop'));
   $('advbtn').setAttribute('aria-expanded', String(id === 'advpop'));
+  openDialogFocus(el);
 }
 function togglePop(id) {
   const el = $(id);
@@ -1120,11 +1235,14 @@ function togglePop(id) {
   el.hidden = !wasHidden;
   $('acct').setAttribute('aria-expanded', String(!el.hidden && id === 'acctpop'));
   $('advbtn').setAttribute('aria-expanded', String(!el.hidden && id === 'advpop'));
+  if (el.hidden) restoreFocus(); else openDialogFocus(el);
 }
 function closePops() {
+  const hadOpen = !!document.querySelector('[data-pop]:not([hidden])');
   document.querySelectorAll('[data-pop]').forEach(p => { p.hidden = true; });
   $('acct').setAttribute('aria-expanded', 'false');
   $('advbtn').setAttribute('aria-expanded', 'false');
+  if (hadOpen) restoreFocus();
 }
 
 /* ==================== 健康抽屉 ==================== */
@@ -1196,7 +1314,9 @@ function setView(v) {
   S.view = v;
   document.querySelectorAll('.tabs button').forEach(b => {
     const on = b.dataset.view === v;
-    b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on));
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-selected', String(on));
+    b.tabIndex = on ? 0 : -1;          // 键盘只在选中的 tab 上停一站（ARIA tabs 惯例）
   });
   $('v-trouble').hidden = v !== 'trouble';
   $('v-panel').hidden = v !== 'panel';
@@ -1604,9 +1724,8 @@ document.addEventListener('click', async e => {
 
   const act = t.dataset.act;
   if (act) {
-    if (act === 'opendrawer') { closePops(); $('scrim').hidden = false; $('drawer').hidden = false;
-      renderDrawer(); return; }
-    if (act === 'closedrawer') { $('scrim').hidden = true; $('drawer').hidden = true; return; }
+    if (act === 'opendrawer') { openDrawer(); return; }
+    if (act === 'closedrawer') { closeDrawer(); return; }
     if (act === 'openacct') { openPop('acctpop'); return; }
     if (act === 'covtoggle') { S.covOpen = !S.covOpen; renderRail(); return; }
     if (act === 'stop') { stopStream(t.dataset.k || 'a'); return; }
@@ -1674,6 +1793,33 @@ document.addEventListener('click', async e => {
   }
 });
 
+/* ==================== 键盘：Esc 关闭 / Tab 陷阱 / tabs 方向键（#30）==================== */
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    if ($('auth').style.display === 'grid') { closeAuth(); return; }
+    if (!$('drawer').hidden) { closeDrawer(); return; }
+    if (document.querySelector('[data-pop]:not([hidden])')) { closePops(); return; }
+    return;
+  }
+  if (e.key === 'Tab') {
+    const box = currentModal();
+    if (box) trapTab(e, box);
+  }
+});
+
+document.querySelector('.tabs').addEventListener('keydown', e => {
+  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+  const tabs = [...document.querySelectorAll('.tabs button')];
+  const i = tabs.indexOf(document.activeElement);
+  if (i < 0) return;
+  e.preventDefault();
+  const next = e.key === 'Home' ? 0
+    : e.key === 'End' ? tabs.length - 1
+    : (i + (e.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+  tabs[next].focus();
+  setView(tabs[next].dataset.view);
+});
+
 /* 正文 [参考N] ↔ 底部来源条的高亮联动 */
 function highlightRef(n, on) {
   const el = document.querySelector('.ref-item[data-ref-item="' + n + '"]');
@@ -1693,10 +1839,10 @@ function showAuth(msg) {
   $('authmsg').textContent = msg || '';
   $('auth').style.display = 'grid';
   document.body.classList.add('sat');
+  openDialogFocus($('auth'));   // #30：键盘用户不用 Tab 遍整页才能到「重新接入」
 }
 $('authgo').onclick = () => {
-  $('auth').style.display = 'none';
-  document.body.classList.remove('sat');
+  closeAuth();
   S.a.open = true; renderAll(); openPop('acctpop');
 };
 
