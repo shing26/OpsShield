@@ -85,6 +85,7 @@ copilot_map=$( { api_paths_for src/main/java/com/opspilot/gateway/CopilotControl
   api_paths_for src/main/java/com/opspilot/gateway/FeedbackController.java
   api_paths_for src/main/java/com/opspilot/gateway/SearchController.java
   api_paths_for src/main/java/com/opspilot/action/ActionOpsController.java; } | sort -u || true)
+echo "DEBUG copilot_map=[$copilot_map]" >&2   # TEMP
 copilot_paths=$(grep -oE "/api/v1/copilot/[a-z/-]+" "$HTML" | sort -u || true)
 for p in $copilot_paths; do
   echo "$copilot_map" | grep -qx "$p" || { echo "FAIL: 面板 fetch 的 copilot 路径无后端映射: $p"; fail=1; }
