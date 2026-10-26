@@ -99,6 +99,18 @@ if (cd offline && "$PY" provenance.py --check >/dev/null 2>&1); then ok "报告�
 if (cd offline && "$PY" doc_numbers.py --check >/dev/null 2>&1); then ok "文档数字↔产物"; else bad "doc_numbers --check"; fi
 if "$PY" scripts/check_public_copy.py --check >/dev/null 2>&1; then ok "对外用词门闩"; else bad "check_public_copy --check"; fi
 
+# L1 审计链 WORM 完整性（盲点 6）：配了 WORM 目录就强制逐条对账；未配则显式 SKIP——
+# 生产环境必须配置（审计链断层 = 事后无法回放），开发机没有 WORM 属正常。
+if [ -n "${OPSPILOT_WORM_DIR:-}" ]; then
+  if "$PY" scripts/l1_worm_gate.py --worm-dir "$OPSPILOT_WORM_DIR" >/dev/null 2>&1; then
+    ok "L1 WORM 完整性"
+  else
+    bad "L1 WORM 完整性（scripts/l1_worm_gate.py --worm-dir $OPSPILOT_WORM_DIR）"
+  fi
+else
+  warn "L1 WORM 完整性：未配置 OPSPILOT_WORM_DIR（生产必须配置）"
+fi
+
 # ---------- 3. 备份新鲜度（G0 允许"从未记录"仅告警；G1 full 必须红） ----------
 "$PY" scripts/check_backup_age.py
 rc=$?

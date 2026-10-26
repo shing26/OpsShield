@@ -195,6 +195,17 @@ OpsShield：payload + HMAC → POST 自动化系统 webhook（ev=action_dispatch
 - **webhook SSRF 闸**：只允许 http/https；默认拒绝环回/私网/链路本地（169.254.169.254 元数据端点），
   确需内网显式 `OPSPILOT_L1_WEBHOOK_ALLOW_PRIVATE=true`；3xx 不跟随（HttpClient NEVER）；connect 3s / read 5s。
 
+## 8.7 frozen 态 + WORM 门禁（2026-10-26 落地）
+
+**frozen 态（kill switch 动线）**：开关关闭时 confirmed 未派发的 op **冻结**而非过期——
+事故现场人正在救火，不该被迫重走提案。frozen 不可派发、不可过期；开关重开后由人显式
+`POST /actions/{opId}/unfreeze`（重置期限 → 自动派发）或 `POST /actions/{opId}/cancel`
+（→ expired）。读路径惰性触发冻结；审计 `action_frozen` / `action_unfrozen` / `action_cancelled`。
+
+**WORM 门禁（盲点 6）**：`scripts/l1_worm_gate.py`——本地 audit.jsonl 的**每一条** L1 事件
+都必须在 WORM 归档里有逐字副本，缺一条即 FAIL（fail-closed）。production_gate 在配置
+`OPSPILOT_WORM_DIR` 时强制对账，未配置则显式 WARN（生产必须配置）。
+
 ## 9. 实现顺序（⛔ 评审修正：verifier 与派发**同步交付**）
 
 ~~~

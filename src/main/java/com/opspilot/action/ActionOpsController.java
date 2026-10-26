@@ -53,6 +53,18 @@ public class ActionOpsController {
         return ops.list(JwtAuthFilter.from(http), state);
     }
 
+    /** 解冻（开关重开后由人操作）：frozen → confirmed → 自动派发。 */
+    @PostMapping("/{opId}/unfreeze")
+    public ActionOpsService.StatusResult unfreeze(@PathVariable String opId, HttpServletRequest http) {
+        return ops.unfreeze(JwtAuthFilter.from(http), opId);
+    }
+
+    /** 取消：frozen → expired（不再执行）。 */
+    @PostMapping("/{opId}/cancel")
+    public ActionOpsService.StatusResult cancel(@PathVariable String opId, HttpServletRequest http) {
+        return ops.cancel(JwtAuthFilter.from(http), opId);
+    }
+
     @GetMapping("/{opId}")
     public ActionOpsService.StatusResult status(@PathVariable String opId, HttpServletRequest http) {
         return ops.status(JwtAuthFilter.from(http), opId);

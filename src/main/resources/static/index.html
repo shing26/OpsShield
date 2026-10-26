@@ -1178,6 +1178,8 @@ async function poll() {
    服务端守卫：confirmer≠proposer / 租户匹配 / 密级足够 / token 哈希原子消费 / 窗口。
    面板只做展示与提交——所有判定在网关，这里没有第二套规则。 */
 let l1Timer = null;
+const L1_STATE_LABEL = { proposed: '待确认', confirmed: '已确认·待派发', frozen: '已冻结（开关关闭）',
+  dispatched: '已派发', executed: '执行成功', failed: '执行失败', expired: '已过期' };
 async function refreshActions() {
   const sec = $('l1sec'); if (!sec) return;
   sec.hidden = false;                    // platform 身份可见（panel 本身已门控）
@@ -1200,7 +1202,7 @@ function renderActions(ops) {
     + '<pre style="margin:6px 0;padding:8px;background:var(--bg2);border-radius:6px;font-size:12px;overflow-x:auto">'
     + esc(o.command) + '</pre>'
     + '<div class="sub" style="font-size:12px">提案人 ' + esc(o.proposedBy)
-    + ' · 来源 ' + esc(o.ref) + ' · 状态 ' + esc(o.state) + '</div></div>';
+    + ' · 来源 ' + esc(o.ref) + ' · 状态 ' + esc(L1_STATE_LABEL[o.state] || o.state) + '</div></div>';
   box.innerHTML = ops.map(card).join('');
   const tick = () => box.querySelectorAll('[data-exp]').forEach(el => {
     const exp = el.dataset.exp; if (!exp) { el.textContent = ''; return; }

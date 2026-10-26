@@ -159,6 +159,37 @@ class ActionDispatchServiceTest {
                 "坏签名请求不得消耗 nonce——同 nonce 首个合法请求仍应通过");
     }
 
+    /** frozen 态：开关关闭时 confirmed 未派发 → frozen（不是 expired）；解冻/取消都有正路。 */
+    @Test
+    void killSwitchFreezesConfirmedOpsAndRecovers() {
+        var jdbc = ctx.getBean(org.springframework.jdbc.core.JdbcTemplate.class);
+        var index = ctx.getBean(com.opspilot.retrieval.InMemoryIndex.class);
+        var audit = ctx.getBean(com.opspilot.metrics.AuditService.class);
+        var metrics = ctx.getBean(com.opspilot.metrics.L1Metrics.class);
+        // 开关关闭的第二套服务（同一 DB）
+        var disabled = new ActionOpsService(jdbc, index, audit,
+                new ActionDispatchService(jdbc, "bd".repeat(32), null, false), metrics, "");
+        String opId = "act_frozen_" + System.nanoTime();
+        jdbc.update("INSERT INTO action_ops (op_id, action_class, command, ref, breadcrumb, service, "
+                + "auth_level, tenant, proposed_by, state) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                opId, "L1-write-low", CMD, "rb-l1d::恢复动作", "r", "inventory-service",
+                3, "tenant-internal", "sre-full", "confirmed");
+        disabled.freezeSweep();
+        assertEquals("frozen", disabled.status(PROPOSER, opId).state(),
+                "开关关闭 → confirmed 冻结（不是 expired）");
+        // 解冻：开关重开后由人显式操作 → 重置期限并自动派发
+        var st = ops.unfreeze(CONFIRMER, opId);
+        assertTrue(java.util.List.of("dispatched", "executed").contains(st.state()),
+                "解冻后应自动派发，实际=" + st.state());
+        // 取消：frozen → expired
+        String op2 = "act_frozen2_" + System.nanoTime();
+        jdbc.update("INSERT INTO action_ops (op_id, action_class, command, ref, breadcrumb, service, "
+                + "auth_level, tenant, proposed_by, state) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                op2, "L1-write-low", CMD, "rb-l1d::恢复动作", "r", "inventory-service",
+                3, "tenant-internal", "sre-full", "frozen");
+        assertEquals("expired", ops.cancel(CONFIRMER, op2).state(), "取消 → expired");
+    }
+
     /** SSRF 最小防护（盲点 5）：私网/环回/链路本地默认拒；显式 allowlist 才放。 */
     @Test
     void webhookPrivateAddressesRejectedUnlessAllowed() {

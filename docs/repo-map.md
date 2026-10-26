@@ -25,7 +25,7 @@
 | `src/main/java/com/opspilot/` | 在线面：`gateway`(协议/编排) `retrieval` `llm` `resilience` `auth` `cache` `storm` `metrics` `health` `ingest` `chunk` `config` `common`(跨层控制信号) `store`(存储接缝) | ✅ |
 | `src/main/java/com/opspilot/store/` | **存储接缝**（[ADR-0022](adr/0022-standalone-storage-mode.md)）：`KvStore` 窄接口（15 操作）+ `RedisKvStore`/`MemoryKvStore` 两实现 + `StoreConfig` 按 `opspilot.storage.mode` 装配。内存实现**刻意复刻 Redis 语义**（TTL 仅建于创建、闭区间窗口裁剪、成员去重、`mapValues` 无顺序承诺）——不是"够用就行"，否则两套实现会在窗口计数/配额水位上悄悄分叉 | ✅ |
 | `src/main/java/com/opspilot/retrieval/` | 检索腿接缝（[ADR-0022](adr/0022-standalone-storage-mode.md)）：`RetrievalLeg` 接口（ES/Qdrant 与内存腿同形）+ `IdentityFilter`（`tenant × auth_level` 过滤**单一事实源**，检索与覆盖范围共用）+ `InMemoryIndex`/`InMemoryLegs`/`Vectors`（内存词法+向量腿，词法哈希非神经语义）+ `RetrievalWiring`（`lexicalLeg`/`vectorLeg` 命名 bean）。**权限过滤复用同一份判据是构造保证**，不是两套实现各自承诺 | ✅ |
-| `src/test/java/` | 单测与集成（408 用例，`@Test` 声明数） | ✅ |
+| `src/test/java/` | 单测与集成（409 用例，`@Test` 声明数） | ✅ |
 | `docs/adr/` | 28 项架构决策（每份含否决项与后果）——**改架构先写 ADR**；0027=MCP 入口、0028=L1 受控行动契约 | ✅ |
 | `docs/agents/` | **engineering skills 的 repo 配置**：issue tracker 约定 / triage label 映射 / 领域文档位置与消费规则（根级 `AGENTS.md` 的 `## Agent skills` 块指向这里）。由 `/setup-matt-pocock-skills` 写入，切换 tracker 或从头开始时才需重跑 | ✅ |
 | `docs/qa/` | 红队缺陷台账 / 模块复验台账（缺陷与验证的单一事实源） | ✅ |

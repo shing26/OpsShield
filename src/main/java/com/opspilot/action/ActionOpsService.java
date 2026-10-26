@@ -160,6 +160,7 @@ public class ActionOpsService {
 
     /** 本租户的 op 列表（面板确认入口的数据面）：只看本租户，state 可过滤。 */
     public java.util.List<StatusResult> list(UserContext caller, String stateFilter) {
+        freezeSweep();
         String sql = "SELECT op_id, state, command, ref, proposed_by, confirmed_by, tenant, confirm_expires_at "
                 + "FROM action_ops WHERE tenant = ?";
         java.util.List<Object> args = new java.util.ArrayList<>(java.util.List.of(caller.tenantId()));
@@ -178,6 +179,7 @@ public class ActionOpsService {
     }
 
     public StatusResult status(UserContext caller, String opId) {
+        freezeSweep();                              // kill switch 动线：关开关后读路径即冻结
         var row = jdbc.queryForMap(
                 "SELECT op_id, state, command, ref, proposed_by, confirmed_by, tenant "
                 + "FROM action_ops WHERE op_id = ?", opId);
@@ -187,6 +189,72 @@ public class ActionOpsService {
         return new StatusResult(opId, (String) row.get("state"), (String) row.get("command"),
                 (String) row.get("ref"), (String) row.get("proposed_by"),
                 (String) row.get("confirmed_by"), (String) row.get("tenant"), null);
+    }
+
+    // ── frozen 态（2026-10-25 评裁决·紧急 kill switch 动线） ──────────────
+    // 开关关闭时 confirmed 未派发的 op **冻结**（不是 expired）——事故现场人正在救火，
+    // 不该被迫重新走一遍提案+确认。frozen 不可派发、不可过期；开关重开后由人显式
+    // unfreeze（→ confirmed → 自动派发，期限重置）或 cancel（→ expired）。全部落审计。
+
+    /** 惰性冻结：开关关闭时把 confirmed 未派发的 op 转 frozen（status/list 读路径触发）。 */
+    public void freezeSweep() {
+        if (dispatch.l1Enabled()) {
+            return;
+        }
+        var rows = jdbc.queryForList("SELECT op_id, tenant FROM action_ops WHERE state='confirmed'");
+        for (var row : rows) {
+            String opId = (String) row.get("op_id");
+            if (jdbc.update("UPDATE action_ops SET state='frozen' "
+                    + "WHERE op_id=? AND state='confirmed'", opId) == 1) {
+                auditEvent(null, "action_frozen", opId);
+                l1Metrics.frozen((String) row.get("tenant"));
+            }
+        }
+    }
+
+    /** 显式解冻（开关重开后由人操作）：frozen → confirmed → 重置期限 → 自动派发。 */
+    public StatusResult unfreeze(UserContext actor, String opId) {
+        if (!dispatch.l1Enabled()) {
+            throw rejection(actor, opId, "l1_disabled", "L1 未启用，不能解冻");
+        }
+        var row = jdbc.queryForMap(
+                "SELECT state, tenant, auth_level FROM action_ops WHERE op_id = ?", opId);
+        if (!"frozen".equals(row.get("state"))) {
+            throw rejection(actor, opId, "state_" + row.get("state"),
+                    "只有 frozen 可解冻（当前 " + row.get("state") + "）");
+        }
+        if (!actor.tenantId().equals(row.get("tenant"))
+                || actor.authLevel() < ((Number) row.get("auth_level")).intValue()) {
+            throw rejection(actor, opId, "confirmer_not_authorized", "解冻人租户或密级不匹配");
+        }
+        int updated = jdbc.update("UPDATE action_ops SET state='confirmed', dispatch_expires_at=? "
+                        + "WHERE op_id=? AND state='frozen'",
+                java.sql.Timestamp.from(Instant.now().plusSeconds(15 * 60)), opId);
+        if (updated != 1) {
+            throw rejection(actor, opId, "cas_conflict", "解冻被并发消费");
+        }
+        auditEvent(actor, "action_unfrozen", opId);
+        dispatch.dispatchConfirmed(opId);
+        return status(actor, opId);
+    }
+
+    /** 取消（frozen → expired）：事故结束/不再需要执行时的正路。 */
+    public StatusResult cancel(UserContext actor, String opId) {
+        var row = jdbc.queryForMap(
+                "SELECT state, tenant, auth_level FROM action_ops WHERE op_id = ?", opId);
+        if (!"frozen".equals(row.get("state"))) {
+            throw rejection(actor, opId, "state_" + row.get("state"),
+                    "只有 frozen 可取消（当前 " + row.get("state") + "）");
+        }
+        if (!actor.tenantId().equals(row.get("tenant"))) {
+            throw rejection(actor, opId, "confirmer_not_authorized", "不能取消他租户的 op");
+        }
+        if (jdbc.update("UPDATE action_ops SET state='expired' WHERE op_id=? AND state='frozen'",
+                opId) == 1) {
+            auditEvent(actor, "action_cancelled", opId);
+            l1Metrics.expired((String) row.get("tenant"), "confirm");
+        }
+        return status(actor, opId);
     }
 
     /** 过期扫描（confirm 前置检查与定时清理共用；红队过期用例的判定点）。 */
