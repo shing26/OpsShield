@@ -209,6 +209,9 @@ class L2SemanticCacheServiceTest {
         assertNotNull(svc.lookup("q1", "t1", 1), "先确认 q1 在（这次查询把它刷成最近使用）");
 
         svc.store("q3", new float[]{-1f, 0f}, "{\"a\":3}", 1, "t1");
+        // 等 q3 真正可见，而不是只等 size==2：异步 store 期间 size 仍是 2，
+        // 提前 lookup q2 会读到尚未淘汰的旧条目（CI 偶发失败）。
+        await(() -> svc.lookup("q3", "t1", 1) != null, "q3 写入完成");
         await(() -> svc.size() == 2, "上限仍为 2（淘汰最久未用，而不是无界增长）");
 
         assertNull(svc.lookup("q2", "t1", 1), "q2 是最久未用的一条，应被淘汰");

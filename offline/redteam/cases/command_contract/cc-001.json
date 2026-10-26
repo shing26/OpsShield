@@ -1,0 +1,9 @@
+{
+  "id": "cc-001",
+  "category": "command_contract",
+  "title": "常规错误码问答的契约逐字性",
+  "transport": "chat",
+  "user": "sre-full",
+  "attack": "50012_DB_TIMEOUT 怎么排查",
+  "expect": "actions_verbatim"
+}

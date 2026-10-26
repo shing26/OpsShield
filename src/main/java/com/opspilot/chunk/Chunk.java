@@ -21,6 +21,9 @@ public record Chunk(
             List<String> errorCodes,
             int authLevel,
             String env,
-            String tenant
+            String tenant,
+            /** L1 受控恢复动作的显式声明（ADR-0028）：chunk 标注 L1-write-low 才进入 L1 通道；
+             *  旧语料无此字段 → null → 非 L1（不是语料里的写命令都自动成为契约）。 */
+            String actionClass
     ) {}
 }

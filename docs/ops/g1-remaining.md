@@ -4,6 +4,7 @@
 > 判据与证据要求以 [production-gate.md](production-gate.md) 为准；逐项配置步骤见
 > [g1-external-setup.md](g1-external-setup.md)（systemd/env/webhook/中间件/Trivy/WORM/回滚）。
 > 本轮 live 实测（readiness + 真实 DashScope chat）见 [g1-live-evidence.md](g1-live-evidence.md)。
+> 按资源依赖拆的任务清单与 VM/WSL 操作步骤见 [blocker-tasks.md](blocker-tasks.md)。
 
 ## 0. 当前已验证到哪
 
@@ -15,20 +16,11 @@
 
 ## 1. 备份每日调度（门禁 1）
 
-缺：实际注册的每日任务 + 一次由任务触发的成功备份（不是手动跑）。
+已完成（Windows 计划任务形态）：`OpsPilot-Backup` 已注册，Next Run 2026/10/24 02:00，
+Last Result=0；由任务触发备份 `backup/users-2026-10-23.zip`，`verified=true`，
+`check_backup_age.py` age=0.0h。证据见 [g1-live-evidence.md](g1-live-evidence.md) §2.7。
 
-```bash
-# Linux
-sudo cp ops/systemd/opspilot-backup.* /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now opspilot-backup.timer
-systemctl list-timers opspilot-backup.timer
-# 次日验收
-cat backup/.last-success.json
-python scripts/check_backup_age.py
-```
-
-Windows 开发形态：`powershell -File scripts/install_windows_tasks.ps1`，回读 `Get-ScheduledTask -TaskName "OpsPilot-Backup"`。
+边界：Linux 生产仍需把 `ops/systemd/opspilot-backup.timer` 注册到 systemd 并等一次真实触发。
 验收：`check_backup_age.py` 退出 0 且 `verified=true`，时间戳来自任务运行（`logs/backup.task.log` / journal）。
 
 ## 2. 告警到人（门禁 2）
@@ -41,57 +33,73 @@ Windows 开发形态：`powershell -File scripts/install_windows_tasks.ps1`，�
 - Redis down：02:46:38 停 Redis，20s 后 gauge=0，02:49:21 `OpsPilotRedisDown` active，receiver=human-notify；
 - Alertmanager webhook 成功通知 +4（两条 firing + 两条 resolved），无新增失败。
 
-还缺：
-- 磁盘满场景：只验证 `aiops_disk_free_bytes` 指标与 `OpsPilotDiskLow` 规则已加载，**未真的填满磁盘**；
-- 飞书群内 2 条 firing + 2 条 resolved 的人工确认。
+已完成磁盘满：Ubuntu VM 用 1G loop 盘填到 94%（`aiops_disk_free_bytes` 906MB→393MB），
+Windows Prometheus 新增 VM target；`OpsPilotDiskLow` 于 19:07:36Z active、receiver=human-notify、
+service=opspilot-vm，恢复后 resolved；Alertmanager webhook 成功通知新增。
+
+已完成：用户已确认收到飞书磁盘告警。
 
 ## 3. 失败证据 full 演练（门禁 4）
 
-缺：一次真实失败请求的审计行 + 堆栈 + `aiops_requests_failed_total` 增量在同一时间窗对上。
+已完成：临时网关把 LLM model 配成不存在，制造一次真实失败（request_id `a8cf4948`）。
 
-- 用错误 key/断网/强制 4xx 制造一次失败（不要改生产 key 持久化）。
-- 验收：`ev=chat_failed` 审计行、`logs/app.log` 的 `stream error`、Prometheus 计数能指到同一 `request_id`。
+- 审计：`ev=chat_failed, err_class=LlmHttpException, err_msg="LLM HTTP 404", delivered=false`；
+- 日志：`WARN [a8cf4948] ChatOrchestrator - stream error: LlmHttpException: LLM HTTP 404`；
+- 指标：`aiops_requests_failed_total{reason="LlmHttpException"} 1.0`。
+
+证据见 [g1-live-evidence.md](g1-live-evidence.md) §2.6。
 
 ## 4. 发布/回滚真实演练（门禁 5）
 
-缺：真实 systemd/容器服务上的停服、换 jar、起服、回滚。
+已完成 Ubuntu 24.04 VM 上的 systemd 演练（证据见 [g1-live-evidence.md](g1-live-evidence.md) §2.10）：
 
-已有 `release.sh` / `rollback.sh` / `drill_release_rollback.sh`（产物哈希与入口已验证），
-并已做本机进程级 previous→current→rollback（三次 health 均 True，见 live evidence §2.3）。
-还缺 **systemd 测试机上的真实停服/切换**：停服 → 换 jar → 起服 → readiness →
-`rollback.sh <prev> --apply` → `/state` 的 `build.version/commit` 与 manifest 对齐。
+- current → v-prev（commit 65cc9b3）→ current 三次切换；
+- 每次 `systemctl is-active` active、readiness UP；
+- `rollback.sh v-prev --apply` 校验 sha256 OK；
+- 注入 `OPSPILOT_BUILD_COMMIT` 后 `/state.build.commit` 分别 969e137 / 65cc9b3 / 969e137，
+  与 manifest 对齐。
+
+门禁 5 已闭环。
 
 ## 5. 单人并发压测（门禁 6）
 
-缺：**live 上游**下的单租户并发测试（mock/内存 soak 只证明背压不崩）。
+已完成一轮 live 采样（20 并发 / 10s；`scripts/live_concurrency.py`）：
+84 次加载请求、4×200、80×429、0×5xx；对照租户 1×200、0×429；
+`aiops_admission_rejected_total=80`、`requests_failed=0`、`degradation_level=L0`；
+成功 TTFT P95 18.1s，对照 8.9s。证据见 [g1-live-evidence.md](g1-live-evidence.md) §2.9。
 
-- 用 locust 或 `soak.sh` 改 live 配置，单租户 20–50 并发。
-- 记录请求数/成功率/429 比例、`aiops_admission_rejected_total`、L0→L1→L2、P95/P99 TTFT。
-- 验收：其他租户成功率不因单租户压测显著下降；L2 不因单人流量点亮。
+还缺：
+- 对照租户至少 20–30 次**同窗口**成功请求，才能比较“成功率不显著下降”；
+- 更长窗口（5–30 分钟）与 P99/容量拐点；
+- 不要用 10s 样本宣称容量通过。
 
 ## 6. SCA 真实结果（门禁 8）
 
-缺：CI `security` job 的 Trivy 结果（本地 Docker Hub 拉取受限，未跑）。
+已完成：CI run `39873876035` 全绿，`security` job success；Trivy artifact 中 Java vulns=0。
 
-- 首次 push/PR 后保存 `security` job 日志与 findings；命中 HIGH/CRITICAL 按修复/豁免记录处置。
-- Dependabot 的 PR 至少有一次实际合并/关闭记录。
+- 初始 37 个 HIGH/CRITICAL；同主版本补丁覆盖修复 33 个（Tomcat 10.1.59、Jackson 2.22.3、
+  Netty 4.1.137.Final、Spring 6.2.19、Micrometer 1.15.12、protobuf 3.25.5、gRPC 1.75.0）；
+- 4 个跨大版本修复的 CVE 登记在 [`.trivyignore`](../../.trivyignore) + [sca-findings.md](sca-findings.md)，
+  附补偿控制与 2027-10-23 复核到期；
+- 还缺：Dependabot 的 PR 至少一次实际合并/关闭记录。
 
-## 7. 审计异地 WORM（门禁 9）
+## 7. 审计 WORM（门禁 9）
 
-缺：真实远端/不可变存储（本地脚本与 systemd 模板已就位）。
+已完成本地 MinIO Object Lock：bucket `opspilot-audit`，COMPLIANCE 180d；两次时间戳 audit 副本；
+对象元数据锁定、版本删除被拒、下载副本验链 PASS。
 
-- 挂载只追加卷到 `/mnt/audit-offsite`，配 `AUDIT_OFFSITE_DIR`，启用 `opspilot-audit-offsite.timer`。
-- 验收：连续两次运行产生两个时间戳目录；副本验链通过；挂载侧确认对象锁/不可变。
-- 哈希链不能证明尾部未删——尾部保护由 WORM/远端只追加保证。
+**用户确认接受“本地对象锁，非异地”作为门禁 9 口径（2026-10-24）**。
+边界：若未来要求真正异地容灾，把 MinIO 换到第二台主机/云 S3 即可，脚本/验收口径不变。
 
 ## 8. Runbook 演练（门禁 10）
 
-缺：按 [runbook.md](runbook.md) 的 A/B/C 三症状各走一次。
+已做本地演练（证据见 [g1-live-evidence.md](g1-live-evidence.md) §2.8）：
 
-- “登录 500”：停库/造坏库 → 按 runbook 恢复；
-- “网关不可达”：停进程 → 按 runbook 与回滚脚本恢复；
-- “降级常亮”：制造上游 429/断网 → 按 runbook 判断解除。
-- 记录每步耗时；目标 5 分钟内“先止损/先保现场”。
+- “登录 500”：空库启动 → 登录 500（`Table "USERS" not found`）→ 换回有效库重启 → `LOGIN_OK`；
+- “网关不可达”：02:37:39 停 gateway → 按 runbook 看端口/日志 → 02:43 重启，readiness UP；
+- “降级常亮”：LLM model 配错，连续 3 次失败 → L2、failures=3；换回有效模型重启 → L0、failures=0。
+
+门禁 10 本机形态已满足；生产 systemd 形态仍需在目标机复跑一次。
 
 ## 9. 语料漂移（已知债务）
 

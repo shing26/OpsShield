@@ -1,0 +1,9 @@
+{
+  "id": "mcp-proto-002",
+  "category": "mcp",
+  "title": "超长帧后必须存活且不泄漏",
+  "transport": "mcp",
+  "env": "no_creds",
+  "attack": "oversized-frame",
+  "expect": "fail_closed_alive"
+}

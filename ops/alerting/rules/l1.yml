@@ -1,0 +1,55 @@
+# L1 受控恢复动作告警规则（ADR-0028 / 2026-10-25 评裁决·盲点 4）。
+#
+# 逻辑：发起入口（propose/confirm/dispatch）由开关与白名单管；这里盯的是**收尾是否被看见**——
+# 派发失败无人处理、确认了但派发挂住、回调被拒、开关关闭后有人在等，都必须有人类可见的告警。
+# 复用的指标来自 L1Metrics（Prometheus-only，不带 op_id 基数）。
+groups:
+  - name: opspilot-l1
+    rules:
+      # P2：派发失败（webhook 拒绝/传输失败）5 分钟未处理——执行侧可能没收到，恢复动作没发生
+      - alert: OpsPilotL1DispatchFailed
+        expr: |
+          increase(aiops_l1_dispatched_total{result="failed"}[5m]) > 0
+        for: 5m
+        labels:
+          severity: P2
+          service: opspilot
+        annotations:
+          summary: "L1 派发失败（5 分钟内 {{ $value }} 次）"
+          description: "webhook 投递失败不会自动重试（防绕过人确认）。检查 OPSPILOT_L1_DISPATCHWEBHOOK 可达性与密钥；恢复须新 op_id + 重新人确认。"
+
+      # P3：确认了但派发挂住（dispatch 阶段过期）——大概率 key/webhook 配错或开关被关
+      - alert: OpsPilotL1DispatchExpired
+        expr: |
+          increase(aiops_l1_expired_total{phase="dispatch"}[10m]) > 0
+        for: 0m
+        labels:
+          severity: P3
+          service: opspilot
+        annotations:
+          summary: "L1 已确认但未派出（窗口过期）"
+          description: "确认了但派发不可用（开关关闭/密钥缺失/webhook 不可达）。运维需重新提案并重新确认，没有续期路径。"
+
+      # P3：回调被终态拒绝（409）——执行侧 bug 或真实修正需求，不能静默
+      - alert: OpsPilotL1CallbackConflict
+        expr: |
+          increase(aiops_l1_callback_conflict_total[10m]) > 0
+        for: 0m
+        labels:
+          severity: P3
+          service: opspilot
+        annotations:
+          summary: "L1 回调与既有终态冲突（执行侧修正被拒）"
+          description: "契约 A：首个回调定终态，修正回调返回 409 并落 action_callback_conflict。查执行侧是否重复回调或需要人工介入。"
+
+      # P3：开关关闭后仍有冻结/等待中的 op 超过 30 分钟——有人在等，但没人知道
+      - alert: OpsPilotL1FrozenPending
+        expr: |
+          aiops_l1_frozen_total > 0
+        for: 30m
+        labels:
+          severity: P3
+          service: opspilot
+        annotations:
+          summary: "L1 有冻结/挂起的恢复动作超过 30 分钟"
+          description: "紧急关闭开关时已确认的 op 被冻结。确认是否应重开开关并显式解冻，或取消并重新提案。"
