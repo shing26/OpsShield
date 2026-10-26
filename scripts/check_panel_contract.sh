@@ -70,19 +70,26 @@ grep -qF "esc(ev.sub)" "$HTML" || {
 # 层 7：copilot / auth 路径字面量必须存在于对应 Controller 的映射上。
 # 层 1 只查了 admin：/chat/stream 或 /coverage 改名时面板不会报错、只会永远 404——
 # 这是「面板静默失明」的另一半（2026-10-26 审查记为门闩盲区，#33）。
-copilot_map=$(grep -hoE '@(Get|Post)Mapping\((value = )?"[^"]+"' \
-  src/main/java/com/opspilot/gateway/CopilotController.java \
-  src/main/java/com/opspilot/gateway/CoverageController.java \
-  src/main/java/com/opspilot/gateway/FeedbackController.java \
-  src/main/java/com/opspilot/gateway/SearchController.java \
-  | sed -E 's/.*"([^"]+)"/\/api\/v1\/copilot\1/' | sort -u || true)
+# 每个 Controller 各自读类级前缀（/api/v1/copilot、/api/v1/copilot/actions、/api/v1/auth…），
+# 再拼方法级映射；类根上有裸 @GetMapping/@PostMapping 的（无参映射）把前缀本身也计入。
+api_paths_for() {
+  local f=$1 prefix subs s
+  prefix=$(grep -oE '@RequestMapping\("[^"]+"\)' "$f" | head -1 | sed -E 's/.*"([^"]+)"/\1/' || true)
+  [ -z "$prefix" ] && return 0
+  subs=$(grep -oE '@(Get|Post)Mapping\((value = )?"[^"]+"' "$f" | sed -E 's/.*"([^"]+)"/\1/' || true)
+  for s in $subs; do echo "${prefix}${s}"; done
+  if grep -qE '^[[:space:]]*@(Get|Post)Mapping$' "$f"; then echo "$prefix"; fi   # 类根上的无参映射
+}
+copilot_map=$( { api_paths_for src/main/java/com/opspilot/gateway/CopilotController.java
+  api_paths_for src/main/java/com/opspilot/gateway/CoverageController.java
+  api_paths_for src/main/java/com/opspilot/gateway/FeedbackController.java
+  api_paths_for src/main/java/com/opspilot/gateway/SearchController.java
+  api_paths_for src/main/java/com/opspilot/action/ActionOpsController.java; } | sort -u || true)
 copilot_paths=$(grep -oE "/api/v1/copilot/[a-z/-]+" "$HTML" | sort -u || true)
 for p in $copilot_paths; do
   echo "$copilot_map" | grep -qx "$p" || { echo "FAIL: 面板 fetch 的 copilot 路径无后端映射: $p"; fail=1; }
 done
-auth_map=$(grep -hoE '@(Get|Post)Mapping\((value = )?"[^"]+"' \
-  src/main/java/com/opspilot/gateway/AuthController.java \
-  | sed -E 's/.*"([^"]+)"/\/api\/v1\/auth\1/' | sort -u || true)
+auth_map=$(api_paths_for src/main/java/com/opspilot/gateway/AuthController.java | sort -u || true)
 auth_paths=$(grep -oE "/api/v1/auth/[a-z/-]+" "$HTML" | sort -u || true)
 for p in $auth_paths; do
   echo "$auth_map" | grep -qx "$p" || { echo "FAIL: 面板 fetch 的 auth 路径无后端映射: $p"; fail=1; }
