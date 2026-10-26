@@ -325,6 +325,7 @@
   .sub{color:var(--muted);font-size:11px;margin-top:10px}
   #events{max-height:40vh;overflow-y:auto;font-family:var(--mono);font-size:12px;
           background:var(--surface-2);border:1px solid var(--line-soft);border-radius:8px}
+  #events .ev-empty{padding:10px 12px;font-size:12px;color:var(--muted)}
   #events .ev{display:flex;gap:10px;padding:var(--s1) 10px;border-bottom:1px solid var(--line-soft);
               white-space:nowrap;overflow:hidden}
   #events .ev:last-child{border-bottom:0}
@@ -395,7 +396,7 @@
             aria-controls="v-panel" tabindex="-1">运行面板</button>
   </nav>
   <span class="spacer"></span>
-  <span id="fingerprint" class="num">build —</span>
+  <span id="fingerprint" class="num"></span>
   <button class="pillbtn" id="acct" data-popbtn="acctpop" aria-haspopup="true" aria-expanded="false">
     <span class="dot"></span>未接入</button>
   <button class="pillbtn" id="healthbtn" data-act="opendrawer">运行态</button>
@@ -696,8 +697,8 @@ async function stream(k, q) {
               error: { message: s.err }, ttft: null, ms: null, state: 'error' };
       showAuth(s.err); renderAll(); return;
     }
-    if (!resp.ok) {
-      s.r.state = 'error'; s.r.error = { message: 'HTTP ' + resp.status };
+    if (!resp.ok) {                       // #35：后端返回 {code,message}，别只显示状态码
+      s.r.state = 'error'; s.r.error = { message: await httpErrText(resp) };
       return;
     }
 
@@ -1310,8 +1311,10 @@ function renderDrawer(metrics, prev) {
 }
 
 /* ==================== 视图装配 ==================== */
-function setView(v) {
+function setView(v, opts) {
   S.view = v;
+  // #35：视图写进 hash（刷新/后退不丢）；silent 用于 hashchange 回填，避免来回改写历史
+  if (!(opts && opts.silent) && location.hash !== '#' + v) history.replaceState(null, '', '#' + v);
   document.querySelectorAll('.tabs button').forEach(b => {
     const on = b.dataset.view === v;
     b.classList.toggle('on', on);
@@ -1351,10 +1354,22 @@ function renderAll() {
 let cursor = 0, prevMetrics = null, pollTimer = null, pollPeriod = 0, alive = false,
     lastPollFailed = false, drawerState = null, drawerPrev = null, pollInFlight = false, tracks = [];
 
+/* #35：非 2xx 一律丢弃响应体 → 配额 429 / query 超长 400 的具体文案到不了页面。
+   后端本来就返回 {code,message}（GlobalExceptionHandler / ErrorBodies），这里只负责读出来。 */
+async function httpErrText(r) {
+  const base = 'HTTP ' + r.status;
+  try {
+    const j = await r.json();
+    const m = j && (j.message || j.error);
+    if (m) return base + ' · ' + m;
+  } catch (e) { /* 非 JSON 响应：保留状态码 */ }
+  return base;
+}
+
 async function api(path) {
   const r = await fetch(path, { headers: S.a.token ? { Authorization: 'Bearer ' + S.a.token } : {} });
   if (r.status === 401 || r.status === 403) { throw { auth: r.status }; }
-  if (!r.ok) throw { err: 'HTTP ' + r.status };
+  if (!r.ok) throw { err: await httpErrText(r) };
   return r.json();
 }
 function stopPoll() { if (pollTimer) clearInterval(pollTimer); pollTimer = null; }
@@ -1402,7 +1417,8 @@ async function poll() {
   }
   try { a = await api('/api/v1/admin/audit/recent?since=' + cursor + '&limit=' + CAP); }
   catch (e) { if (e.auth) { return; } a = null; }
-  lastPollFailed = false; alive = true; S.platform = true;
+  if (lastPollFailed) { lastPollFailed = false; resyncInterval(); }   // #35：文案与真实 interval 一致
+  alive = true; S.platform = true;
   renderHeader(); renderPanelGate();   // 抽屉由 renderState 用**本轮** metrics 渲染（#27）
   $('pollstate').textContent = '轮询中 · ' + (cadence() / 1000) + 's'; $('pollstate').style.color = '';
   renderState(s); if (a) renderEvents(a);
@@ -1473,7 +1489,9 @@ if (qp) { const el = $('l1op'); if (el) el.value = qp; }
 
 /* #24：窄屏顶栏折行会把去重键串撑成两三行——只留 build 版本，完整信息进 title / 运行态抽屉。 */
 function fingerprintText(b) {
-  const full = 'build ' + b.version + ' · jvm ' + b.jvm +
+  // #35：commit 后端早已下发（本地为 unknown），顶栏此前从不展示——“现在跑的是哪一版”答不出来。
+  const commit = b.commit && b.commit !== 'unknown' ? ' · commit ' + String(b.commit).slice(0, 7) : '';
+  const full = 'build ' + b.version + commit + ' · jvm ' + b.jvm +
     ' · uptime ' + Math.floor(b.uptime_s / 3600) + 'h' + Math.floor(b.uptime_s % 3600 / 60) +
     'm · pid ' + b.pid;
   const narrow = window.matchMedia && window.matchMedia('(max-width:600px)').matches;
@@ -1668,8 +1686,15 @@ function drawRate(reset) {
 /* ---------- 事件流 ---------- */
 
 function renderEvents(a) {
+  // #35：初始是一条空心细条——给一句空态；首条事件到达即移除。
+  const evBox = $('events');
+  const emptyHint = evBox.querySelector('.ev-empty');
+  if (a.events.length && emptyHint) emptyHint.remove();
   if (a.truncated) {
     prepend('<div class="ev lost">⚠️ 事件丢失（缓冲轮转或服务重启，游标已跳至 ' + a.max_seq + '）</div>');
+  }
+  if (!a.events.length && !a.truncated && !evBox.querySelector('.ev:not(.ev-empty)')) {
+    prepend('<div class="ev-empty">暂无新事件——发起一次查询、接入身份或触发降级后，事件会在这里滚动出现。</div>');
   }
   for (const ev of a.events) {
     cursor = Math.max(cursor, ev.seq | 0);
@@ -1854,19 +1879,30 @@ $('windows').onclick = (e) => {
   drawRate(false);
 };
 $('copy').onclick = async () => {
+  const btn = $('copy');
+  const restore = () => { btn.textContent = '复制最近 50 条 JSON'; };
   const a = await api('/api/v1/admin/audit/recent?since=' + Math.max(0, cursor - 50) + '&limit=50')
     .catch(() => null);
-  if (a) { await navigator.clipboard.writeText(JSON.stringify(a.events, null, 2));
-    $('copy').textContent = '已复制 ✓'; setTimeout(() => $('copy').textContent = '复制最近 50 条 JSON', 1500); }
+  if (!a) { btn.textContent = '取审计失败'; setTimeout(restore, 1800); return; }   // #35：不再静默
+  try {
+    await navigator.clipboard.writeText(JSON.stringify(a.events, null, 2));
+    btn.textContent = '已复制 ✓';
+  } catch (e) {
+    btn.textContent = '复制失败（剪贴板不可用）';   // 非 https/无权限时 navigator.clipboard 会抛
+  }
+  setTimeout(restore, 1800);
 };
 
 /* ==================== 启动 ==================== */
 renderAll();
+setView(location.hash === '#panel' ? 'panel' : 'trouble');   // #35：刷新后回到同一视图
+window.addEventListener('hashchange', () => {
+  setView(location.hash === '#panel' ? 'panel' : 'trouble', { silent: true });
+});
 syncTopbarHeight();
 window.addEventListener('resize', syncTopbarHeight);
 if (window.ResizeObserver) new ResizeObserver(syncTopbarHeight).observe(document.querySelector('.topbar'));
 renderTracks();
-setView('trouble');
 /* 刷新不掉线：sessionStorage 里还有 token 就同时恢复运行态轮询与覆盖范围（两者都按身份算） */
 if (S.a.token) { startPoll(); loadCoverage(); }
 </script>

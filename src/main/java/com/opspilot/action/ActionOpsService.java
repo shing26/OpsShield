@@ -166,6 +166,13 @@ public class ActionOpsService {
         l1Metrics.confirmed(confirmer.tenantId());
         dispatch.stampDispatchDeadline(opId);       // 契约 3：confirm 即定派发期限
         dispatch.dispatchConfirmed(opId);           // §2：confirmed→dispatched 系统自动
+        // #32：审计必须写**真实终态**——派发可能因开关/key/webhook 缺失或期限已过而停在
+        // confirmed/expired；无条件写 action_dispatched 会让回放误判「动作已发出」。
+        String after = jdbc.queryForList("SELECT state FROM action_ops WHERE op_id = ?", String.class, opId)
+                .stream().findFirst().orElse("");
+        boolean dispatched = "dispatched".equals(after);
+        auditEvent(confirmer, dispatched ? "action_dispatched" : "action_not_dispatched",
+                opId + (dispatched ? "" : " (state=" + after + ")"));
         return status(confirmer, opId);
     }
 
@@ -198,9 +205,15 @@ public class ActionOpsService {
 
     public StatusResult status(UserContext caller, String opId) {
         freezeSweep();                              // kill switch 动线：关开关后读路径即冻结
-        var row = jdbc.queryForMap(
+        // #32：queryForMap 在 0 行时抛 EmptyResultDataAccessException → 500。未知 opId 是
+        // 客户端可决策的 404，不是服务端故障；同时落 action_rejected 便于审计对账。
+        var rows = jdbc.queryForList(
                 "SELECT op_id, state, command, ref, proposed_by, confirmed_by, tenant, auth_level "
                 + "FROM action_ops WHERE op_id = ?", opId);
+        if (rows.isEmpty()) {
+            throw rejection(caller, opId, "not_found", "op 不存在（opId 拼错或已被清理）");
+        }
+        var row = rows.get(0);
         if (!caller.tenantId().equals(row.get("tenant"))) {
             throw rejection(caller, opId, "cross_tenant", "不能查他租户的 op");
         }
@@ -285,6 +298,8 @@ public class ActionOpsService {
     public void expire(String opId) {
         if (jdbc.update("UPDATE action_ops SET state='expired' "
                 + "WHERE op_id=? AND state='proposed'", opId) == 1) {
+            // #32：过期也要留痕——否则审计里只有 proposed、没有终态，链路对不上
+            auditEvent(null, "action_expired", opId);
             l1Metrics.expired(tenantOf(opId), "confirm");
         }
     }
