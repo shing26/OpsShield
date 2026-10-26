@@ -4,6 +4,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
 import com.opspilot.auth.UserContext;
 import com.opspilot.chunk.Chunk;
@@ -30,6 +31,7 @@ class ActionOpsServiceTest {
 
     @Autowired ActionOpsService ops;
     @Autowired InMemoryIndex index;
+    @Autowired JdbcTemplate jdbc;
 
     static final UserContext PROPOSER = new UserContext("sre-full", "platform", 3, "tenant-internal");
     static final UserContext CONFIRMER = new UserContext("sre-manager", "platform", 3, "tenant-internal");
@@ -115,5 +117,62 @@ class ActionOpsServiceTest {
         var e = assertThrows(ActionOpsService.ActionRejectedException.class,
                 () -> ops.confirm(CONFIRMER, p.opId(), "deadbeef"));
         assertEquals("bad_token", e.stage);
+    }
+
+    // ── 密级闸（#17）：command 原文不得下发给低密级调用者 ─────────────────────
+    // 每个用例用独立租户：本类共用一个 H2 内存库，混租户会让「列表条数」无法断言。
+
+    private static UserContext user(String sub, int level, String tenant) {
+        return new UserContext(sub, level >= 3 ? "platform" : "sre", level, tenant);
+    }
+
+    private String insertOp(String tenant, int authLevel, String state) {
+        String opId = "act_lvl_" + System.nanoTime();
+        jdbc.update("INSERT INTO action_ops (op_id, action_class, command, ref, breadcrumb, service, "
+                        + "auth_level, tenant, proposed_by, state) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                opId, "L1-write-low", CMD, "rb-l1::恢复动作", "rb-l1 > 恢复", "order-service",
+                authLevel, tenant, "sre-full", state);
+        return opId;
+    }
+
+    /** 列表按密级过滤：L1 调用者不该看到 L3 的 op（返回体里带 command 原文）。 */
+    @Test
+    void listFiltersByCallerAuthLevel() {
+        String tenant = "tenant-lvl-list";
+        insertOp(tenant, 1, "proposed");
+        insertOp(tenant, 3, "proposed");
+
+        var low = ops.list(user("sre-limited", 1, tenant), "proposed");
+        var high = ops.list(user("sre-platform", 3, tenant), "proposed");
+
+        assertEquals(1, low.size(), "L1 调用者只能看到 auth_level<=1 的 op");
+        assertEquals(2, high.size(), "L3 调用者看到同租户全部");
+        assertTrue(low.stream().allMatch(o -> o.command() != null), "低密级侧拿到的命令来自它有权看的行");
+    }
+
+    /** 单条读取同样过密级闸；够密级的同租户用户不受影响。 */
+    @Test
+    void statusRejectsLowerLevelCaller() {
+        String tenant = "tenant-lvl-status";
+        String opId = insertOp(tenant, 3, "proposed");
+
+        var e = assertThrows(ActionOpsService.ActionRejectedException.class,
+                () -> ops.status(user("sre-limited", 1, tenant), opId));
+        assertEquals("op_level_insufficient", e.stage);
+        assertEquals("proposed", ops.status(user("sre-platform", 3, tenant), opId).state(),
+                "同租户够密级仍可读");
+    }
+
+    /** 取消是写操作：低密级不能取消高密级的 frozen op（与 unfreeze 同一条判据）。 */
+    @Test
+    void cancelRejectsLowerLevelCaller() {
+        String tenant = "tenant-lvl-cancel";
+        String opId = insertOp(tenant, 3, "frozen");
+
+        var e = assertThrows(ActionOpsService.ActionRejectedException.class,
+                () -> ops.cancel(user("sre-limited", 1, tenant), opId));
+        assertEquals("confirmer_not_authorized", e.stage);
+        assertEquals("expired", ops.cancel(user("sre-platform", 3, tenant), opId).state(),
+                "够密级的同租户用户可取消");
     }
 }

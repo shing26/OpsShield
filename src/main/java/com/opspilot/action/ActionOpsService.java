@@ -169,12 +169,19 @@ public class ActionOpsService {
         return status(confirmer, opId);
     }
 
-    /** 本租户的 op 列表（面板确认入口的数据面）：只看本租户，state 可过滤。 */
+    /**
+     * 本租户的 op 列表（面板确认入口的数据面）：只看本租户、且**密级不超过调用者**，state 可过滤。
+     *
+     * <p>auth_level 过滤是越权面（2026-10-26 修 #17）：返回体带 {@code command} 原文（chunk 逐字内容），
+     * 不按密级过滤等于把 L2/L3 的命令清单下发给 L1 用户；判据与 confirm/unfreeze 同一条
+     * （{@code caller.authLevel() >= op.auth_level}），不另立第二套口径。
+     */
     public java.util.List<StatusResult> list(UserContext caller, String stateFilter) {
         freezeSweep();
         String sql = "SELECT op_id, state, command, ref, proposed_by, confirmed_by, tenant, confirm_expires_at "
-                + "FROM action_ops WHERE tenant = ?";
-        java.util.List<Object> args = new java.util.ArrayList<>(java.util.List.of(caller.tenantId()));
+                + "FROM action_ops WHERE tenant = ? AND auth_level <= ?";
+        java.util.List<Object> args = new java.util.ArrayList<>(
+                java.util.List.of(caller.tenantId(), caller.authLevel()));
         if (stateFilter != null && !stateFilter.isBlank()) {
             sql += " AND state = ?";
             args.add(stateFilter);
@@ -192,10 +199,15 @@ public class ActionOpsService {
     public StatusResult status(UserContext caller, String opId) {
         freezeSweep();                              // kill switch 动线：关开关后读路径即冻结
         var row = jdbc.queryForMap(
-                "SELECT op_id, state, command, ref, proposed_by, confirmed_by, tenant "
+                "SELECT op_id, state, command, ref, proposed_by, confirmed_by, tenant, auth_level "
                 + "FROM action_ops WHERE op_id = ?", opId);
         if (!caller.tenantId().equals(row.get("tenant"))) {
             throw rejection(caller, opId, "cross_tenant", "不能查他租户的 op");
+        }
+        // 读路径同样要过密级闸（#17）：command 是原文，L1 用户不该读到 L3 的动作
+        if (caller.authLevel() < ((Number) row.get("auth_level")).intValue()) {
+            throw rejection(caller, opId, "op_level_insufficient",
+                    "调用者密级低于该 op 的密级（" + caller.authLevel() + " < " + row.get("auth_level") + "）");
         }
         return new StatusResult(opId, (String) row.get("state"), (String) row.get("command"),
                 (String) row.get("ref"), (String) row.get("proposed_by"),
@@ -257,8 +269,9 @@ public class ActionOpsService {
             throw rejection(actor, opId, "state_" + row.get("state"),
                     "只有 frozen 可取消（当前 " + row.get("state") + "）");
         }
-        if (!actor.tenantId().equals(row.get("tenant"))) {
-            throw rejection(actor, opId, "confirmer_not_authorized", "不能取消他租户的 op");
+        if (!actor.tenantId().equals(row.get("tenant"))
+                || actor.authLevel() < ((Number) row.get("auth_level")).intValue()) {
+            throw rejection(actor, opId, "confirmer_not_authorized", "取消人租户或密级不匹配");
         }
         if (jdbc.update("UPDATE action_ops SET state='expired' WHERE op_id=? AND state='frozen'",
                 opId) == 1) {
