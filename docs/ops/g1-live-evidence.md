@@ -200,14 +200,132 @@ Last Result: 0
 结论：A/B/C 三症状均已实际操作；A 是在临时库上注入登录 500 并恢复，B/C 是真实停进程/模型错误。
 门禁 10 可判绿（本机形态；生产 systemd 形态仍需在目标机复跑）。
 
+## 2.9 live 单租户并发采样（门禁 6 / 7）
+
+脚本：`scripts/live_concurrency.py`；真实 DashScope，20 并发，10s（实际 23.8s 排空），
+租户 `tenant-internal` 加载，`tenant-acme` 对照。原始数据：[`live-concurrency-2026-10-23.json`](live-concurrency-2026-10-23.json)。
+
+| 指标 | tenant-internal（加载） | tenant-acme（对照） |
+|---|---:|---:|
+| 请求数 | 84 | 1 |
+| 200 | 4 | 1 |
+| 429 | 80（95.2%） | 0 |
+| 5xx/连接错误 | 0 | 0 |
+| TTFT P50 | 18.126s | 8.944s |
+| TTFT P95 | 18.133s | 8.944s |
+
+网关侧：`aiops_requests_total=85`、`aiops_admission_rejected_total=80`、
+`aiops_requests_failed_total=0`、`aiops_llm_calls_total=2`；
+`/admin/state`：`degradation_level=L0`、`failures=0`。
+
+结论与边界：
+- 20 并发下租户级许可（4）触发 429 背压，0 个 5xx；另一租户未出现 429；
+- 成功请求 TTFT P95 约 18s，对照租户约 8.9s；这是 10s 窗口样本，不是容量结论；
+- 对照样本只有 1 条，不能宣称“其他租户成功率统计不下降”，只能说不受同租户 429 牵连；
+- L2 未被单租户流量点亮（L0），但仍需更长窗口复测。
+
+## 2.10 Ubuntu VM 测试机（2026-10-23）
+
+VM：Ubuntu 24.04，systemd 255，OpenJDK 21，IP 192.168.59.129；网关以 systemd 运行在
+/opt/opspilot，jar 为 /opt/opspilot/app.jar（OPSPILOT_JAR 与 rollback 落点一致）。
+
+### T1：systemd 起服务
+
+~~~text
+systemctl is-active opspilot-gateway.service -> active
+GET /actuator/health/readiness -> {"status":"UP"}
+GET /actuator/health -> {"status":"UP","groups":["liveness","readiness"]}
+~~~
+
+### T2：停服/换 jar/回滚
+
+当前版本 v-current（commit 969e137）→ 回滚到上一版 v-prev（commit 65cc9b3）→ 再回 v-current：
+
+~~~text
+current  active, readiness UP
+v-prev   active, readiness UP
+v-current active, readiness UP
+rollback.sh v-prev --apply 校验 sha256 OK
+~~~
+
+注入 OPSPILOT_BUILD_COMMIT 后：
+
+~~~text
+v-current: /state.build.commit = 969e137，manifest v-current = 969e137
+v-prev:    /state.build.commit = 65cc9b3，manifest v-prev = 65cc9b3
+v-current: /state.build.commit = 969e137，readiness UP
+~~~
+
+manifest commit 与 /state commit 已对齐；门禁 5 的停服/换 jar/回滚/状态对齐全部完成。
+
+### T3：1G loop 盘磁盘满
+
+~~~text
+before fill: aiops_disk_free_bytes{path="data"} 9.5019008E8  (~906MB)
+after fill:  aiops_disk_free_bytes{path="data"} 4.12504064E8 (~393MB)
+df: /dev/loop0 974M 851M 57M 94% /mnt/opspilot-test
+~~~
+
+VM 网关绑定 0.0.0.0，Windows Prometheus 新增 target 192.168.59.129:8081
+（service=opspilot-vm）；notify 以飞书通道运行。
+
+~~~text
+Alertmanager: OpsPilotDiskLow
+status=active, startsAt=2026-10-23T19:07:36Z
+receivers=[human-notify], instance=192.168.59.129:8081, service=opspilot-vm
+~~~
+
+恢复磁盘后 alert resolved；Alertmanager webhook 通知计数新增成功。
+边界：飞书群内磁盘告警已由用户确认收到；OpsPilotDown 仍因本机宿主网关停止而 active，与磁盘场景无关。
+
+## 2.11 MinIO Object Lock 实测（门禁 9 对象锁部分）
+
+VM 上另起独立 MinIO 实例（不覆盖原有 9000）：
+
+~~~text
+endpoint: http://192.168.59.129:9002
+bucket:   opspilot-audit
+image:    registry.cn-hangzhou.aliyuncs.com/mdpublic/mingdaoyun-minio:RELEASE.2025-04-22T22-12-26Z
+object lock: COMPLIANCE 180 days
+~~~
+
+上传两次带时间戳的 audit 副本：
+
+~~~text
+20261023T233000Z/audit.tar.gz
+20261023T233100Z/audit.tar.gz
+~~~
+
+对象元数据：
+
+~~~text
+X-Amz-Object-Lock-Mode: COMPLIANCE
+X-Amz-Object-Lock-Retain-Until-Date: 2027-04-21T23:32:36Z
+~~~
+
+不可变验证：
+
+~~~text
+mc rm --version-id e20891ba-... -> "is WORM protected and cannot be overwritten" (rc=1)
+~~~
+
+下载副本后按时间序验链：
+
+~~~text
+PASS 审计链：2 条带 hash，2881 条旧格式；末 hash=b5359a1c...
+~~~
+
+边界：MinIO 与网关在同一台 VM，对象锁/版本保护/副本验链已证，但**不是异地副本**；
+用户已确认接受“本地对象锁、非异地”作为门禁 9 口径。原有 9000 实例未动；新实例凭据在 /etc/opspilot/minio-audit.env（600）。
+
 ## 3. 未完成/被环境阻塞
 
 | 项 | 结果 | 原因 |
 |---|---|---|
 | 飞书人类回执 | 已确认 | 飞书自定义机器人（URL + 签名 secret）已配置，notify 返回 `200 forwarded`，用户确认群内收到 |
-| Trivy SCA | 未完成 | Trivy 0.76.1 二进制已通过 `gh release download` 取得，但漏洞库 `mirror.gcr.io` 连接超时；本地 Docker Hub 也受限 |
-| WORM 异地副本 | 未做 | 无真实远端/WORM 挂载路径；本地只读目录不等于对象锁 |
-| 测试机停服/切换/回滚 | 部分完成 | 本机进程级 previous→current→rollback 三跳均 health=True；**缺 systemd 测试机上的真实停服/切换** |
+| Trivy SCA | 已完成 | CI run 39873876035 全绿；artifact Java vulns=0；4 条跨大版本豁免见 `.trivyignore` |
+| WORM 副本 | 已完成（口径已确认） | 本地 MinIO Object Lock 已验（COMPLIANCE 180d、版本删除被拒、副本验链 PASS）；用户确认接受“非异地”口径 |
+| 测试机停服/切换/回滚 | 已完成 | Ubuntu 24.04 systemd：current→v-prev→current，readiness UP，`/state.build.commit` 与 manifest 对齐 |
 
 ## 4. 复现命令（安全版）
 

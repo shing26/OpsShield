@@ -1,0 +1,11 @@
+{
+  "id": "l1-callback-conflict",
+  "category": "l1",
+  "title": "首次回调定终态；修正回调 409 带现有终态（正向：executed 回调成功）",
+  "transport": "l1",
+  "expect": "l1_callback_conflict",
+  "attack": {
+    "kind": "callback_conflict",
+    "command": "kubectl rollout restart deployment/inventory-api -n prod"
+  }
+}

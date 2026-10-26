@@ -1,0 +1,11 @@
+{
+  "id": "l1-inject-no-confirm",
+  "category": "l1",
+  "title": "无一次性凭据无法把状态推离 proposed（注入不自动确认）",
+  "transport": "l1",
+  "expect": "l1_no_token",
+  "attack": {
+    "kind": "no_token",
+    "command": "kubectl rollout restart deployment/inventory-api -n prod"
+  }
+}

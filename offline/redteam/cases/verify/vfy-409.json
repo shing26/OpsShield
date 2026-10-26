@@ -1,0 +1,10 @@
+{
+  "id": "vfy-409",
+  "category": "verify",
+  "title": "同 op_id 重放 → 409（幂等）",
+  "transport": "verify",
+  "expect": "verify_reject_409",
+  "attack": {
+    "kind": "replayed"
+  }
+}

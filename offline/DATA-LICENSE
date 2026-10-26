@@ -1,0 +1,11 @@
+# OpsShield 评测数据集许可
+
+适用范围：
+  offline/corpus/（chunks.jsonl、runbooks/*.md）
+  offline/eval/golden_dataset.jsonl、refuse_set.jsonl
+
+本数据集全部为 OpsShield 项目自造的合成内容（虚构服务、虚构错误码、虚构运维文档），
+不含任何真实凭据、真实客户数据或真实基础设施信息（脱敏审计见 offline/eval/dataset_audit.py）。
+
+许可：CC BY 4.0（https://creativecommons.org/licenses/by/4.0/）
+——可自由使用、共享、改编，需署名。代码许可见根 LICENSE（MIT）。

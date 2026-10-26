@@ -36,6 +36,9 @@ ReadWritePaths=/opt/opspilot/data /opt/opspilot/logs /opt/opspilot/backup
 # "-" 前缀 = 文件不存在也继续（memory 模式可以零依赖启动，ADR-0022）
 EnvironmentFile=-/etc/opspilot/gateway.env
 Environment=JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
+# 发布/回滚统一落到 app.jar（release.sh/rollback.sh 的 --apply 目标），
+# 避免 start_gateway.sh 默认 target/*.jar 与 rollback 的 app.jar 不一致导致“换了但没生效”。
+Environment=OPSPILOT_JAR=/opt/opspilot/app.jar
 ExecStart=/bin/bash /opt/opspilot/scripts/start_gateway.sh --foreground
 Restart=on-failure
 RestartSec=5

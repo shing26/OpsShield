@@ -528,7 +528,7 @@ public final class ReadOnlyCommandPolicy {
     // ────────────────────────────── 第 4 层：重定向与替换 ──────────────────────────────
 
     /** 重定向目标只允许 {@code /dev/null}（{@code 2>/dev/null} 无害）与 {@code &2} 之类的 fd 重定向。 */
-    private static boolean redirectsReadOnly(String segment) {
+    static boolean redirectsReadOnly(String segment) {
         String scan = maskPlaceholders(segment);   // <pid>/<orderId> 是占位符，不是重定向
         char quote = 0;
         for (int i = 0; i < scan.length(); i++) {
@@ -624,7 +624,7 @@ public final class ReadOnlyCommandPolicy {
     }
 
     /** 命令替换是唯一能把任意写操作藏进"已核准工具"参数里的通道（{@code ls $(rm -rf /)}）。 */
-    private static boolean noCommandSubstitution(String segment) {
+    static boolean noCommandSubstitution(String segment) {
         return SUBSTITUTION_MARKERS.stream().noneMatch(segment::contains);
     }
 

@@ -24,7 +24,9 @@ class OpenAiControllerTest {
 
     private final ChatOrchestrator orchestrator = mock(ChatOrchestrator.class);
     private final AdmissionGate admission = new AdmissionGate(new AdmissionProperties(32, 4, 1));
-    private final OpenAiController controller = new OpenAiController(orchestrator, null, admission);
+    private final jakarta.validation.Validator validator =
+            jakarta.validation.Validation.buildDefaultValidatorFactory().getValidator();
+    private final OpenAiController controller = new OpenAiController(orchestrator, null, admission, validator);
 
     private static MockHttpServletRequest withUser() {
         MockHttpServletRequest req = new MockHttpServletRequest();
@@ -92,6 +94,20 @@ class OpenAiControllerTest {
         verify(orchestrator, never()).precheck(any());
     }
 
+    /** #18：/v1 面手工 new ChatRequest 曾绕过字段级契约——9000 字 query 必须在配额/上游之前 400。 */
+    @Test
+    void oversizeQueryIsRejectedBeforeQuota() {
+        var ex = assertThrows(ResponseStatusException.class, () -> controller.chatCompletions(
+                new OpenAiController.ChatCompletionsReq("opspilot",
+                        List.of(new OpenAiController.Msg("user", "x".repeat(9000))), true),
+                withUser(), new MockHttpServletResponse()));
+        assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
+        assertTrue(ex.getReason() != null && ex.getReason().contains("8192"),
+                "错误要点名字段上限，实际=" + ex.getReason());
+        verify(orchestrator, never()).precheck(any());
+        verify(orchestrator, never()).submit(any(), any(), any(), any(), any());
+    }
+
     @Test
     void quotaPrecheckHappensBeforeSubmit() {
         controller.chatCompletions(new OpenAiController.ChatCompletionsReq(null,
@@ -105,7 +121,7 @@ class OpenAiControllerTest {
     @Test
     void admissionExhaustionReturns429WithRetryAfter() {
         AdmissionGate oneSlot = new AdmissionGate(new AdmissionProperties(4, 1, 2));
-        OpenAiController c = new OpenAiController(orchestrator, null, oneSlot);
+        OpenAiController c = new OpenAiController(orchestrator, null, oneSlot, validator);
         MockHttpServletResponse first = new MockHttpServletResponse();
         c.chatCompletions(new OpenAiController.ChatCompletionsReq("opspilot",
                 List.of(new OpenAiController.Msg("user", "q1")), true), withUser(), first);
@@ -129,7 +145,7 @@ class OpenAiControllerTest {
     @Test
     @SuppressWarnings("unchecked")
     void modelsAdvertiseOpspilotWithCreated() {
-        var withBuild = new OpenAiController(orchestrator, buildProps("1.0.0", "2026-09-12T00:00:00Z"), admission);
+        var withBuild = new OpenAiController(orchestrator, buildProps("1.0.0", "2026-09-12T00:00:00Z"), admission, validator);
         var data1 = (List<Map<String, Object>>) withBuild.models().get("data");
         assertEquals("opspilot", data1.get(0).get("id"));
         assertEquals(Instant.parse("2026-09-12T00:00:00Z").getEpochSecond(), data1.get(0).get("created"));

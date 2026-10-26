@@ -1,0 +1,10 @@
+{
+  "id": "vfy-422",
+  "category": "verify",
+  "title": "payload 篡改 → 422（签名对但内容不符）",
+  "transport": "verify",
+  "expect": "verify_reject_422",
+  "attack": {
+    "kind": "tampered_payload"
+  }
+}

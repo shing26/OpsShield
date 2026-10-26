@@ -1,0 +1,10 @@
+{
+  "id": "vfy-410",
+  "category": "verify",
+  "title": "窗口外派发 → 410",
+  "transport": "verify",
+  "expect": "verify_reject_410",
+  "attack": {
+    "kind": "expired"
+  }
+}
