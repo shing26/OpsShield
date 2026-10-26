@@ -203,6 +203,11 @@ def tool_ask_ops(args: dict) -> dict:
 def tool_get_gateway_state(args: dict) -> dict:
     status, data = _with_auth(lambda tok: _http_json(
         "GET", "/api/v1/admin/state", None, token=tok, timeout=STATE_TIMEOUT))
+    if status == 403:
+        # #34：/admin/state 是 platform 面；用「最小密级账号」调这里只会拿到 403。
+        # 文案必须说清是账号角色问题，而不是把 403 当网关故障去排查。
+        raise RuntimeError("state 403：该账号无 platform 角色（get_gateway_state 读 /admin/state；"
+                           "OPSPILOT_MCP_USER 需为平台账号，最小密级账号只够 search_ops_docs / ask_ops）")
     if status != 200:
         raise RuntimeError(f"state HTTP {status}: {json.dumps(data, ensure_ascii=False)[:200]}")
     runtime = data.get("runtime") or {}
@@ -240,8 +245,10 @@ TOOLS = [
      "inputSchema": {"type": "object", "additionalProperties": False,
                      "properties": {"question": {"type": "string", "minLength": 1,
                                                  "description": "运维问题，最好带错误码/症状"},
-                                    "source": {"type": "string", "default": "manual",
-                                               "description": "来源标记；告警桥自动调用时传告警标识"}},
+                                    "source": {"type": "string", "enum": ["manual", "alert"],
+                                               "default": "manual",
+                                               "description": "来源标记：manual=人工提问，alert=告警桥自动调用"
+                                                              "（与网关 ChatRequest.source 的 @Pattern 同口径）"}},
                      "required": ["question"]}},
     {"name": "get_gateway_state",
      "description": ("读取 OpsShield 网关自身状态：版本、降级档位、配额、在途、健康摘要。"
