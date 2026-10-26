@@ -1,0 +1,183 @@
+{
+  "generated_at": "2026-10-24T13:22:13+00:00",
+  "license": "CC BY 4.0（数据集）；代码许可见根 LICENSE",
+  "files": {
+    "offline/corpus/chunks.jsonl": {
+      "sha256": "156c7af50bfc8bcf522182c2dffc97db7ebaba35fbcc650105a77d510b9258f1",
+      "records": 448,
+      "bytes": 381684
+    },
+    "offline/eval/golden_dataset.jsonl": {
+      "sha256": "8e6b7584254b1008f530be2d19bb231e35e61dfcacc3babb12b7ab2742a64d27",
+      "records": 68,
+      "bytes": 10842
+    },
+    "offline/eval/refuse_set.jsonl": {
+      "sha256": "6f7dc18d47f7d03834f5a24360590c700eac962d7d0967fd9b0ed4661938b593",
+      "records": 24,
+      "bytes": 4238
+    }
+  },
+  "runbooks": {
+    "ac-501-order-db-timeout.md": {
+      "sha256": "66a99db9d4d28c84af6901b1274648ed5e90a551f7720bc9521f3de9366aa574",
+      "bytes": 1997
+    },
+    "ac-502-webhook-sign.md": {
+      "sha256": "0cb10aeefcd3fb3d61d4a74e95b355e5862501fbcf37ab8c4b86ca04bfc0dc8b",
+      "bytes": 1482
+    },
+    "ac-503-sso-token.md": {
+      "sha256": "39ebe62c5e4fa925092dddaabdbbe2275a694f207133905747ddfadd4d8cbc65",
+      "bytes": 1503
+    },
+    "ac-504-bucket-quota.md": {
+      "sha256": "9f435fc1d226fa14b6e1943a595951b3044d00ae9baf965bc8074efbf1ca0776",
+      "bytes": 1491
+    },
+    "ac-505-cdn-miss-storm.md": {
+      "sha256": "cb24715a0a011db69ff811a0e78b79b41a2970f341a867ccfb5be8c032ba20a0",
+      "bytes": 1690
+    },
+    "ac-506-batch-backpressure.md": {
+      "sha256": "e432caf83666e41a254978082f86eb182659743c486a98702e0436be7d0b3850",
+      "bytes": 1443
+    },
+    "ac-507-dns-flake.md": {
+      "sha256": "4c971adb7b715db5b5ca747854f309cc9eed50cf9c1989cc0c1b46d6eee49a5b",
+      "bytes": 1521
+    },
+    "ac-508-report-slow-sql.md": {
+      "sha256": "2ae142a6ccb7b6272dece47d74a99649a40ae161d034389a473ebf3ed05eaec9",
+      "bytes": 1436
+    },
+    "rb-001-order-db-timeout.md": {
+      "sha256": "8db89a3049b1637c98370befabbf69d3f3886f0f43d36d94dcf90b13157f4142",
+      "bytes": 1697
+    },
+    "rb-002-db-deadlock.md": {
+      "sha256": "89ccbb5c740466291fb8e91571cd340cb51153e16d8b3de4b315efa21819bd96",
+      "bytes": 1285
+    },
+    "rb-003-redis-timeout-refused.md": {
+      "sha256": "9e8d33ba595eeb5bd97c3a36511225b2c14ea1d28d78f7696fc71d07ec4c5a3f",
+      "bytes": 1401
+    },
+    "rb-004-mq-lag-send-failed.md": {
+      "sha256": "0a0eccb87c57dbbfb1a66e748d312abd180a9a91ac2a97373fa250062a33c2a4",
+      "bytes": 1404
+    },
+    "rb-005-pay-gateway.md": {
+      "sha256": "e3db7f0fa47c34eb56fb21a46b74ed8debe72f0b48e5e2c78c78fe1ae7a4f1a8",
+      "bytes": 1536
+    },
+    "rb-006-order-state-conflict.md": {
+      "sha256": "ecf5915add36ee6e02987c266ad0acce86b98f5b896f153d98fc8e4f7ed52623",
+      "bytes": 1452
+    },
+    "rb-007-inventory-insufficient.md": {
+      "sha256": "e440b38ddc6221577206943c6c27eb4aa07b70ada8334385b55c1919a46dfec8",
+      "bytes": 1233
+    },
+    "rb-008-rate-limit-sentinel.md": {
+      "sha256": "28497e07f884eebd0d09a0e2068514c5ac2e8324f34e6f451cfa3816df5e4d12",
+      "bytes": 1500
+    },
+    "rb-009-k8s-oomkilled.md": {
+      "sha256": "7b29a32ffab5015052008d5d9dd3d54c89dc92a5ce2aa86f8795b0b1acffc652",
+      "bytes": 1333
+    },
+    "rb-010-node-notready-ntp.md": {
+      "sha256": "b709503c463861ebf8004c239a1411cf5f82366a90fbb317609625da68f74df8",
+      "bytes": 1386
+    },
+    "rb-011-jvm-gc-pause.md": {
+      "sha256": "93cbf2e11118c8ad3db0609905b11fb47f0405cd83d751742c2cea4f8ab3a6a5",
+      "bytes": 1038
+    },
+    "rb-012-threadpool-exhausted.md": {
+      "sha256": "a2c287144df8498c6a45097af6bcb5599f6f901ff463ad1aca71cfac6b0ddecc",
+      "bytes": 1259
+    },
+    "rb-013-search-index-oss.md": {
+      "sha256": "7dc28801785ed8e2ee5b7055d8fc9c2105fb173a6e61e0baa77c1caabf03a8c1",
+      "bytes": 1395
+    },
+    "rb-014-cert-expiring.md": {
+      "sha256": "148e41d20ce1018e587621d04cc5d37f7a3f153bfdc26e1941344f1d1d2bbc42",
+      "bytes": 1263
+    },
+    "rb-101-local-inventory.md": {
+      "sha256": "f60a8cd7d224fa3bc7730aa9156a9676a4c40a5556b2a472841e18bb296785a5",
+      "bytes": 2363
+    },
+    "rb-102-container-oom-middleware-down.md": {
+      "sha256": "85b27bf20ceb0b526de2e2c347635f7f777ad6c6533752c70813521b0a5f984e",
+      "bytes": 2468
+    },
+    "rb-103-port-occupied-wrong-service.md": {
+      "sha256": "e74fa91ba4e9b4f9d8b269ab4bae641b09a1e0420614074a6167e1e04879e4e7",
+      "bytes": 1971
+    },
+    "rb-104-stale-panel-html.md": {
+      "sha256": "becb9860d1833d39069c069d117e8b156d03bbeeb7c95b85ea75d414df529888",
+      "bytes": 1423
+    },
+    "rb-105-truncated-jar.md": {
+      "sha256": "9e2cb6b0c6da932a3faf8dc8f25a491d5b8202f78155106066de4d58f8c46f6f",
+      "bytes": 1806
+    },
+    "rb-111-model-arrearage.md": {
+      "sha256": "c7615af08c4eb54360b0e82bd319932608115053045673b5f32ff6891db8a1b4",
+      "bytes": 1837
+    },
+    "rb-112-stale-jar-404.md": {
+      "sha256": "015ebf9594bd5a731af6b91d00cfb48791cb5882ac5c74b32a8d10430f4910ae",
+      "bytes": 1766
+    },
+    "rb-113-wsl-bash-intercept.md": {
+      "sha256": "08e3fc67acbfc35009fb4876f2239790810788a1ddcc755586cb837403b2adf4",
+      "bytes": 1354
+    },
+    "rb-114-port-squatter.md": {
+      "sha256": "cccff4565e33f729f3efd4da5d9881731cb92273fcad0cfa2f5baa31eaa562d7",
+      "bytes": 1416
+    },
+    "rb-115-h2-corruption-recovery.md": {
+      "sha256": "09a89c6f1487a41f4ec3e885717f9d11e31d2f206ac3c7c4259af84b88315f3b",
+      "bytes": 3456
+    },
+    "rb-201-degradation-stuck-l2.md": {
+      "sha256": "e9381775efbadb7b9b0aea88f4853bfc402b13c5ee6c5d7cf167c615783915cb",
+      "bytes": 2440
+    },
+    "rb-202-cache-eviction.md": {
+      "sha256": "ece2649d9d088b6b90180b123452f6c1a3a1e19334656b0ff3c7cc5a56518fb1",
+      "bytes": 2490
+    },
+    "rb-203-container-oom-loop.md": {
+      "sha256": "754cf20f73d8a215b8f314c8856e67383ef2e2001e10620055be8b6561f10733",
+      "bytes": 2460
+    },
+    "rb-204-backup-verification.md": {
+      "sha256": "e00c570e6db67a4761549b070c73838f38695af23fef45d11fd9b09f682fdab6",
+      "bytes": 2295
+    },
+    "rb-205-cross-tenant-leak.md": {
+      "sha256": "72ab67eba7cea525a3353c5181064b6610a5bfb327316c285944bc064b9f1df2",
+      "bytes": 2574
+    },
+    "rb-206-client-error-status.md": {
+      "sha256": "0e9b7fd175df1b98d6cc97bbb5f1f70ee095bda30d2a45603b41ff597915dbaa",
+      "bytes": 2580
+    },
+    "rb-207-end-to-end-latency.md": {
+      "sha256": "7af856b1b30b0fa2c3a7287abc2fedf6adb15ec975009fa312d7613e1bafc1a5",
+      "bytes": 2374
+    },
+    "rb-208-dependency-down.md": {
+      "sha256": "147cdc84b0f28ef9cf836509020ce11e78b08b435a35f0f771e5f03c35870299",
+      "bytes": 3309
+    }
+  }
+}

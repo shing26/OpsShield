@@ -4,6 +4,7 @@ import com.opspilot.auth.JwtAuthFilter;
 import com.opspilot.auth.UserContext;
 import com.opspilot.gateway.dto.ChatRequest;
 import com.opspilot.resilience.AdmissionGate;
+import jakarta.validation.Validator;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.List;
@@ -42,13 +43,16 @@ public class OpenAiController {
     private final ChatOrchestrator orchestrator;
     private final BuildProperties build; // /v1/models 的 created 字段源（无 build-info 时 0）
     private final AdmissionGate admission;
+    private final Validator validator;
 
     public OpenAiController(ChatOrchestrator orchestrator,
                             @Nullable BuildProperties build,
-                            AdmissionGate admission) {
+                            AdmissionGate admission,
+                            Validator validator) {
         this.orchestrator = orchestrator;
         this.build = build;
         this.admission = admission;
+        this.validator = validator;
     }
 
     @PostMapping(value = "/chat/completions", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
@@ -60,13 +64,31 @@ public class OpenAiController {
                     "this endpoint only supports streaming (stream=true) completions / 本端点仅提供流式补全");
         }
         String query = lastUserMessage(req.messages());
-        orchestrator.precheck(user);
+        // #18：字段级契约与 /chat/stream 是同一份（ChatRequest 上的注解），但这里手工 new record
+        // 绕过了 MVC 的参数校验——必须显式 validate。否则 9000 字 query 会一路打进上游，4xx
+        // 连续失败达阈后把**全租户**推进 L2 熔断（ADR-0026 决策 4 要防的正是这种单点放大）。
+        ChatRequest chatRequest = new ChatRequest(query, "manual", "", "prod", null);
+        var violations = validator.validate(chatRequest);
+        if (!violations.isEmpty()) {
+            String detail = violations.stream()
+                    .map(v -> v.getPropertyPath() + ": " + v.getMessage())
+                    .sorted()
+                    .collect(java.util.stream.Collectors.joining("; "));
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, detail);
+        }
+        // #31：先拿准入许可、再扣配额（被准入拒绝的请求不得消耗当日配额）
         AdmissionGate.Permit permit = admission.tryAcquire(user.tenantId());
         if (permit == null) {
             orchestrator.recordAdmissionRejected();
             resp.setHeader("Retry-After", String.valueOf(admission.retryAfterSeconds()));
             throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,
                     "too many concurrent requests for this tenant / 当前租户并发已满，请稍后重试");
+        }
+        try {
+            orchestrator.precheck(user);
+        } catch (RuntimeException e) {
+            permit.release();
+            throw e;
         }
         // Cache-Control/X-Accel-Buffering：防中间代理缓冲破坏打字机（QA 第五轮 P3 线卫生）
         resp.setHeader("Cache-Control", "no-cache");
@@ -76,7 +98,7 @@ public class OpenAiController {
         // 本面恒 source=manual：协议体的角色是"人在客户端里说话"，告警链路只走 /chat/stream
         // （自举告警源经那条入口，ADR-0011）。若将来有人把生产者指到本面，审计会把告警静默
         // 标成 manual，且 service="" / env="prod" 会与 SSE 面算出不同指纹——两处都是坑。
-        orchestrator.submit(new ChatRequest(query, "manual", "", "prod", null),
+        orchestrator.submit(chatRequest,
                 user, new OpenAiChatSink(emitter, DEFAULT_MODEL), "openai", permit);
         return emitter;
     }

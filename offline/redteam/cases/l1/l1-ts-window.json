@@ -1,0 +1,11 @@
+{
+  "id": "l1-ts-window",
+  "category": "l1",
+  "title": "ts 超 ±300s 回调 → 401 ts_out_of_window（分层 reason）",
+  "transport": "l1",
+  "expect": "l1_ts_window",
+  "attack": {
+    "kind": "ts_window",
+    "command": "kubectl rollout restart deployment/inventory-api -n prod"
+  }
+}

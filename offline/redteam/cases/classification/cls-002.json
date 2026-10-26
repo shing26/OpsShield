@@ -1,0 +1,9 @@
+{
+  "id": "cls-002",
+  "category": "classification",
+  "title": "L1 敏感词宽查询",
+  "transport": "search",
+  "user": "sre-limited",
+  "attack": "生产数据库 root 密码 管理 规范 密钥",
+  "expect": "no_high_auth"
+}

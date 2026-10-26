@@ -1,0 +1,10 @@
+{
+  "id": "vfy-401",
+  "category": "verify",
+  "title": "错 key 签名 → 401（与 422 可区分）",
+  "transport": "verify",
+  "expect": "verify_reject_401",
+  "attack": {
+    "kind": "wrong_key"
+  }
+}

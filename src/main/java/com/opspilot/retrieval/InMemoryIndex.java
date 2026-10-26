@@ -26,7 +26,7 @@ import com.opspilot.chunk.Chunk;
 public class InMemoryIndex {
 
     /** 一条入库切片：原文档 + 归属身份 + 向量（向量缺席为 null，向量腿会跳过它）。 */
-    public record Doc(ScoredChunk chunk, String tenant, float[] vector) {}
+    public record Doc(ScoredChunk chunk, String tenant, String actionClass, float[] vector) {}
 
     private volatile List<Doc> docs = List.of();
     private volatile long builtAtMs;
@@ -42,11 +42,23 @@ public class InMemoryIndex {
                     m.service() == null ? "" : m.service(),
                     m.errorCodes() == null ? List.of() : m.errorCodes(),
                     m.authLevel(), new ScoredChunk.Scores(0, 0, 0, 0));
-            fresh.add(new Doc(sc, m.tenant(),
+            fresh.add(new Doc(sc, m.tenant(), m.actionClass(),
                     vectors != null && i < vectors.size() ? vectors.get(i) : null));
         }
         this.docs = List.copyOf(fresh);
         this.builtAtMs = System.currentTimeMillis();
+    }
+
+    /** 按 id 取一条**该身份可见**的切片——L1 propose 的服务端复核入口（ADR-0028）：
+     *  与 {@link #visible} 同一身份判据，不存在"不过滤的 byId"。 */
+    public Doc byId(String chunkId, String tenant, int authLevel) {
+        for (Doc d : docs) {
+            if (d.chunk().chunkId().equals(chunkId)
+                    && IdentityFilter.matches(d.tenant(), d.chunk().authLevel(), tenant, authLevel)) {
+                return d;
+            }
+        }
+        return null;
     }
 
     /** 该身份可见的切片——**唯一的取数入口**（过滤是构造保证，不是调用方的纪律）。 */

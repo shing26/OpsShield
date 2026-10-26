@@ -283,3 +283,31 @@ def _capture_check(root: Path) -> str:
         rc = dn.check(root)
     assert rc == 1
     return buf.getvalue()
+
+
+def test_registry_self_counts_are_derived_not_hardcoded() -> None:
+    """#39：门闩自身的规模（条数/引用处数）必须由登记表现算，不得写死在文档里。"""
+    entries = dn.load_registry(REPO)
+    assert dn.derive({"kind": "registry_entries"}, REPO) == len(entries)
+    assert dn.derive({"kind": "registry_citations"}, REPO) == sum(len(e["cited_in"]) for e in entries)
+
+
+def test_mutation_e_registry_scale_turns_gate_red(tmp_path: Path) -> None:
+    """变异 E：把 README 里的「N 条文档数字」改大 1 → 必须红且点名 doc_gate_entries。"""
+    root = _mirror(tmp_path)
+    entry = next(e for e in dn.load_registry(root) if e["id"] == "doc_gate_entries")
+    cite = entry["cited_in"][0]
+    val = _derived(root, "doc_gate_entries")
+    hits = dn.citations(root, cite)
+    assert hits, f"{cite['file']} 未按 {cite['pattern']!r} 引用"
+    lineno, literal = hits[0]
+    assert literal == val
+    wrong = str(int(val) + 1)
+    path = root / cite["file"]
+    lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+    lines[lineno - 1] = lines[lineno - 1].replace(literal, wrong, 1)
+    path.write_text("".join(lines), encoding="utf-8")
+    assert dn.check(root) == 1
+    out = _capture_check(root)
+    assert "doc_gate_entries" in out, out
+    assert f"{cite['file']}:{lineno}" in out, out

@@ -25,8 +25,8 @@
 | `src/main/java/com/opspilot/` | 在线面：`gateway`(协议/编排) `retrieval` `llm` `resilience` `auth` `cache` `storm` `metrics` `health` `ingest` `chunk` `config` `common`(跨层控制信号) `store`(存储接缝) | ✅ |
 | `src/main/java/com/opspilot/store/` | **存储接缝**（[ADR-0022](adr/0022-standalone-storage-mode.md)）：`KvStore` 窄接口（15 操作）+ `RedisKvStore`/`MemoryKvStore` 两实现 + `StoreConfig` 按 `opspilot.storage.mode` 装配。内存实现**刻意复刻 Redis 语义**（TTL 仅建于创建、闭区间窗口裁剪、成员去重、`mapValues` 无顺序承诺）——不是"够用就行"，否则两套实现会在窗口计数/配额水位上悄悄分叉 | ✅ |
 | `src/main/java/com/opspilot/retrieval/` | 检索腿接缝（[ADR-0022](adr/0022-standalone-storage-mode.md)）：`RetrievalLeg` 接口（ES/Qdrant 与内存腿同形）+ `IdentityFilter`（`tenant × auth_level` 过滤**单一事实源**，检索与覆盖范围共用）+ `InMemoryIndex`/`InMemoryLegs`/`Vectors`（内存词法+向量腿，词法哈希非神经语义）+ `RetrievalWiring`（`lexicalLeg`/`vectorLeg` 命名 bean）。**权限过滤复用同一份判据是构造保证**，不是两套实现各自承诺 | ✅ |
-| `src/test/java/` | 单测与集成（385 用例，`@Test` 声明数） | ✅ |
-| `docs/adr/` | 27 项架构决策（每份含否决项与后果）——**改架构先写 ADR**；0027=MCP Server 生态入口 | ✅ |
+| `src/test/java/` | 单测与集成（424 用例，`@Test` 声明数） | ✅ |
+| `docs/adr/` | 28 项架构决策（每份含否决项与后果）——**改架构先写 ADR**；0027=MCP 入口、0028=L1 受控行动契约 | ✅ |
 | `docs/agents/` | **engineering skills 的 repo 配置**：issue tracker 约定 / triage label 映射 / 领域文档位置与消费规则（根级 `AGENTS.md` 的 `## Agent skills` 块指向这里）。由 `/setup-matt-pocock-skills` 写入，切换 tracker 或从头开始时才需重跑 | ✅ |
 | `docs/qa/` | 红队缺陷台账 / 模块复验台账（缺陷与验证的单一事实源） | ✅ |
 | `docs/ops/` | 生产化就绪度台账（现行状态置顶 + 历史归档） | ✅ |
@@ -68,6 +68,7 @@
 | --- | --- |
 | `quickstart.sh` | 公开入口：一键冷启动（预检 buildx / compose 插件） |
 | `run.sh` | 开发态起服务（加载 `.env` + `mvn spring-boot:run`，可透传 `--opspilot.ingest=true`） |
+`redteam/runner.py` + `cases/` | **红队对抗套件**（6 类 21 用例，含 MCP 端到端攻击面）：manifest 防删用例、泄漏硬 0 判据、独立 runner；对外页 docs/redteam.md |
 `mcp_server.py` | **MCP Server（stdio，stdlib-only，ADR-0027）**：把检索/可信问答/网关状态暴露为 3 个只读 MCP 工具；以配置用户登录网关，全部护栏留在网关侧；stdout 只出协议帧（强制 UTF-8） |
 `mcp_smoke.py` | MCP 冒烟客户端：对真网关走 initialize→tools/list→tools/call 全链路，验收/排障第一入口（`--ask` 才消耗配额） |
 | `start_gateway.sh` | **jar 形态起网关（本机生产/演示形态，OPS §6 形态取舍）**：端口占用预检并点名占用者 → jar 缺失拒启 → 轮询到日志 `Started` 才算成（不信 `/actuator/health`，它可能属于别的项目）。覆盖口 `SERVER_PORT`（默认 8081）/ `GATEWAY_HEAP` |
