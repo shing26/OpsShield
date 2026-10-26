@@ -46,3 +46,40 @@ def test_diff_table_requires_both_sides() -> None:
     """#25：B 未查询时差集表不能给出 B=0 这类数字结论。"""
     html = _html()
     assert "两侧都完成后才有对照" in html, "对照表缺一侧时必须只给说明、不给表"
+
+def test_popover_is_viewport_anchored() -> None:
+    """#28：弹层必须相对视口定位；absolute + 文档坐标会在滚动后整块跑出视口。"""
+    html = _html()
+    m = re.search(r"\.pop\{([^}]*)\}", html)
+    assert m, ".pop 样式缺失"
+    assert "position:fixed" in m.group(1), "弹层必须 position:fixed（#28：滚动后不可见）"
+
+
+def test_filter_is_not_applied_to_body() -> None:
+    """#22：body 上的 filter 会为 fixed 后代创建包含块，把凭证遮罩改成相对整页定位。"""
+    html = _html()
+    assert "body.sat{filter" not in html, "滤镜不能挂在 body 上（#22）"
+    assert ".sat .topbar" in html, "滤镜应只作用于内容层（顶栏/视图/页脚）"
+
+
+def test_topbar_height_is_a_variable_not_a_magic_number() -> None:
+    """#23：顶栏会换行，sticky 偏移/弹层 top 必须读实测变量。"""
+    html = _html()
+    assert "--topbar-h" in html, "顶栏高度必须以 CSS 变量暴露（#23）"
+    assert "top:53px" not in html, "禁止再把顶栏高度写死成 53px"
+    assert ".ts-app{display:grid;grid-template-columns:300px 1fr;height:100%" in html, \
+        "桌面壳必须是定高两列（左栏/主区各自滚动，顶栏不再盖左栏；#23）"
+
+
+def test_mobile_kpis_are_two_columns() -> None:
+    """#24：≤600px 时 KPI 不能一列五屏。"""
+    html = _html()
+    assert "max-width:600px" in html, "缺窄屏补充断点（#24）"
+    assert "grid-template-columns:1fr 1fr" in html, "窄屏 KPI 必须是两列"
+
+
+def test_reingest_timestamp_is_display_formatted() -> None:
+    """#24：纳秒精度 ISO 原串不该直接进面板文案。"""
+    html = _html()
+    assert "fmtTs(ri.last)" in html, "reingest 时间必须走 fmtTs 显示层格式化"
+    assert "fmtTs" in html and "replace(/(\\d{4}" in html, "fmtTs 必须真的截掉小数秒"

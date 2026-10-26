@@ -30,6 +30,7 @@
 <style>
   :root{
     color-scheme:dark;                 /* 原生控件/滚动条跟随暗色，不再出现白底 input（#21） */
+    --topbar-h:53px;                   /* 顶栏实际高度（JS 实测回写）：sticky 偏移/弹层/侧栏都用它，不再写死 53（#23） */
     --bg:#0e1117; --surface:#161b22; --surface-2:#1c2129; --line:#262d38; --line-soft:#1f252e;
     --txt:#e6edf3; --txt-2:#b6c2cf; --muted:#7d8894;
     --ok:#3fb950; --warn:#d29922; --err:#f85149; --accent:#58a6ff;
@@ -39,9 +40,11 @@
     --mono:ui-monospace,"Cascadia Mono",Consolas,"Liberation Mono",monospace;
   }
   *{box-sizing:border-box}
-  html,body{margin:0}
+  html,body{margin:0;height:100%}
+  /* #23：60/30/10 三段式壳——顶栏与页脚定高，视图 flex:1 内部滚动。
+     这样顶栏永远不会盖住左栏（sticky 左栏在等高容器里粘不住的问题从结构上消掉）。 */
   body{background:var(--bg);color:var(--txt);font:14px/1.55 var(--sans);
-       -webkit-font-smoothing:antialiased}
+       -webkit-font-smoothing:antialiased;display:flex;flex-direction:column;height:100%;overflow:hidden}
   .num,.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
   input::placeholder,textarea::placeholder{color:var(--muted)}
   button{font:inherit;cursor:pointer}
@@ -70,10 +73,12 @@
   .pillbtn:hover{border-color:var(--muted);color:var(--txt)}
   .dot{width:7px;height:7px;border-radius:50%;background:var(--muted);flex:0 0 auto}
   .dot.on{background:var(--ok)}
-  .pop{position:absolute;z-index:10;background:var(--surface);border:1px solid var(--line);
-       border-radius:8px;box-shadow:0 14px 40px rgba(0,0,0,.5);padding:14px;width:min(380px,92vw)}
-  #acctpop{top:52px;right:16px}
-  #advpop{top:52px;right:16px;width:min(430px,94vw)}
+  /* #28：弹层相对**视口**定位（此前 absolute 相对文档，滚动后整块跑到视口外） */
+  .pop{position:fixed;z-index:10;background:var(--surface);border:1px solid var(--line);
+       border-radius:8px;box-shadow:0 14px 40px rgba(0,0,0,.5);padding:14px;width:min(380px,92vw);
+       max-height:calc(100vh - var(--topbar-h) - 20px);overflow:auto}
+  #acctpop{top:calc(var(--topbar-h) + 6px);right:16px}
+  #advpop{top:calc(var(--topbar-h) + 6px);right:16px;width:min(430px,94vw)}
   .pop-hd{font-size:12px;color:var(--muted);margin-bottom:10px}
   .pop .note{font-size:11px;color:var(--muted);line-height:1.6;margin-top:10px}
 
@@ -99,13 +104,15 @@
   .locked b{color:var(--txt)}
 
   /* ---------- 视图容器 ---------- */
-  .view{min-height:calc(100vh - 104px)}
+  .view{flex:1 1 auto;min-height:0;overflow:auto}
 
   /* ---------- 排障台视图：左栏（任务级）+ 右画布（证据） ---------- */
-  .ts-app{display:grid;grid-template-columns:300px 1fr}
-  .ts-app aside{position:sticky;top:53px;height:calc(100vh - 53px);overflow:auto;background:var(--surface);
+  /* #23：桌面用「定高壳 + 两列各自滚动」而不是 sticky 左栏——
+     sticky 的容器高度等于左栏自身高度时它**粘不住**，滚动后左栏顶部会钻到 sticky 顶栏下面。 */
+  .ts-app{display:grid;grid-template-columns:300px 1fr;height:100%;min-height:0;overflow:hidden}
+  .ts-app aside{height:100%;overflow:auto;background:var(--surface);
                 border-right:1px solid var(--line);padding:16px;display:flex;flex-direction:column;gap:14px}
-  .ts-app main{padding:20px 26px 60px;min-width:0}
+  .ts-app main{padding:20px 26px 60px;min-width:0;height:100%;overflow:auto}
   .canvas{display:grid;gap:16px;max-width:960px;margin:0 auto}
   .canvas.compare{grid-template-columns:1fr 1fr;max-width:none}
 
@@ -333,23 +340,41 @@
   #auth .card{width:min(520px,92vw);padding:26px 28px}
   #auth .msg{color:var(--warn);font-size:12px;min-height:18px;margin-top:6px}
   #auth p{color:var(--muted);font-size:11px;margin:12px 0 0;line-height:1.6}
-  .sat{filter:saturate(.15) brightness(.7)}
+  /* #22：滤镜不能挂在 body 上——CSS filter 会为 fixed 后代创建包含块，等于把「凭证已失效」
+     遮罩改成相对整页定位（长页滚动后卡片跑到视口外）。只压暗内容层。 */
+  .sat .topbar,.sat .view,.sat footer{filter:saturate(.15) brightness(.7)}
 
-  footer{border-top:1px solid var(--line);background:var(--surface);
+  footer{flex:0 0 auto;border-top:1px solid var(--line);background:var(--surface);
          padding:10px var(--s5);display:flex;justify-content:space-between;
          font-size:11px;color:var(--muted)}
 
   /* ---------- 窄屏（≤900px）：左栏改为顶栏堆叠 ----------
      常驻左栏是桌面工作台的人体工学，窄屏照搬会把报告列压成 90px 宽的竖排字。 */
   @media (max-width:900px){
-    .ts-app{grid-template-columns:1fr}
-    .ts-app aside{position:static;height:auto;overflow:visible;border-right:0;
+    body{height:auto;overflow:auto}
+    .view{flex:none;min-height:calc(100vh - var(--topbar-h) - 51px);overflow:visible}
+    .ts-app{grid-template-columns:1fr;height:auto;min-height:0;overflow:visible}
+    .ts-app aside{height:auto;overflow:visible;border-right:0;
                   border-bottom:1px solid var(--line)}
-    .ts-app main{padding:16px 14px 40px}
+    .ts-app main{padding:16px 14px 40px;height:auto;overflow:visible}
     .canvas.compare{grid-template-columns:1fr}
     .diff{overflow-x:auto}
     .topbar{padding:10px 14px}
     #acctpop,#advpop{right:10px;left:10px;width:auto}
+  }
+
+  /* ---------- 窄屏补充（≤600px，#24） ----------
+     KPI 一列五屏在手机上不可用；去重键串在顶栏折行又占高度——窄屏只留 build 版本（细节看运行态抽屉）。 */
+  @media (max-width:600px){
+    .topbar{gap:var(--s2);padding:8px 12px}
+    .brand span{display:none}                    /* 副标题在窄屏省掉，让顶栏落回两行 */
+    .tabs button{padding:5px 10px}
+    .pillbtn{padding:3px 9px;font-size:11px}
+    .panel-main{padding:var(--s3) 12px var(--s4)}
+    .kpis{grid-template-columns:1fr 1fr;gap:var(--s2)}
+    .kpi{padding:12px}
+    .kpi .value{font-size:24px}
+    .kpi .foot{min-height:0}
   }
 </style>
 </head>
@@ -952,7 +977,8 @@ async function loadCoverage() {
     const r = await fetch('/api/v1/copilot/coverage',
       { headers: { Authorization: 'Bearer ' + S.a.token } });
     if (r.status === 401 || r.status === 403) {
-      dropToken('a', r.status + ' · token 失效，重新接入'); renderAll(); return;
+      const msg = r.status + ' · token 失效，请重新接入';
+      dropToken('a', msg); renderAll(); showAuth(msg); return;   // #22：与轮询/流式同一出口
     }
     if (!r.ok) { S.coverage = null; S.covErr = 'HTTP ' + r.status; }
     else { S.coverage = await r.json(); S.covErr = null; }
@@ -1047,11 +1073,20 @@ function renderCanvas() {
 
 /* ==================== 右上角弹层 ==================== */
 /* 顶栏是**会话级**信息（我是谁 / 系统健不健康）——它必须随登录态变，否则登录完顶栏还写着"未接入" */
+/* #23：sticky 偏移、弹层 top、左栏高度都读 --topbar-h。顶栏会因换行/去重键变长/缩放变高，
+   写死 53px 会让左栏顶部被盖住——这里实测回写，尺寸一变就同步。 */
+function syncTopbarHeight() {
+  const tb = document.querySelector('.topbar');
+  if (!tb) return;
+  document.documentElement.style.setProperty('--topbar-h', Math.round(tb.getBoundingClientRect().height) + 'px');
+}
+
 function renderHeader() {
   const a = S.a;
   $('acct').innerHTML = '<span class="dot' + (a.token ? ' on' : '') + '"></span>'
     + esc(a.token ? (a.tokenUser || a.user) : '未接入');
   $('healthbtn').textContent = S.platform === false ? '运行态 · 锁定' : '运行态';
+  syncTopbarHeight();   // 胶囊文案/去重键变化会改变顶栏高度（#23）
 }
 
 function renderAcct() {
@@ -1226,10 +1261,13 @@ async function poll() {
   try { s = await api('/api/v1/admin/state'); }
   catch (e) {
     if (e.auth === 401) {
-      dropToken('a', '401 · token 已过期或无效，重新接入');
+      const msg = '401 · token 已过期或无效，请重新接入';
+      dropToken('a', msg);
       $('pollstate').textContent = '凭证失效 · 已停止轮询';
       $('pollstate').style.color = 'var(--warn)';
-      renderAll(); return;
+      renderAll();
+      showAuth(msg);   // #22：后台轮询失效也要弹遮罩，不能只改页脚一行
+      return;
     }
     if (e.auth === 403) {
       /* 非 platform：门禁一字不动，渲染锁定态并停轮询（不拿 403 反复打端点） */
@@ -1313,12 +1351,28 @@ if (qp) { const el = $('l1op'); if (el) el.value = qp; }
 
 /* ---------- 运行态 ---------- */
 
+/* #24：窄屏顶栏折行会把去重键串撑成两三行——只留 build 版本，完整信息进 title / 运行态抽屉。 */
+function fingerprintText(b) {
+  const full = 'build ' + b.version + ' · jvm ' + b.jvm +
+    ' · uptime ' + Math.floor(b.uptime_s / 3600) + 'h' + Math.floor(b.uptime_s % 3600 / 60) +
+    'm · pid ' + b.pid;
+  const narrow = window.matchMedia && window.matchMedia('(max-width:600px)').matches;
+  return { full, shown: narrow ? 'build ' + b.version : full };
+}
+
+/* #24：后端 last 形如 "ok @ 2026-10-27T01:14:20.063598300 (trigger=…)"——纳秒对人是噪音。
+   只做显示层格式化（语义不变），不猜时区。 */
+function fmtTs(s) {
+  if (s == null || s === '') return '—';
+  return String(s).replace(/(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}:\d{2})(?:\.\d+)?/, '$1 $2');
+}
+
 function renderState(s) {
   drawerState = s;
   const b = s.build;
-  $('fingerprint').textContent = 'build ' + b.version + ' · jvm ' + b.jvm +
-    ' · uptime ' + Math.floor(b.uptime_s / 3600) + 'h' + Math.floor(b.uptime_s % 3600 / 60) +
-    'm · pid ' + b.pid;
+  const fp = fingerprintText(b);
+  $('fingerprint').textContent = fp.shown;
+  $('fingerprint').title = fp.full;
   $('lastts').textContent = 'server ts ' + new Date(s.ts).toLocaleTimeString();
 
   const h = s.health;
@@ -1330,7 +1384,7 @@ function renderState(s) {
     dep('Qdrant', h.qdrant.status, h.qdrant.value) + dep('Redis', h.redis.status, null) +
     dep('后端', h.live_mode ? 'UP' : 'DEGRADED', h.live_mode ? 'live' : 'mock');
   const ri = s.runtime.reingest;
-  $('reingest').textContent = 'reingest ' + (ri.busy ? '执行中' : '空闲') + ' · last ' + ri.last;
+  $('reingest').textContent = 'reingest ' + (ri.busy ? '执行中' : '空闲') + ' · last ' + fmtTs(ri.last);
 
   const d = s.runtime.degradation;
   $('deg').innerHTML = ['L0', 'L1', 'L2'].map(l =>
@@ -1662,6 +1716,9 @@ $('copy').onclick = async () => {
 
 /* ==================== 启动 ==================== */
 renderAll();
+syncTopbarHeight();
+window.addEventListener('resize', syncTopbarHeight);
+if (window.ResizeObserver) new ResizeObserver(syncTopbarHeight).observe(document.querySelector('.topbar'));
 renderTracks();
 setView('trouble');
 /* 刷新不掉线：sessionStorage 里还有 token 就同时恢复运行态轮询与覆盖范围（两者都按身份算） */
