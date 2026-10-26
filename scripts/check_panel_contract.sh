@@ -74,9 +74,10 @@ grep -qF "esc(ev.sub)" "$HTML" || {
 # 再拼方法级映射；类根上有裸 @GetMapping/@PostMapping 的（无参映射）把前缀本身也计入。
 api_paths_for() {
   local f=$1 prefix subs s
-  prefix=$(grep -oE '@RequestMapping\("[^"]+"\)' "$f" | head -1 | sed -E 's/.*"([^"]+)"/\1/' || true)
+  # sed 必须吃掉尾部 `)`：只替换到最后一个引号会留下 `)`（实测把 map 拼成 /api/v1/copilot)/chat/stream）
+  prefix=$(grep -oE '@RequestMapping\("[^"]+"\)' "$f" | head -1 | sed -E 's/.*"([^"]+)".*/\1/' || true)
   [ -z "$prefix" ] && return 0
-  subs=$(grep -oE '@(Get|Post)Mapping\((value = )?"[^"]+"' "$f" | sed -E 's/.*"([^"]+)"/\1/' || true)
+  subs=$(grep -oE '@(Get|Post)Mapping\((value = )?"[^"]+"' "$f" | sed -E 's/.*"([^"]+)".*/\1/' || true)
   for s in $subs; do echo "${prefix}${s}"; done
   if grep -qE '^[[:space:]]*@(Get|Post)Mapping$' "$f"; then echo "$prefix"; fi   # 类根上的无参映射
 }
@@ -85,7 +86,6 @@ copilot_map=$( { api_paths_for src/main/java/com/opspilot/gateway/CopilotControl
   api_paths_for src/main/java/com/opspilot/gateway/FeedbackController.java
   api_paths_for src/main/java/com/opspilot/gateway/SearchController.java
   api_paths_for src/main/java/com/opspilot/action/ActionOpsController.java; } | sort -u || true)
-echo "DEBUG copilot_map=[$copilot_map]" >&2   # TEMP
 copilot_paths=$(grep -oE "/api/v1/copilot/[a-z/-]+" "$HTML" | sort -u || true)
 for p in $copilot_paths; do
   echo "$copilot_map" | grep -qx "$p" || { echo "FAIL: 面板 fetch 的 copilot 路径无后端映射: $p"; fail=1; }
