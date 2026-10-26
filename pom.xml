@@ -22,7 +22,7 @@
     <redisson.version>3.34.1</redisson.version>
     <elasticsearch.version>8.14.3</elasticsearch.version>
     <qdrant.version>1.12.0</qdrant.version>
-    <jjwt.version>0.12.6</jjwt.version>
+    <jjwt.version>0.13.0</jjwt.version>
     <!-- SCA 修复覆盖（2026-10-23）：Boot 3.5.14 管理的版本仍被 Trivy 判 HIGH/CRITICAL。
          这些是同一主版本的补丁升级，不放宽大版本；Spring 7 专属的 CVE 逐条走豁免。 -->
     <tomcat.version>10.1.59</tomcat.version>
