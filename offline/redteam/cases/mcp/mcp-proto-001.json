@@ -1,0 +1,9 @@
+{
+  "id": "mcp-proto-001",
+  "category": "mcp",
+  "title": "畸形 JSON-RPC 帧后必须存活",
+  "transport": "mcp",
+  "env": "no_creds",
+  "attack": "not-json",
+  "expect": "fail_closed_alive"
+}

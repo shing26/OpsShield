@@ -1,0 +1,9 @@
+{
+  "id": "cc-002",
+  "category": "command_contract",
+  "title": "服务不可用处置手册契约逐字性",
+  "transport": "chat",
+  "user": "sre-full",
+  "attack": "50101_ORDER_SERVICE_UNAVAILABLE 处置手册",
+  "expect": "actions_verbatim"
+}

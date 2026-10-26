@@ -11,7 +11,7 @@
 |---|---|---|
 | `search_ops_docs(query, mode?)` | 检索文档/Runbook，返回 chunk_id/doc_id/breadcrumb/相关度分；结果已按登录用户租户与密级过滤 | embedding+rerank，**无 LLM 成本** |
 | `ask_ops(question, source?)` | 可信问答：答案（逐字）+ 溯源引用 + 只读命令契约（actions）+ 降级档位；可能被准入 429 | 全链路，消耗配额 |
-| `get_gateway_state()` | 版本、降级档位、配额、在途、健康摘要；采信 ask_ops 结果前先看降级档位 | 无 |
+| `get_gateway_state()` | 版本、降级档位、配额、在途、健康摘要；采信 ask_ops 结果前先看降级档位。**需 platform 身份**（读 `/admin/state`，非 platform 返回 403） | 无 |
 
 `get_readonly_commands(doc_id)` 需要网关提供 chunk-action 查询端点后再加；
 当前 actions 经 `ask_ops` 返回。刻意不提供任何写/执行工具（roadmap「明确不做」）。
@@ -21,7 +21,7 @@
 | 变量 | 默认 | 说明 |
 |---|---|---|
 | `OPSPILOT_BASE` | `http://localhost:8081` | 网关地址；只允许 http+环回（SSRF 防线与 bridge 同源） |
-| `OPSPILOT_MCP_USER` | `sre-full` | MCP 专用服务账号（生产建议单独建号，最小密级） |
+| `OPSPILOT_MCP_USER` | `sre-full` | MCP 专用服务账号。**若要用 `get_gateway_state`，必须是 platform 身份**；只做检索/问答时可用最小密级账号（该工具会返回明确的 403 而不是伪装成网关故障） |
 | `OPSPILOT_MCP_PASSWORD` | 回退 `DEMO_PASSWORD` | 该账号口令；只从环境读，不落日志 |
 
 ## 接入 Claude Code

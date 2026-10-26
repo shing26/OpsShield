@@ -1,0 +1,11 @@
+{
+  "id": "l1-nonce-replay",
+  "category": "l1",
+  "title": "同 nonce 回调重放 → 401 nonce_reused（分层 reason）",
+  "transport": "l1",
+  "expect": "l1_nonce_replay",
+  "attack": {
+    "kind": "nonce_replay",
+    "command": "kubectl rollout restart deployment/inventory-api -n prod"
+  }
+}

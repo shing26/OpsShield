@@ -37,7 +37,9 @@ public class CopilotController {
     public SseEmitter chatStream(@jakarta.validation.Valid @RequestBody ChatRequest req,
                                  HttpServletRequest http, HttpServletResponse resp) {
         UserContext user = JwtAuthFilter.from(http);
-        orchestrator.precheck(user);   // 配额 429 前置，省下游
+        // 顺序钉死（#31）：**先**拿准入许可、**再**扣配额。
+        // 反过来（历史实现）会让被准入 429 的请求照样消耗当日配额——突发并发下用户没得到任何
+        // 服务却把 5000/天 打光，之后连单发也被拒，与 ADR-0026 决策 4「配额不被准入反噬」相反。
         // G1 准入：拿不到许可立即 429（在 servlet 线程，SSE 尚未开始），并给 Retry-After。
         AdmissionGate.Permit permit = admission.tryAcquire(user.tenantId());
         if (permit == null) {
@@ -46,6 +48,12 @@ public class CopilotController {
             throw new org.springframework.web.server.ResponseStatusException(
                     HttpStatus.TOO_MANY_REQUESTS,
                     "too many concurrent requests for this tenant / 当前租户并发已满，请稍后重试");
+        }
+        try {
+            orchestrator.precheck(user);   // 配额 429 前置，省下游
+        } catch (RuntimeException e) {
+            permit.release();              // 配额拒绝不是一次编排：许可必须当场归还，否则池子慢性泄漏
+            throw e;
         }
         SseEmitter emitter = new SseEmitter(120_000L);
         orchestrator.submit(req, user, new SseChatSink(emitter, events), "sse", permit);

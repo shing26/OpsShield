@@ -37,6 +37,15 @@ class SearchControllerTest {
         verifyNoInteractions(svc);
     }
 
+    /** #18：检索面同样有 query 上限（embedding/rerank 成本护栏），超限不得进腿。 */
+    @Test
+    void oversizeQueryIsRejectedBeforeSearch() {
+        var ex = assertThrows(ResponseStatusException.class, () -> controller.search(
+                new SearchController.SearchReq("x".repeat(8193), "hybrid"), withUser(1)));
+        assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
+        verifyNoInteractions(svc);
+    }
+
     @Test
     void validLevelReachesSearchService() {
         when(svc.search(anyString(), anyString(), anyInt(), anyString()))
