@@ -29,6 +29,7 @@
 -->
 <style>
   :root{
+    color-scheme:dark;                 /* 原生控件/滚动条跟随暗色，不再出现白底 input（#21） */
     --bg:#0e1117; --surface:#161b22; --surface-2:#1c2129; --line:#262d38; --line-soft:#1f252e;
     --txt:#e6edf3; --txt-2:#b6c2cf; --muted:#7d8894;
     --ok:#3fb950; --warn:#d29922; --err:#f85149; --accent:#58a6ff;
@@ -42,6 +43,7 @@
   body{background:var(--bg);color:var(--txt);font:14px/1.55 var(--sans);
        -webkit-font-smoothing:antialiased}
   .num,.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  input::placeholder,textarea::placeholder{color:var(--muted)}
   button{font:inherit;cursor:pointer}
   [hidden]{display:none !important}
   :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
@@ -128,6 +130,9 @@
   .idbar .who{font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .idbar .sw{margin-left:auto;font-size:11px;color:var(--muted);background:none;border:0;padding:0 2px}
   .idbar .sw:hover{color:var(--accent)}
+  /* L1 确认区输入框：复用 .fld 的暗色观感（#21：此前裸 input 走 UA 白底） */
+  .l1in{background:var(--bg);color:var(--txt);border:1px solid var(--line);
+        border-radius:6px;padding:8px 10px;font:inherit;font-size:13px}
   .chk{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--txt-2)}
   .chips{display:flex;flex-wrap:wrap;gap:5px}
   .chip{font-size:11px;color:var(--txt-2);background:var(--bg);border:1px solid var(--line);
@@ -135,6 +140,7 @@
   .chip:hover{border-color:var(--accent);color:var(--accent)}
   .errline{font-size:12px;color:var(--err);line-height:1.5}
   .hintline{font-size:11px;color:var(--warn);line-height:1.5}
+  .msg{font-size:12px;color:var(--txt-2);min-height:16px}   /* L1 确认提示（此前无规则 → 与正文同色） */
   /* ---------- 覆盖范围（提问前可见的知识库边界，ADR-0023 决策 5） ---------- */
   .cov{border:1px solid var(--line-soft);border-radius:6px;padding:9px 10px;background:var(--bg)}
   .cov-hd{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted)}
@@ -276,7 +282,7 @@
   .chain .hit{color:var(--ok)} .chain .no{color:var(--txt-2)} .chain .rfs{color:var(--err)}
   .bar{display:flex;height:8px;margin-top:var(--s2);border-radius:4px;overflow:hidden;
        background:var(--line-soft)}
-  .bar i{display:block;height:100%}
+  .bar i{display:block;height:100%;background:var(--accent)}   /* #20：此前无背景色 → 整条不可见 */
   .legend{display:flex;flex-wrap:wrap;gap:var(--s1) var(--s3);margin-top:6px;font-size:10px;color:var(--muted)}
   .legend span{display:inline-flex;align-items:center;gap:5px}
   .legend i{width:8px;height:8px;border-radius:2px;display:inline-block}
@@ -432,10 +438,10 @@
         <div class="sub" id="l1hint" style="margin-bottom:8px"></div>
         <div id="l1pending"></div>
         <details style="margin-top:10px">
-          <summary style="cursor:pointer;color:var(--fg2)">粘贴 op_id 与一次性凭据确认（凭据来自提案人转交）</summary>
+          <summary style="cursor:pointer;color:var(--txt-2)">粘贴 op_id 与一次性凭据确认（凭据来自提案人转交）</summary>
           <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
-            <input id="l1op" placeholder="op_id (act_…)" style="flex:1;min-width:140px">
-            <input id="l1tok" placeholder="一次性凭据（64 位十六进制）" style="flex:2;min-width:200px">
+            <input id="l1op" class="l1in" placeholder="op_id (act_…)" style="flex:1;min-width:140px">
+            <input id="l1tok" class="l1in" placeholder="一次性凭据（64 位十六进制）" style="flex:2;min-width:200px">
             <button class="btn" id="l1confirm">确认执行</button>
           </div>
           <div class="msg" id="l1msg" style="margin-top:6px"></div>
@@ -870,6 +876,14 @@ function nearMs(x, y) {
 }
 
 function diffTable(ra, rb) {
+  // #25：任一侧未完成时，表里出现的任何数字都会被读成「测量值」（尤其 B=0 会读成“隔离生效”）。
+  // 缺一侧就只给说明，不给表。
+  if (!ra || !rb) {
+    const who = !ra && !rb ? '两侧均未发起' : (!ra ? '身份 A 未发起' : '身份 B 未发起');
+    return '<div class="diff"><div class="diff-hd"><b>📊 双身份对照</b>'
+      + '<div class="sub">两侧都完成后才有对照——当前' + who
+      + '，本区不给出任何数字结论。</div></div></div>';
+  }
   const ids = r => new Set(((r && r.refs) || []).map(x => x.chunkId));
   const A = ids(ra), B = ids(rb);
   const onlyA = [...A].filter(x => !B.has(x));
@@ -1259,11 +1273,11 @@ function renderActions(ops) {
   hint.textContent = ops.length + ' 条待确认——确认前逐字核对命令与影响范围；窗口过期须重新提案。';
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   const card = o =>
-    '<div style="border:1px solid var(--bd);border-radius:8px;padding:10px;margin-bottom:8px">'
+    '<div style="border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:8px">'
     + '<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline">'
-    + '<code style="font-size:12px;color:var(--fg2)">' + esc(o.opId) + '</code>'
+    + '<code style="font-size:12px;color:var(--txt-2)">' + esc(o.opId) + '</code>'
     + '<span class="num" data-exp="' + esc(o.expiresAt || '') + '" style="color:var(--warn)"></span></div>'
-    + '<pre style="margin:6px 0;padding:8px;background:var(--bg2);border-radius:6px;font-size:12px;overflow-x:auto">'
+    + '<pre style="margin:6px 0;padding:8px;background:var(--bg);border:1px solid var(--line-soft);border-radius:6px;font-size:12px;overflow-x:auto">'
     + esc(o.command) + '</pre>'
     + '<div class="sub" style="font-size:12px">提案人 ' + esc(o.proposedBy)
     + ' · 来源 ' + esc(o.ref) + ' · 状态 ' + esc(L1_STATE_LABEL[o.state] || o.state) + '</div></div>';
@@ -1458,15 +1472,22 @@ function drawRate(reset) {
     if (idx < 0 || idx >= buckets) continue;
     cells[idx].n += s.inc; cells[idx].gap = false;
   }
-  const peak = Math.max(1, ...cells.map(c => c.n));
+  const peakRaw = Math.max(0, ...cells.map(c => c.n));
+  const peak = Math.max(1, peakRaw);          // 只用于柱高比例，不再当作对外数字
   const totalReq = cells.reduce((a, c) => a + c.n, 0);
+  const hasData = peakRaw > 0;
+  const samples = rate.filter(r => r.t >= start).length;
   $('chart').innerHTML = cells.map(c => {
     const cls = c.n ? 'b' : (c.gap ? 'b gap' : 'b zero');
     return '<div class="' + cls + '" style="height:' + (c.n ? Math.max(8, c.n / peak * 100) : (c.gap ? 6 : 2)) + '%"></div>';
   }).join('');
   const secs = Math.round(bw / 1000);
+  // #25：没有采样就不写「合计 0 / 峰值 1」这种看起来像实测的组合；
+  // 只有基线那一格时也不给合计（那一次的请求落在基线里，标出来而不是算进去）。
   $('chartpeak').textContent = (reset ? '⚠ 网关重启，计数归零，旧序列已丢弃 · ' : '') +
-    '合计 ' + totalReq + ' 次 · 峰值 ' + peak + ' 次/' + secs + 's';
+    '合计 ' + (hasData ? totalReq + ' 次' : '—') +
+    ' · 峰值 ' + (hasData ? peakRaw : '—') + ' 次/' + secs + 's' +
+    (samples < 2 ? '（首格为基线，未计入）' : '');
   $('chartwin').textContent = '← ' + (span / 60000) + ' 分钟前 · 每格 ' + secs + 's';
 }
 
