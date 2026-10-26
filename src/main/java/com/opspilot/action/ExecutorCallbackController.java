@@ -20,11 +20,14 @@ public class ExecutorCallbackController {
 
     private final ActionDispatchService dispatch;
     private final com.opspilot.metrics.AuditService audit;
+    private final com.opspilot.metrics.L1Metrics l1Metrics;
 
     public ExecutorCallbackController(ActionDispatchService dispatch,
-                                      com.opspilot.metrics.AuditService audit) {
+                                      com.opspilot.metrics.AuditService audit,
+                                      com.opspilot.metrics.L1Metrics l1Metrics) {
         this.dispatch = dispatch;
         this.audit = audit;
+        this.l1Metrics = l1Metrics;
     }
 
     public record CallbackReq(String opId, String status, String detail, Long ts, String nonce) {}
@@ -56,6 +59,7 @@ public class ExecutorCallbackController {
         boolean first = dispatch.callback(req.opId(), req.status(), req.detail());
         if (!first) {
             String existing = dispatch.existingState(req.opId());
+            l1Metrics.callbackConflict(dispatch.tenantOf(req.opId()));
             audit.log(null, "action_callback_conflict", "executor", "manual",
                     req.opId() + " " + req.status() + " 现有终态=" + existing,
                     null, "none", null, false, 0, 0, null, null, null, null);

@@ -23,6 +23,7 @@ import static org.junit.jupiter.api.Assertions.*;
         "opspilot.probes.enabled=false",
         "opspilot.l1.enabled=true",
         "opspilot.l1.allowed-targets=deployment/order-api,deployment/inventory-api",
+        "OPSPILOT_L1_WEBHOOK_ALLOW_PRIVATE=true",   // 测试 webhook 是环回
         "spring.datasource.url=jdbc:h2:mem:actiondispatch;MODE=PostgreSQL;DB_CLOSE_DELAY=-1",
         "spring.datasource.username=sa", "spring.datasource.password="})
 class ActionDispatchServiceTest {
@@ -146,7 +147,8 @@ class ActionDispatchServiceTest {
     @Test
     void badSignatureDoesNotConsumeNonce() {
         var audit = ctx.getBean(com.opspilot.metrics.AuditService.class);
-        var ctl = new ExecutorCallbackController(dispatch, audit);
+        var ctl = new ExecutorCallbackController(dispatch, audit,
+                ctx.getBean(com.opspilot.metrics.L1Metrics.class));
         long now = java.time.Instant.now().getEpochSecond();
         String nonce = "pin-" + System.nanoTime();
         var resp = ctl.callback(
@@ -157,6 +159,39 @@ class ActionDispatchServiceTest {
                 "坏签名请求不得消耗 nonce——同 nonce 首个合法请求仍应通过");
     }
 
+    /** SSRF 最小防护（盲点 5）：私网/环回/链路本地默认拒；显式 allowlist 才放。 */
+    @Test
+    void webhookPrivateAddressesRejectedUnlessAllowed() {
+        assertThrows(IllegalStateException.class,
+                () -> ActionDispatchService.validateWebhookUrl("http://127.0.0.1:8080/exec", false));
+        assertThrows(IllegalStateException.class,
+                () -> ActionDispatchService.validateWebhookUrl("http://169.254.169.254/latest", false));
+        assertThrows(IllegalStateException.class,
+                () -> ActionDispatchService.validateWebhookUrl("http://10.1.2.3:8080/exec", false));
+        assertThrows(IllegalStateException.class,
+                () -> ActionDispatchService.validateWebhookUrl("ftp://example.com/x", false));
+        assertEquals("http://127.0.0.1:8080/exec",
+                ActionDispatchService.validateWebhookUrl("http://127.0.0.1:8080/exec", true),
+                "显式放开后内网 webhook 可用");
+        assertNull(ActionDispatchService.validateWebhookUrl("", false), "空 = 未配置");
+    }
+
+    /** 指标面：propose/confirm/dispatch/executed 在 Prometheus 计数上可见（告警基础）。 */
+    @Test
+    void l1MetricsIncrementOnLifecycle() {
+        var reg = ctx.getBean(io.micrometer.core.instrument.MeterRegistry.class);
+        double before = reg.get("aiops.l1.proposed").tag("tenant", "tenant-internal")
+                .counter().count();
+        loadL1Chunk();
+        var p = ops.propose(PROPOSER, "rb-l1d::恢复动作", CMD);
+        assertEquals(before + 1,
+                reg.get("aiops.l1.proposed").tag("tenant", "tenant-internal").counter().count(),
+                "propose 指标必须 +1");
+        ops.confirm(CONFIRMER, p.opId(), p.confirmToken());
+        assertTrue(reg.get("aiops.l1.dispatched").tag("tenant", "tenant-internal")
+                .tag("result", "ok").counter().count() >= 1, "派发成功指标可见");
+    }
+
     /** 密钥轮换：新 key 签名、旧 key 在窗口内仍可验（回调不断流）。 */
     @Test
     void previousKeyStillVerifiesDuringRotation() throws Exception {
@@ -164,7 +199,8 @@ class ActionDispatchServiceTest {
         byte[] prev = java.util.HexFormat.of().parseHex("cd".repeat(32));
         var f = java.nio.file.Files.createTempFile("prevkey", ".txt");
         java.nio.file.Files.writeString(f, java.util.HexFormat.of().formatHex(prev));
-        var rotated = new ActionDispatchService(jdbc, "", "", f.toString(), null, true);
+        var rotated = new ActionDispatchService(jdbc, "", "", f.toString(), null, true, true,
+                ctx.getBean(com.opspilot.metrics.L1Metrics.class));
         String material = "callback:act_x:executed:1:n1";
         String prevSig = ActionDispatchService.hmac(prev, material);
         assertTrue(rotated.signatureMatches(prevSig, material), "旧 key 签名在窗口内必须通过");

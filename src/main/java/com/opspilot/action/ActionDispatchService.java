@@ -46,6 +46,7 @@ public class ActionDispatchService {
     private final byte[] previousKey;                 // 轮换窗口内仍接受的旧 key（只验不签）
     private final String webhookUrl;
     private final boolean l1Enabled;                  // 灰度开关，默认 false（红队全绿前不开）
+    private final com.opspilot.metrics.L1Metrics l1Metrics;
     private final HttpClient http = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(3))
             .followRedirects(HttpClient.Redirect.NEVER)
@@ -60,20 +61,62 @@ public class ActionDispatchService {
                                  @Value("${OPSPILOT_DISPATCH_KEY_FILE:}") String keyFile,
                                  @Value("${OPSPILOT_DISPATCH_KEY_PREVIOUS_FILE:}") String prevKeyFile,
                                  @Value("${opspilot.l1.dispatch-webhook:}") String webhookUrl,
-                                 @Value("${opspilot.l1.enabled:false}") boolean l1Enabled) {
+                                 @Value("${opspilot.l1.enabled:false}") boolean l1Enabled,
+                                 @Value("${OPSPILOT_L1_WEBHOOK_ALLOW_PRIVATE:false}") boolean allowPrivateWebhook,
+                                 com.opspilot.metrics.L1Metrics l1Metrics) {
+        this.l1Metrics = l1Metrics;
         this.jdbc = jdbc;
         this.dispatchKey = loadKey(keyHex, keyFile, "DISPATCH_KEY");
         this.previousKey = loadKey("", prevKeyFile, "DISPATCH_KEY_PREVIOUS_FILE");
-        this.webhookUrl = webhookUrl == null || webhookUrl.isBlank() ? null : webhookUrl;
+        this.webhookUrl = validateWebhookUrl(webhookUrl, allowPrivateWebhook);
         this.l1Enabled = l1Enabled;
         if (this.dispatchKey != null && this.previousKey != null) {
             log.info("L1 派发密钥轮换窗口开启：新 key 签名，旧 key 仍可验（回调不断流）");
         }
     }
 
-    /** 测试/嵌入用：直接给 key（不读文件）。 */
+    /** 测试/嵌入用：直接给 key（不读文件）；测试的 webhook 是环回，默认放开私网闸。 */
     ActionDispatchService(JdbcTemplate jdbc, String keyHex, String webhookUrl, boolean l1Enabled) {
-        this(jdbc, keyHex, "", "", webhookUrl, l1Enabled);
+        this(jdbc, keyHex, "", "", webhookUrl, l1Enabled, true, new com.opspilot.metrics.L1Metrics(
+                new io.micrometer.core.instrument.simple.SimpleMeterRegistry()));
+    }
+
+    /**
+     * webhook SSRF 最小防护（评裁决·盲点 5）：只允许 http/https，且默认拒绝环回/私网/链路本地
+     * （169.254.169.254 云元数据端点）——生产 webhook 应是独立网段或显式 allowlist 开启。
+     * 3xx 已由 HttpClient 不跟随兜住（防重定向进内网）。
+     */
+    static String validateWebhookUrl(String url, boolean allowPrivate) {
+        if (url == null || url.isBlank()) {
+            return null;
+        }
+        try {
+            var u = java.net.URI.create(url.trim());
+            String scheme = u.getScheme() == null ? "" : u.getScheme().toLowerCase();
+            if (!scheme.equals("http") && !scheme.equals("https")) {
+                throw new IllegalStateException("webhook 仅允许 http/https: " + scheme);
+            }
+            String host = u.getHost();
+            if (host == null || host.isBlank()) {
+                throw new IllegalStateException("webhook URL 缺少主机名");
+            }
+            if (!allowPrivate) {
+                for (java.net.InetAddress a : java.net.InetAddress.getAllByName(host)) {
+                    if (a.isLoopbackAddress() || a.isSiteLocalAddress()
+                            || a.isLinkLocalAddress() || a.isAnyLocalAddress()
+                            || a.isMulticastAddress()) {
+                        throw new IllegalStateException(
+                                "webhook 指向内网/环回地址（" + a.getHostAddress()
+                                + "）；确需请显式设 OPSPILOT_L1_WEBHOOK_ALLOW_PRIVATE=true");
+                    }
+                }
+            }
+            return url.trim();
+        } catch (java.net.UnknownHostException e) {
+            throw new IllegalStateException("webhook 主机无法解析: " + e.getMessage(), e);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalStateException("webhook URL 非法: " + e.getMessage(), e);
+        }
     }
 
     /**
@@ -177,6 +220,7 @@ public class ActionDispatchService {
         if (deadline == null || Instant.now(clock).isAfter(deadline.toInstant())) {
             // 契约 3：过期不可派发——惰性转 expired，重跑须新 op_id + 重新人确认
             jdbc.update("UPDATE action_ops SET state='expired' WHERE op_id=? AND state='confirmed'", opId);
+            l1Metrics.expired(tenantOf(opId), "dispatch");
             log.warn("L1 派发期限已过：{} 转 expired（须重新提案）", opId);
             return;
         }
@@ -205,6 +249,8 @@ public class ActionDispatchService {
                     HttpResponse.BodyHandlers.ofString());
             if (resp.statusCode() / 100 != 2) {                 // 3xx 不跟随：直接 failed
                 fail(opId, "webhook HTTP " + resp.statusCode());
+            } else {
+                l1Metrics.dispatched(tenantOf(opId), true);
             }
         } catch (Exception e) {
             fail(opId, "webhook 传输失败: " + e.getClass().getSimpleName());
@@ -218,10 +264,18 @@ public class ActionDispatchService {
      */
     public boolean callback(String opId, String status, String detail) {
         String target = "executed".equals(status) ? "executed" : "failed";
-        return jdbc.update("UPDATE action_ops SET state=?, dispatch_result=? "
+        boolean ok = jdbc.update("UPDATE action_ops SET state=?, dispatch_result=? "
                         + "WHERE op_id=? AND state='dispatched'",
                 target, detail == null ? "" : detail.substring(0, Math.min(detail.length(), 500)),
                 opId) == 1;
+        if (ok) {
+            if ("executed".equals(target)) {
+                l1Metrics.executed(tenantOf(opId));
+            } else {
+                l1Metrics.failed(tenantOf(opId));
+            }
+        }
+        return ok;
     }
 
     /** 冲突审计用：op 当前状态（不存在返回 absent）。 */
@@ -246,7 +300,13 @@ public class ActionDispatchService {
         }
     }
 
+    String tenantOf(String opId) {
+        var l = jdbc.queryForList("SELECT tenant FROM action_ops WHERE op_id = ?", String.class, opId);
+        return l.isEmpty() ? "" : l.get(0);
+    }
+
     private void fail(String opId, String reason) {
+        l1Metrics.dispatched(tenantOf(opId), false);
         // 不自动重试（规格 §2）：失败留痕 + 日志告警面（Alertmanager 规则接盲点 4）
         jdbc.update("UPDATE action_ops SET state='failed', dispatch_result=? "
                 + "WHERE op_id=? AND state='dispatched'", reason, opId);

@@ -40,6 +40,7 @@ public class ActionOpsService {
     private final InMemoryIndex index;              // memory 模式；live 模式的 ES byId 后续接
     private final AuditService audit;
     private final ActionDispatchService dispatch;   // confirm 成功后自动派发（未启用则停在 confirmed）
+    private final com.opspilot.metrics.L1Metrics l1Metrics;
 
     /** 灰度目标白名单（2026-10-25 评裁决 4·A）：配置定义而非 K8s label——
      * 任何有 RBAC 的人都能打 label，白名单形同虚设；配置变更走 OpsShield 审计。
@@ -48,7 +49,9 @@ public class ActionOpsService {
 
     public ActionOpsService(JdbcTemplate jdbc, InMemoryIndex index, AuditService audit,
                             ActionDispatchService dispatch,
+                            com.opspilot.metrics.L1Metrics l1Metrics,
                             @Value("${opspilot.l1.allowed-targets:}") String allowedTargetsCsv) {
+        this.l1Metrics = l1Metrics;
         this.jdbc = jdbc;
         this.index = index;
         this.audit = audit;
@@ -102,6 +105,7 @@ public class ActionOpsService {
                 proposer.sub(), java.sql.Timestamp.from(Instant.now()), "proposed",
                 sha256Hex(token), java.sql.Timestamp.from(expires));
         auditEvent(proposer, "action_proposed", opId + " " + command);
+        l1Metrics.proposed(proposer.tenantId());
         return new ProposeResult(opId, token, expires.toString());
     }
 
@@ -148,6 +152,7 @@ public class ActionOpsService {
             throw rejection(confirmer, opId, "cas_conflict", "确认已被并发消费");
         }
         auditEvent(confirmer, "action_confirmed", opId);
+        l1Metrics.confirmed(confirmer.tenantId());
         dispatch.stampDispatchDeadline(opId);       // 契约 3：confirm 即定派发期限
         dispatch.dispatchConfirmed(opId);           // §2：confirmed→dispatched 系统自动
         return status(confirmer, opId);
@@ -186,8 +191,15 @@ public class ActionOpsService {
 
     /** 过期扫描（confirm 前置检查与定时清理共用；红队过期用例的判定点）。 */
     public void expire(String opId) {
-        jdbc.update("UPDATE action_ops SET state='expired' "
-                + "WHERE op_id=? AND state='proposed'", opId);
+        if (jdbc.update("UPDATE action_ops SET state='expired' "
+                + "WHERE op_id=? AND state='proposed'", opId) == 1) {
+            l1Metrics.expired(tenantOf(opId), "confirm");
+        }
+    }
+
+    private String tenantOf(String opId) {
+        var l = jdbc.queryForList("SELECT tenant FROM action_ops WHERE op_id = ?", String.class, opId);
+        return l.isEmpty() ? "" : l.get(0);
     }
 
     // ── 内部 ──────────────────────────────────────────────────────────

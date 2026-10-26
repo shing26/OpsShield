@@ -187,6 +187,14 @@ OpsShield：payload + HMAC → POST 自动化系统 webhook（ev=action_dispatch
 | 密钥卫生 | `OPSPILOT_DISPATCH_KEY_FILE` 优先 | 生产读挂载 Secret（K8s/600 文件）；环境变量明文仅限开发 |
 | 密钥轮换 | `OPSPILOT_DISPATCH_KEY_PREVIOUS_FILE` | 旧 key **只验不签**，窗口内回调不断流；轮换完成后清空 |
 
+## 8.6 指标与告警 + webhook SSRF（盲点 4/5 落地，2026-10-26）
+
+- **指标面**（`L1Metrics`，Prometheus-only 不进面板契约）：`aiops_l1_{proposed,confirmed,dispatched,executed,failed,expired,callback_conflict,frozen}_total`；
+  基数 = tenant × 闭集（result/phase），不带 op_id；
+- **告警规则** `ops/alerting/rules/l1.yml`：派发失败 P2（5min 持续）、派发阶段过期 P3、回调冲突 P3、冻结超 30min P3；
+- **webhook SSRF 闸**：只允许 http/https；默认拒绝环回/私网/链路本地（169.254.169.254 元数据端点），
+  确需内网显式 `OPSPILOT_L1_WEBHOOK_ALLOW_PRIVATE=true`；3xx 不跟随（HttpClient NEVER）；connect 3s / read 5s。
+
 ## 9. 实现顺序（⛔ 评审修正：verifier 与派发**同步交付**）
 
 ~~~

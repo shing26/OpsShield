@@ -76,6 +76,7 @@ JWT_SECRET="$(head -c 48 /dev/urandom | base64 | tr -dc a-zA-Z0-9)" DASHSCOPE_AP
 OPSPILOT_L1_ENABLED=true OPSPILOT_DISPATCH_KEY="$DISPATCH_KEY" \
 OPSPILOT_L1_DISPATCHWEBHOOK="http://127.0.0.1:18104/exec" \
 OPSPILOT_L1_ALLOWEDTARGETS="deployment/inventory-api" \
+OPSPILOT_L1_WEBHOOK_ALLOW_PRIVATE=true \
 "$JAVA_BIN" -Xms128m -Xmx512m -jar app.jar >app.log 2>&1 &
 PID=$!
 cd "$ROOT"
