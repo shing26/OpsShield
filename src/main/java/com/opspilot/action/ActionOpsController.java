@@ -73,10 +73,15 @@ public class ActionOpsController {
     /** 判定/守卫失败 = 4xx（客户端可决策），不 5xx；stage 供红队区分打在哪一层。 */
     @ExceptionHandler(ActionOpsService.ActionRejectedException.class)
     public ResponseEntity<Map<String, String>> rejected(ActionOpsService.ActionRejectedException e) {
-        return ResponseEntity.status("self_confirm".equals(e.stage) ||
-                "confirmer_not_authorized".equals(e.stage) || "cross_tenant".equals(e.stage)
+        HttpStatus status = "self_confirm".equals(e.stage)
+                || "confirmer_not_authorized".equals(e.stage) || "cross_tenant".equals(e.stage)
                 || "op_level_insufficient".equals(e.stage)
-                ? HttpStatus.FORBIDDEN : HttpStatus.BAD_REQUEST)
+                ? HttpStatus.FORBIDDEN : HttpStatus.BAD_REQUEST;
+        // #32：未知 opId 是 404（资源不存在），与其它守卫失败的 400/403 分开
+        if ("not_found".equals(e.stage)) {
+            status = HttpStatus.NOT_FOUND;
+        }
+        return ResponseEntity.status(status)
                 .body(Map.of("code", "ACTION_REJECTED", "stage", e.stage,
                         "message", e.getMessage()));
     }

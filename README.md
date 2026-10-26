@@ -16,7 +16,7 @@
 [![Java](https://img.shields.io/badge/Java-21-ED8B00?style=flat&logo=openjdk&logoColor=white)](https://openjdk.org/)
 [![Spring Boot](https://img.shields.io/badge/Spring_Boot-3.5.14-6DB33F?style=flat&logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)
 [![Metrics](https://img.shields.io/badge/Metrics-Micrometer_%7C_Prometheus-498BA3?style=flat&logo=prometheus&logoColor=white)](https://prometheus.io/)
-[![Java Tests](https://img.shields.io/badge/Java_Tests-421_Passed-4CAF50?style=flat&logo=openjdk&logoColor=white)](#-测试体系与安全回归测试)
+[![Java Tests](https://img.shields.io/badge/Java_Tests-424_Passed-4CAF50?style=flat&logo=openjdk&logoColor=white)](#-测试体系与安全回归测试)
 [![Benchmark](https://img.shields.io/badge/Benchmark-Regression_Gated-4CAF50?style=flat&logo=githubactions&logoColor=white)](docs/benchmark.md)
 [![Python Probes](https://img.shields.io/badge/Probes-389_Passed-3776AB?style=flat&logo=python&logoColor=white)](#-测试体系与安全回归测试)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -339,7 +339,7 @@ OpsShield 把"系统活着"做成了结构化的入口矩阵（默认端口 `808
 
 防线不只靠单测——关键判据全部经"改坏必红、复原必绿"的安全回归测试，文档数字由门闩每次现算比对产物：
 
-* **Java 421 单测**（`mvn test` 实跑全绿）：并发合并、状态机无损跃迁、AST 词法解析、双出口指标一致性、覆盖范围聚合、内存存储后端与身份过滤的跨后端对照；
+* **Java 424 单测**（`mvn test` 实跑全绿）：并发合并、状态机无损跃迁、AST 词法解析、双出口指标一致性、覆盖范围聚合、内存存储后端与身份过滤的跨后端对照；
 * **Python 389 条 test 函数**（`pytest offline/tests/`；参数化展开后执行例数更多）：含 `action_contract_probe.py` 的 **AC-1..AC-9 九组形式化不变式**——帧形状 / 逐字性 / 契约⊆引用闭包 / 段名闸 / 红线绊线 / 回放一致性 / 租户围栏 / 指标单调 / 反假绿覆盖；以及 `preset_probe.py` 的 **P-1..P-3 三组**——左栏预设与页面同源、预设形状（不锁产额）、覆盖范围与语料逐项相等；
 * **安全回归测试**：契约探针 5 路（段名闸恒真、逐字恒真、红线恒空、闭包前置 None、AC-7 租户恒真——每条都有"改坏后 N failed / 复原后全绿"的实测记录）；文档门闩另有 A/B/C 三路（改文档数字、改产物、改写措辞，各须红）；
 * **CI 全部 job**（java / static-gate / panel-contract / provenance / python / shell / security / sbom / smoke / benchmark）零 key 零中间件可跑；`doc_numbers` 门闩现算比对 **33 条文档数字 / 48 处引用**，数字与产物分叉即 CI 红；评测报告与语料的同代性用内容摘要钉死（`provenance`，不用 checkout 会刷平的 mtime）；对外面用词由 `check_public_copy` 钉住（内部 canonical 词不得漏到本 README 与页面文案，词表从 `docs/CONTEXT.md` 现取）。

@@ -32,6 +32,7 @@ class ActionOpsServiceTest {
     @Autowired ActionOpsService ops;
     @Autowired InMemoryIndex index;
     @Autowired JdbcTemplate jdbc;
+    @Autowired com.opspilot.metrics.AuditService audit;   // #32：审计终态断言
 
     static final UserContext PROPOSER = new UserContext("sre-full", "platform", 3, "tenant-internal");
     static final UserContext CONFIRMER = new UserContext("sre-manager", "platform", 3, "tenant-internal");
@@ -174,5 +175,31 @@ class ActionOpsServiceTest {
         assertEquals("confirmer_not_authorized", e.stage);
         assertEquals("expired", ops.cancel(user("sre-platform", 3, tenant), opId).state(),
                 "够密级的同租户用户可取消");
+    }
+
+    /** #32：未知 opId 是 404 语义（not_found），不是 queryForMap 抛出的 500。 */
+    @Test
+    void unknownOpIdIsNotFoundNotServerError() {
+        var e = assertThrows(ActionOpsService.ActionRejectedException.class,
+                () -> ops.status(PROPOSER, "act_00000000000000000000"));
+        assertEquals("not_found", e.stage);
+    }
+
+    /** #32：审计链必须含派发与过期终态——只有 proposed/confirmed 时，回放看不出动作有没有真正发出。 */
+    @Test
+    void auditTrailCoversDispatchedAndExpired() {
+        loadL1Chunk();
+        var p = ops.propose(PROPOSER, "rb-l1::恢复动作", CMD);
+        ops.confirm(CONFIRMER, p.opId(), p.confirmToken());
+        var p2 = ops.propose(PROPOSER, "rb-l1::恢复动作", CMD);
+        ops.expire(p2.opId());
+        var events = audit.recentSince(0, 500).events().stream()
+                .map(ev -> String.valueOf(ev.get("ev"))).toList();
+        String state = ops.status(PROPOSER, p.opId()).state();
+        assertTrue(events.contains("action_dispatched") || events.contains("action_not_dispatched"),
+                "缺派发终态审计：" + events);
+        assertEquals("dispatched".equals(state), events.contains("action_dispatched"),
+                "审计不得声称已派发而真实状态是 " + state + "：" + events);
+        assertTrue(events.contains("action_expired"), "缺 action_expired：" + events);
     }
 }
