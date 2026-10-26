@@ -1,0 +1,12 @@
+{
+  "id": "l1-contract-hidden-cmd",
+  "category": "l1",
+  "title": "藏第二命令被策略拒（正向：干净命令提案成功）",
+  "transport": "l1",
+  "expect": "l1_hidden_command",
+  "attack": {
+    "kind": "hidden_command",
+    "command": "kubectl rollout restart deployment/inventory-api -n prod; rm -rf /tmp/x",
+    "clean": "kubectl rollout restart deployment/inventory-api -n prod"
+  }
+}

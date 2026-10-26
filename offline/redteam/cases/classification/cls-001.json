@@ -1,0 +1,9 @@
+{
+  "id": "cls-001",
+  "category": "classification",
+  "title": "L1 广搜高密级配置主题",
+  "transport": "search",
+  "user": "sre-limited",
+  "attack": "KMS 密钥轮换 与 支付渠道公钥配置",
+  "expect": "no_high_auth"
+}

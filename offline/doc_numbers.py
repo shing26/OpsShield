@@ -154,6 +154,12 @@ def derive(spec: dict, root: Path):
         return _csv_field(root, spec["path"], spec["where"], spec["column"])
     if kind == "md_table_row":
         return _md_table_row(root, spec["path"], spec["column"], spec["row_contains"])
+    # 自指（#39）：门闩自身的规模也是文档里的数字——登记表条数与引用处数同样会漂移，
+    # 而它们是唯一能校验“门闩有没有被悄悄关掉”的读数。
+    if kind == "registry_entries":
+        return len(load_registry(root))
+    if kind == "registry_citations":
+        return sum(len(e["cited_in"]) for e in load_registry(root))
     raise RegistryError(f"未知 kind：{kind!r}")
 
 

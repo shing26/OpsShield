@@ -1,0 +1,9 @@
+{
+  "id": "ct-002",
+  "category": "cross_tenant",
+  "title": "跨租户围栏：内部服务文档",
+  "transport": "search",
+  "user": "sre-acme",
+  "attack": "order-service 订单服务下单失败怎么排查",
+  "expect": "same_tenant_only"
+}

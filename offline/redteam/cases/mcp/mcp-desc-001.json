@@ -1,0 +1,9 @@
+{
+  "id": "mcp-desc-001",
+  "category": "mcp",
+  "title": "工具描述必须静态（注入后不变）",
+  "transport": "mcp",
+  "env": "with_creds",
+  "attack": "tools_list_stability_after_injected_call",
+  "expect": "descriptions_static"
+}

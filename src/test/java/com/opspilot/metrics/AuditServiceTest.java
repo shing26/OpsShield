@@ -277,4 +277,22 @@ class AuditServiceTest {
         assertEquals(200, ((String) rows.get(0).get("q")).length(), "chat 行 q 截 200");
         assertEquals(64, ((String) rows.get(1).get("sub")).length(), "auth 行 sub 截 64");
     }
+
+    /** #32：动作类事件保留命令原文（上限 1024），其余事件仍按 200 截断。 */
+    @Test
+    void actionEventsKeepLongCommandWhileOthersStayAt200() {
+        AuditService svc = new AuditService();
+        String longCmd = "kubectl " + "x".repeat(600);
+        svc.log(U, "action_proposed", "action-api", "manual", longCmd, null, null, "none",
+                false, 0, 0, null, null, null, null);
+        svc.log(U, "chat", "sse", "manual", longCmd, null, null, "hybrid",
+                false, 0, 0, null, null, null, null);
+        var evs = svc.recentSince(0, 10).events();
+        String actionQ = evs.stream().filter(e -> "action_proposed".equals(e.get("ev")))
+                .findFirst().orElseThrow().get("q").toString();
+        String chatQ = evs.stream().filter(e -> "chat".equals(e.get("ev")))
+                .findFirst().orElseThrow().get("q").toString();
+        assertEquals(longCmd.length(), actionQ.length(), "action_* 命令原文不得被 200 截断");
+        assertEquals(200, chatQ.length(), "其余事件仍按 200 控制单行体积");
+    }
 }

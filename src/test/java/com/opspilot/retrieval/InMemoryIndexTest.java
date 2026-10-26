@@ -128,7 +128,7 @@ class InMemoryIndexTest {
 
     private static Chunk chunk(String id, String service, String tenant, int level, String text) {
         return new Chunk(id, "doc-" + id, "runbook", text, "Ops > " + service + " > 排查",
-                new Chunk.Metadata(service, null, null, List.of("50012_DB_TIMEOUT"), level, "prod", tenant));
+                new Chunk.Metadata(service, null, null, List.of("50012_DB_TIMEOUT"), level, "prod", tenant, null));
     }
 
     private static OpsPilotProperties props() {

@@ -1,0 +1,11 @@
+{
+  "id": "l1-cross-confirm",
+  "category": "l1",
+  "title": "跨租户确认被拒（正向：本租户确认成功）",
+  "transport": "l1",
+  "expect": "l1_cross_confirm",
+  "attack": {
+    "kind": "cross_confirm",
+    "command": "kubectl rollout restart deployment/inventory-api -n prod"
+  }
+}
