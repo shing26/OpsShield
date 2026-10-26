@@ -166,8 +166,13 @@ class ActionDispatchServiceTest {
         var index = ctx.getBean(com.opspilot.retrieval.InMemoryIndex.class);
         var audit = ctx.getBean(com.opspilot.metrics.AuditService.class);
         var metrics = ctx.getBean(com.opspilot.metrics.L1Metrics.class);
-        // 开关关闭的第二套服务（同一 DB）
-        var disabled = new ActionOpsService(jdbc, index, audit,
+        // 开关关闭的第二套服务（同一 DB）。索引走 ObjectProvider（P0 修复后生产构造的形态）：
+        // live 形态下没有这个 bean，此处显式给一个「总是返回该索引」的 provider，保持 memory 语义。
+        @SuppressWarnings("unchecked")
+        var indexProvider = (org.springframework.beans.factory.ObjectProvider<InMemoryIndex>)
+                org.mockito.Mockito.mock(org.springframework.beans.factory.ObjectProvider.class);
+        org.mockito.Mockito.when(indexProvider.getIfAvailable()).thenReturn(index);
+        var disabled = new ActionOpsService(jdbc, indexProvider, audit,
                 new ActionDispatchService(jdbc, "bd".repeat(32), null, false), metrics, "");
         String opId = "act_frozen_" + System.nanoTime();
         jdbc.update("INSERT INTO action_ops (op_id, action_class, command, ref, breadcrumb, service, "
