@@ -9,7 +9,7 @@ import java.util.Locale;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -37,7 +37,13 @@ public class ActionOpsService {
     static final long CONFIRM_WINDOW_S = 900;      // 规格 §2：15 分钟
 
     private final JdbcTemplate jdbc;
-    private final InMemoryIndex index;              // memory 模式；live 模式的 ES byId 后续接
+    /**
+     * memory 模式的语料索引——**live 形态下这个 bean 不存在**（{@link InMemoryIndex} 带
+     * {@code @ConditionalOnProperty(storage.mode=memory)}）。所以这里是软依赖：L1 提案在 live 下
+     * 明确拒绝并说明原因，而不是让整个应用起不来（2026-10-26 修 P0：此前强依赖导致
+     * {@code storage.mode=live} 启动即 {@code NoSuchBeanDefinitionException}）。
+     */
+    private final ObjectProvider<InMemoryIndex> indexProvider;
     private final AuditService audit;
     private final ActionDispatchService dispatch;   // confirm 成功后自动派发（未启用则停在 confirmed）
     private final com.opspilot.metrics.L1Metrics l1Metrics;
@@ -47,13 +53,13 @@ public class ActionOpsService {
      * 空 = 全拒（fail-closed：写面灰度默认不许任何目标）。 */
     private final java.util.Set<String> allowedTargets;
 
-    public ActionOpsService(JdbcTemplate jdbc, InMemoryIndex index, AuditService audit,
+    public ActionOpsService(JdbcTemplate jdbc, ObjectProvider<InMemoryIndex> indexProvider, AuditService audit,
                             ActionDispatchService dispatch,
                             com.opspilot.metrics.L1Metrics l1Metrics,
                             @Value("${opspilot.l1.allowed-targets:}") String allowedTargetsCsv) {
         this.l1Metrics = l1Metrics;
         this.jdbc = jdbc;
-        this.index = index;
+        this.indexProvider = indexProvider;
         this.audit = audit;
         this.dispatch = dispatch;
         this.allowedTargets = java.util.Arrays.stream(allowedTargetsCsv.split(","))
@@ -74,7 +80,12 @@ public class ActionOpsService {
         if (proposer.authLevel() < 2) {
             reject(proposer, chunkId, "proposer_level", "提案需 level>=2");
         }
-        InMemoryIndex.Doc doc = index == null ? null : index.byId(chunkId, proposer.tenantId(), proposer.authLevel());
+        InMemoryIndex index = indexProvider.getIfAvailable();
+        if (index == null) {                    // live 形态：明确拒绝，不静默降级成「chunk 不存在」
+            reject(proposer, chunkId, "l1_requires_memory_storage",
+                    "L1 提案需要 memory 存储形态（opspilot.storage.mode=memory）：live 的 ES byId 通道尚未接入");
+        }
+        InMemoryIndex.Doc doc = index.byId(chunkId, proposer.tenantId(), proposer.authLevel());
         if (doc == null) {
             reject(proposer, chunkId, "chunk_not_visible", "chunk 不存在或不可见");
         }
