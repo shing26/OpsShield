@@ -35,7 +35,8 @@ import jakarta.validation.constraints.Size;
  */
 public record ChatRequest(
         @NotBlank(message = "query 不能为空")
-        @Size(max = 8192, message = "query 超长（上限 8192 字符）") String query,
+        @Size(max = ChatRequest.MAX_QUERY_CHARS,
+              message = "query 超长（上限 " + ChatRequest.MAX_QUERY_CHARS + " 字符）") String query,
         @Pattern(regexp = "manual|alert", message = "source 仅允许 manual|alert") String source,
         @Size(max = 128, message = "service 超长（上限 128 字符）") String service,
         @Size(max = 32, message = "env 超长（上限 32 字符）") String env,
@@ -43,6 +44,11 @@ public record ChatRequest(
                 message = "alertId 应为 8–128 位 [A-Za-z0-9_.=|\\-]；它进缓存键组分，故形状必须受限")
         String alertId
 ) {
+
+    /** query 字段上限（字符）：/chat/stream 走 MVC 校验；/v1 面手工 new record 后必须显式
+     *  validate；/search 面用这个常量做长度闸——三处同一口径，否则任一面都能绕过（#18）。 */
+    public static final int MAX_QUERY_CHARS = 8192;
+
     public String sourceOrDefault() {
         return source == null || source.isBlank() ? "manual" : source;
     }

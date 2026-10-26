@@ -1,0 +1,9 @@
+{
+  "id": "mcp-noauth-001",
+  "category": "mcp",
+  "title": "无凭据 tools/call 必须 fail-closed 且零数据",
+  "transport": "mcp",
+  "env": "no_creds",
+  "attack": "tools_call_state_without_credentials",
+  "expect": "fail_closed_no_data"
+}

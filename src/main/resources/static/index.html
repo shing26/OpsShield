@@ -29,6 +29,8 @@
 -->
 <style>
   :root{
+    color-scheme:dark;                 /* 原生控件/滚动条跟随暗色，不再出现白底 input（#21） */
+    --topbar-h:53px;                   /* 顶栏实际高度（JS 实测回写）：sticky 偏移/弹层/侧栏都用它，不再写死 53（#23） */
     --bg:#0e1117; --surface:#161b22; --surface-2:#1c2129; --line:#262d38; --line-soft:#1f252e;
     --txt:#e6edf3; --txt-2:#b6c2cf; --muted:#7d8894;
     --ok:#3fb950; --warn:#d29922; --err:#f85149; --accent:#58a6ff;
@@ -38,10 +40,13 @@
     --mono:ui-monospace,"Cascadia Mono",Consolas,"Liberation Mono",monospace;
   }
   *{box-sizing:border-box}
-  html,body{margin:0}
+  html,body{margin:0;height:100%}
+  /* #23：60/30/10 三段式壳——顶栏与页脚定高，视图 flex:1 内部滚动。
+     这样顶栏永远不会盖住左栏（sticky 左栏在等高容器里粘不住的问题从结构上消掉）。 */
   body{background:var(--bg);color:var(--txt);font:14px/1.55 var(--sans);
-       -webkit-font-smoothing:antialiased}
+       -webkit-font-smoothing:antialiased;display:flex;flex-direction:column;height:100%;overflow:hidden}
   .num,.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  input::placeholder,textarea::placeholder{color:var(--muted)}
   button{font:inherit;cursor:pointer}
   [hidden]{display:none !important}
   :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
@@ -68,10 +73,12 @@
   .pillbtn:hover{border-color:var(--muted);color:var(--txt)}
   .dot{width:7px;height:7px;border-radius:50%;background:var(--muted);flex:0 0 auto}
   .dot.on{background:var(--ok)}
-  .pop{position:absolute;z-index:10;background:var(--surface);border:1px solid var(--line);
-       border-radius:8px;box-shadow:0 14px 40px rgba(0,0,0,.5);padding:14px;width:min(380px,92vw)}
-  #acctpop{top:52px;right:16px}
-  #advpop{top:52px;right:16px;width:min(430px,94vw)}
+  /* #28：弹层相对**视口**定位（此前 absolute 相对文档，滚动后整块跑到视口外） */
+  .pop{position:fixed;z-index:10;background:var(--surface);border:1px solid var(--line);
+       border-radius:8px;box-shadow:0 14px 40px rgba(0,0,0,.5);padding:14px;width:min(380px,92vw);
+       max-height:calc(100vh - var(--topbar-h) - 20px);overflow:auto}
+  #acctpop{top:calc(var(--topbar-h) + 6px);right:16px}
+  #advpop{top:calc(var(--topbar-h) + 6px);right:16px;width:min(430px,94vw)}
   .pop-hd{font-size:12px;color:var(--muted);margin-bottom:10px}
   .pop .note{font-size:11px;color:var(--muted);line-height:1.6;margin-top:10px}
 
@@ -97,13 +104,15 @@
   .locked b{color:var(--txt)}
 
   /* ---------- 视图容器 ---------- */
-  .view{min-height:calc(100vh - 104px)}
+  .view{flex:1 1 auto;min-height:0;overflow:auto}
 
   /* ---------- 排障台视图：左栏（任务级）+ 右画布（证据） ---------- */
-  .ts-app{display:grid;grid-template-columns:300px 1fr}
-  .ts-app aside{position:sticky;top:53px;height:calc(100vh - 53px);overflow:auto;background:var(--surface);
+  /* #23：桌面用「定高壳 + 两列各自滚动」而不是 sticky 左栏——
+     sticky 的容器高度等于左栏自身高度时它**粘不住**，滚动后左栏顶部会钻到 sticky 顶栏下面。 */
+  .ts-app{display:grid;grid-template-columns:300px 1fr;height:100%;min-height:0;overflow:hidden}
+  .ts-app aside{height:100%;overflow:auto;background:var(--surface);
                 border-right:1px solid var(--line);padding:16px;display:flex;flex-direction:column;gap:14px}
-  .ts-app main{padding:20px 26px 60px;min-width:0}
+  .ts-app main{padding:20px 26px 60px;min-width:0;height:100%;overflow:auto}
   .canvas{display:grid;gap:16px;max-width:960px;margin:0 auto}
   .canvas.compare{grid-template-columns:1fr 1fr;max-width:none}
 
@@ -111,7 +120,7 @@
   .railhead b{font-size:13px}
   .railhead span{font-size:11px;color:var(--muted)}
   .fld{display:flex;flex-direction:column;gap:4px}
-  .fld label{font-size:11px;color:var(--muted)}
+  .fld label,.fld .lbl{font-size:11px;color:var(--muted)}
   .fld input,.fld textarea{background:var(--bg);color:var(--txt);border:1px solid var(--line);
                            border-radius:6px;padding:8px 10px;font:inherit;font-size:13px;width:100%}
   .fld textarea{resize:vertical;min-height:76px;line-height:1.6}
@@ -128,6 +137,9 @@
   .idbar .who{font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .idbar .sw{margin-left:auto;font-size:11px;color:var(--muted);background:none;border:0;padding:0 2px}
   .idbar .sw:hover{color:var(--accent)}
+  /* L1 确认区输入框：复用 .fld 的暗色观感（#21：此前裸 input 走 UA 白底） */
+  .l1in{background:var(--bg);color:var(--txt);border:1px solid var(--line);
+        border-radius:6px;padding:8px 10px;font:inherit;font-size:13px}
   .chk{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--txt-2)}
   .chips{display:flex;flex-wrap:wrap;gap:5px}
   .chip{font-size:11px;color:var(--txt-2);background:var(--bg);border:1px solid var(--line);
@@ -135,6 +147,7 @@
   .chip:hover{border-color:var(--accent);color:var(--accent)}
   .errline{font-size:12px;color:var(--err);line-height:1.5}
   .hintline{font-size:11px;color:var(--warn);line-height:1.5}
+  .msg{font-size:12px;color:var(--txt-2);min-height:16px}   /* L1 确认提示（此前无规则 → 与正文同色） */
   /* ---------- 覆盖范围（提问前可见的知识库边界，ADR-0023 决策 5） ---------- */
   .cov{border:1px solid var(--line-soft);border-radius:6px;padding:9px 10px;background:var(--bg)}
   .cov-hd{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted)}
@@ -183,6 +196,13 @@
   .md .md-h{font-weight:600;font-size:14px;margin:14px 0 6px}
   .md .md-h:first-child{margin-top:0}
   .md .md-li{padding-left:15px;text-indent:-15px}
+  .md .md-oli{padding-left:0;text-indent:0}
+  .md .md-no{font-family:var(--mono);color:var(--muted);margin-right:5px}
+  .md .md-quote{border-left:3px solid var(--line);padding:2px 10px;margin:6px 0;color:var(--txt-2)}
+  .md .md-t{border-collapse:collapse;margin:8px 0;font-size:12.5px;width:100%}
+  .md .md-t th,.md .md-t td{border:1px solid var(--line-soft);padding:5px 8px;text-align:left;vertical-align:top}
+  .md .md-t th{background:var(--surface-2);color:var(--txt-2);font-weight:600}
+  .md a{color:var(--accent);text-decoration:none} .md a:hover{text-decoration:underline}
   .md .md-gap{height:8px}
   .md code{font-family:var(--mono);font-size:12px;background:var(--surface-2);padding:1px 5px;border-radius:4px}
   .md strong{font-weight:600}
@@ -276,7 +296,7 @@
   .chain .hit{color:var(--ok)} .chain .no{color:var(--txt-2)} .chain .rfs{color:var(--err)}
   .bar{display:flex;height:8px;margin-top:var(--s2);border-radius:4px;overflow:hidden;
        background:var(--line-soft)}
-  .bar i{display:block;height:100%}
+  .bar i{display:block;height:100%;background:var(--accent)}   /* #20：此前无背景色 → 整条不可见 */
   .legend{display:flex;flex-wrap:wrap;gap:var(--s1) var(--s3);margin-top:6px;font-size:10px;color:var(--muted)}
   .legend span{display:inline-flex;align-items:center;gap:5px}
   .legend i{width:8px;height:8px;border-radius:2px;display:inline-block}
@@ -305,6 +325,7 @@
   .sub{color:var(--muted);font-size:11px;margin-top:10px}
   #events{max-height:40vh;overflow-y:auto;font-family:var(--mono);font-size:12px;
           background:var(--surface-2);border:1px solid var(--line-soft);border-radius:8px}
+  #events .ev-empty{padding:10px 12px;font-size:12px;color:var(--muted)}
   #events .ev{display:flex;gap:10px;padding:var(--s1) 10px;border-bottom:1px solid var(--line-soft);
               white-space:nowrap;overflow:hidden}
   #events .ev:last-child{border-bottom:0}
@@ -327,23 +348,41 @@
   #auth .card{width:min(520px,92vw);padding:26px 28px}
   #auth .msg{color:var(--warn);font-size:12px;min-height:18px;margin-top:6px}
   #auth p{color:var(--muted);font-size:11px;margin:12px 0 0;line-height:1.6}
-  .sat{filter:saturate(.15) brightness(.7)}
+  /* #22：滤镜不能挂在 body 上——CSS filter 会为 fixed 后代创建包含块，等于把「凭证已失效」
+     遮罩改成相对整页定位（长页滚动后卡片跑到视口外）。只压暗内容层。 */
+  .sat .topbar,.sat .view,.sat footer{filter:saturate(.15) brightness(.7)}
 
-  footer{border-top:1px solid var(--line);background:var(--surface);
+  footer{flex:0 0 auto;border-top:1px solid var(--line);background:var(--surface);
          padding:10px var(--s5);display:flex;justify-content:space-between;
          font-size:11px;color:var(--muted)}
 
   /* ---------- 窄屏（≤900px）：左栏改为顶栏堆叠 ----------
      常驻左栏是桌面工作台的人体工学，窄屏照搬会把报告列压成 90px 宽的竖排字。 */
   @media (max-width:900px){
-    .ts-app{grid-template-columns:1fr}
-    .ts-app aside{position:static;height:auto;overflow:visible;border-right:0;
+    body{height:auto;overflow:auto}
+    .view{flex:none;min-height:calc(100vh - var(--topbar-h) - 51px);overflow:visible}
+    .ts-app{grid-template-columns:1fr;height:auto;min-height:0;overflow:visible}
+    .ts-app aside{height:auto;overflow:visible;border-right:0;
                   border-bottom:1px solid var(--line)}
-    .ts-app main{padding:16px 14px 40px}
+    .ts-app main{padding:16px 14px 40px;height:auto;overflow:visible}
     .canvas.compare{grid-template-columns:1fr}
     .diff{overflow-x:auto}
     .topbar{padding:10px 14px}
     #acctpop,#advpop{right:10px;left:10px;width:auto}
+  }
+
+  /* ---------- 窄屏补充（≤600px，#24） ----------
+     KPI 一列五屏在手机上不可用；去重键串在顶栏折行又占高度——窄屏只留 build 版本（细节看运行态抽屉）。 */
+  @media (max-width:600px){
+    .topbar{gap:var(--s2);padding:8px 12px}
+    .brand span{display:none}                    /* 副标题在窄屏省掉，让顶栏落回两行 */
+    .tabs button{padding:5px 10px}
+    .pillbtn{padding:3px 9px;font-size:11px}
+    .panel-main{padding:var(--s3) 12px var(--s4)}
+    .kpis{grid-template-columns:1fr 1fr;gap:var(--s2)}
+    .kpi{padding:12px}
+    .kpi .value{font-size:24px}
+    .kpi .foot{min-height:0}
   }
 </style>
 </head>
@@ -351,11 +390,13 @@
 <header class="topbar">
   <div class="brand"><b>OpsShield</b><span>统一工作台</span></div>
   <nav class="tabs" role="tablist" aria-label="视图">
-    <button class="on" data-view="trouble" role="tab" aria-selected="true">排障台</button>
-    <button data-view="panel" role="tab" aria-selected="false">运行面板</button>
+    <button id="tab-trouble" class="on" data-view="trouble" role="tab" aria-selected="true"
+            aria-controls="v-trouble" tabindex="0">排障台</button>
+    <button id="tab-panel" data-view="panel" role="tab" aria-selected="false"
+            aria-controls="v-panel" tabindex="-1">运行面板</button>
   </nav>
   <span class="spacer"></span>
-  <span id="fingerprint" class="num">build —</span>
+  <span id="fingerprint" class="num"></span>
   <button class="pillbtn" id="acct" data-popbtn="acctpop" aria-haspopup="true" aria-expanded="false">
     <span class="dot"></span>未接入</button>
   <button class="pillbtn" id="healthbtn" data-act="opendrawer">运行态</button>
@@ -363,17 +404,17 @@
     高级 · 权限隔离演练</button>
 </header>
 
-<div class="pop" id="acctpop" data-pop hidden></div>
-<div class="pop" id="advpop" data-pop hidden></div>
+<div class="pop" id="acctpop" data-pop role="dialog" aria-label="身份接入" hidden></div>
+<div class="pop" id="advpop" data-pop role="dialog" aria-label="高级 · 权限隔离演练" hidden></div>
 <div class="scrim" id="scrim" data-act="closedrawer" hidden></div>
-<div class="drawer" id="drawer" hidden>
+<div class="drawer" id="drawer" role="dialog" aria-modal="true" aria-label="运行态" hidden>
   <div class="drawer-hd"><b>运行态</b>
-    <button class="x" data-act="closedrawer" title="关闭">✕</button></div>
+    <button class="x" data-act="closedrawer" title="关闭" aria-label="关闭运行态抽屉">✕</button></div>
   <div class="drawer-bd" id="drawerbody"></div>
 </div>
 
 <!-- ==================== 视图一：排障台（默认） ==================== -->
-<div id="v-trouble" class="view ts-app">
+<div id="v-trouble" class="view ts-app" role="tabpanel" aria-labelledby="tab-trouble">
   <aside id="rail"></aside>
   <main>
     <div id="canvas" class="canvas"></div>
@@ -382,7 +423,7 @@
 </div>
 
 <!-- ==================== 视图二：运行面板 ==================== -->
-<div id="v-panel" class="view" hidden>
+<div id="v-panel" class="view" role="tabpanel" aria-labelledby="tab-panel" hidden>
   <div id="panel-lock" hidden></div>
   <div class="panel-main" id="panel-main">
     <div class="kpis" id="kpis"></div>
@@ -424,6 +465,24 @@
         <div class="tiles" id="tiles"></div>
         <div class="sub" id="sfrow"></div>
       </section>
+
+      <section id="l1sec" hidden>
+        <h2>受控恢复动作 · L1
+          <span class="tag">需不同确认人 · 一次性凭据 · 15 分钟窗口 · 命令逐字来自文档</span>
+        </h2>
+        <div class="sub" id="l1hint" style="margin-bottom:8px"></div>
+        <div id="l1pending"></div>
+        <details style="margin-top:10px">
+          <summary style="cursor:pointer;color:var(--txt-2)">粘贴 op_id 与一次性凭据确认（凭据来自提案人转交）</summary>
+          <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+            <input id="l1op" class="l1in" placeholder="op_id (act_…)" style="flex:1;min-width:140px">
+            <input id="l1tok" class="l1in" placeholder="一次性凭据（64 位十六进制）" style="flex:2;min-width:200px">
+            <button class="btn" id="l1confirm">确认执行</button>
+          </div>
+          <div class="msg" id="l1msg" style="margin-top:6px"></div>
+        </details>
+      </section>
+
     </div>
     <section>
       <h2>事件流 · AUDIT
@@ -437,8 +496,8 @@
 
 <footer><span id="pollstate">idle</span><span id="lastts" class="num"></span></footer>
 
-<div id="auth"><div class="card">
-  <b style="font-size:15px">凭证已失效</b>
+<div id="auth" role="dialog" aria-modal="true" aria-labelledby="authtitle"><div class="card">
+  <b id="authtitle" style="font-size:15px">凭证已失效</b>
   <div class="msg" id="authmsg"></div>
   <p>工作台不弹独立登录窗——右上角账号胶囊里填用户名与口令即可。此遮罩只在 token 失效（401）时出现。</p>
   <p style="margin-top:14px"><button class="btn" id="authgo">去右上角重新接入</button></p>
@@ -457,7 +516,9 @@ const SS = k => 'opspilot.session.jwt.' + k;
 try { localStorage.removeItem('opspilot.jwt'); } catch (e) { /* 非致命 */ }
 
 function side(user) {
-  return { user, pass: '', token: null, err: null, busy: false, open: true, r: null };
+  // tokenUser = 当前 token 的真实主体（登录时记下）。展示身份一律用它而不是输入框里的 user，
+  // 否则改一下输入框就能把旧 token 的结果标成新用户名（#16/#3 的共同根因）。
+  return { user, pass: '', token: null, tokenUser: null, err: null, busy: false, open: true, r: null, ctl: null };
 }
 
 const S = {
@@ -467,6 +528,7 @@ const S = {
   platform: null,       // null=尚未实测 / true=200 / false=403；不靠客户端解 token 猜
   hint: '',
   pendingAsk: false,    // 未接入时先填了输入/预设：接入成功后自动发起，省掉一次点击
+  asking: false,        // 一次 ask() 的进行中标记（覆盖 login await 窗口，防连点并发，#19）
   coverage: null,       // 覆盖范围快照（GET /api/v1/copilot/coverage，按身份过滤）
   covErr: null,
   covOpen: false,
@@ -480,7 +542,7 @@ try {
   S.b.user = localStorage.getItem('opspilot.userB') || S.b.user;
   for (const k of ['a', 'b']) {
     const t = sessionStorage.getItem(SS(k));
-    if (t) { S[k].token = t; S[k].open = false; }
+    if (t) { S[k].token = t; S[k].tokenUser = S[k].user; S[k].open = false; }
   }
 } catch (e) { /* 隐私模式下 storage 可能抛——非致命 */ }
 
@@ -494,15 +556,21 @@ function inline(t) {
   return t
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/`([^`]+)`/g, '<code>$1</code>')
-    .replace(/\[参考\s*(\d+)\]/g, '<span class="ref-badge" data-ref="$1">参考$1</span>');
+    .replace(/\[参考\s*(\d+)\]/g, '<span class="ref-badge" data-ref="$1">参考$1</span>')
+    // #26：链接只放行 http(s)——模型输出不可信，javascript:/data: 一律按原文显示
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
+      '<a href="$2" target="_blank" rel="noopener noreferrer nofollow">$1</a>');
 }
 
 /* 极小 markdown 子集。答案由模型产出、以 markdown 形态落库，原页面把它当纯文本吐出
    （`## 问题定位` / `**粗体**` 原样可见）——那是"简陋"感的主要来源，不是布局问题。 */
 function md(s) {
+  // #26：有序列表保留编号；补表格/引用块；围栏与行内标记规则不变（先 esc 再套标签）。
+  const lines = esc(s).split('\n');
   const out = [];
   let inFence = false, buf = [];
-  for (const line of esc(s).split('\n')) {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
     if (/^\s*```/.test(line)) {                 // 围栏行本身不输出（语言标也丢，只留代码）
       if (inFence) { out.push('<pre class="md-code">' + buf.join('\n') + '</pre>'); buf = []; }
       inFence = !inFence;
@@ -510,14 +578,35 @@ function md(s) {
     }
     if (inFence) { buf.push(line); continue; }  // 围栏内一律原文，不做行内标记
     let m;
+    // 表格：当前行是表头，且下一行是 |---|---| 分隔行（模型常用形态）
+    if (/^\s*\|.*\|\s*$/.test(line) && i + 1 < lines.length
+        && /^\s*\|[\s:|-]+\|\s*$/.test(lines[i + 1])) {
+      const head = mdCells(line);
+      i += 2;
+      const rows = [];
+      while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) { rows.push(mdCells(lines[i])); i++; }
+      i--;
+      out.push('<table class="md-t"><thead><tr>'
+        + head.map(h => '<th>' + inline(h) + '</th>').join('')
+        + '</tr></thead><tbody>'
+        + rows.map(r => '<tr>' + head.map((_, ci) => '<td>' + inline(r[ci] || '') + '</td>').join('') + '</tr>').join('')
+        + '</tbody></table>');
+      continue;
+    }
     if ((m = line.match(/^\s*#{2,4}\s+(.+)$/))) out.push('<div class="md-h">' + inline(m[1]) + '</div>');
+    else if ((m = line.match(/^\s*&gt;\s?(.*)$/))) out.push('<div class="md-quote">' + inline(m[1]) + '</div>');   // esc() 后 > 已是 &gt;
     else if ((m = line.match(/^\s*[-*]\s+(.+)$/))) out.push('<div class="md-li">· ' + inline(m[1]) + '</div>');
-    else if ((m = line.match(/^\s*\d+[.)]\s+(.+)$/))) out.push('<div class="md-li">· ' + inline(m[1]) + '</div>');
+    else if ((m = line.match(/^\s*(\d+)[.)]\s+(.+)$/))) out.push('<div class="md-li md-oli"><span class="md-no">' + m[1] + '.</span> ' + inline(m[2]) + '</div>');
     else if (!line.trim()) out.push('<div class="md-gap"></div>');
     else out.push('<div>' + inline(line) + '</div>');
   }
   if (inFence) out.push('<pre class="md-code">' + buf.join('\n') + '</pre>');  // 流式中途未闭合
   return out.join('');
+}
+
+/* 表格行 → 单元格（去掉首尾竖线后按 | 切；单元格内的 inline 标记仍走 inline()）。 */
+function mdCells(line) {
+  return line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(x => x.trim());
 }
 
 /* ==================== 数据层 ====================
@@ -538,6 +627,8 @@ async function login(k) {
     else if (!r.ok) s.err = 'HTTP ' + r.status;
     else {
       s.token = (await r.json()).token;
+      s.tokenUser = s.user.trim();   // 身份标签以 token 主体为准（#16：切用例/改输入框不改归属）
+      s.r = null;             // 换身份后旧证据卡必须丢弃，不能挂在新用户名下（#3）
       s.pass = '';            // 口令用完即弃：不留在内存状态里
       s.open = false;         // 登录成功 → 折叠为一行胶囊条
       try { sessionStorage.setItem(SS(k), s.token); } catch (e) { /* 非致命 */ }
@@ -554,42 +645,61 @@ async function login(k) {
 }
 
 async function ask() {
-  if (!S.q.trim()) { S.hint = '先填排障输入'; renderRail(); return; }
+  // #19：重入守卫必须覆盖 login 的 await 窗口——s.busy 要到 stream() 内才置位，
+  // 连点预设/发起会在这段窗口里发出多路 SSE，同写一个 s.r（答案交错、refs 张冠李戴）。
+  if (S.asking) { S.hint = '上一条查询还在进行中，稍候…'; renderRail(); return; }
+  const q = S.q.trim();                // 一次 ask 只认一条 query：卡片与请求体用同一个值
+  if (!q) { S.hint = '先填排障输入'; renderRail(); return; }
   if (!S.a.token) {
     S.pendingAsk = true;               // 输入已在手：接入成功后自动发起（见 login 的调用点）
     S.hint = '先接入身份';
     renderRail(); openPop('acctpop'); return;
   }
-  S.hint = '';
-  const sides = S.compare ? ['a', 'b'] : ['a'];
-  await Promise.all(sides.map(async k => { if (!S[k].token) await login(k); }));
-  await Promise.all(sides.filter(k => S[k].token).map(stream));
-  /* 查询已落审计 ⇒ 立刻取一次运行态：抽屉里的数字当场更新（这是合并唯一不可替代的收益） */
-  if (S.a.token) poll();
+  S.asking = true; S.hint = ''; renderRail();
+  try {
+    const sides = S.compare ? ['a', 'b'] : ['a'];
+    await Promise.all(sides.map(async k => { if (!S[k].token) await login(k); }));
+    await Promise.all(sides.filter(k => S[k].token).map(k => stream(k, q)));
+    /* 查询已落审计 ⇒ 立刻取一次运行态：抽屉里的数字当场更新（这是合并唯一不可替代的收益） */
+    if (S.a.token) poll();
+  } finally { S.asking = false; renderRail(); }
 }
 
-async function stream(k) {
+async function stream(k, q) {
   const s = S[k];
+  // 同侧重复发起：先掐掉上一路（#19 的第二道闸；第一道是 ask() 的 S.asking）
+  if (s.ctl) { try { s.ctl.abort(); } catch (e) { /* 非致命 */ } }
+  const ctl = new AbortController();
+  s.ctl = ctl;
   /* 记下**这一张卡对应的那条问**：上报覆盖缺口时 note 要指向它，而不是指向此刻输入框里
-     可能已经被改过的内容。 */
-  s.r = { q: S.q, answer: '', meta: null, refs: [], actions: [], nearMiss: [], error: null,
-          ttft: null, ms: null, state: 'streaming' };
+     可能已经被改过的内容。by = 这条证据属于哪个 token 主体（#16 归因）。 */
+  s.r = { q, by: s.tokenUser || s.user, answer: '', meta: null, refs: [], actions: [],
+          nearMiss: [], error: null, ttft: null, ms: null, state: 'streaming' };
   s.busy = true; renderCanvas(); renderRail();
   const t0 = performance.now();
+  // #37：SSE 生命周期。15s 首帧看门狗 + 150s 总时长；超时/用户取消都走 AbortController。
+  let timedOut = false;
+  const bomb = ms => setTimeout(() => { timedOut = true; try { ctl.abort(); } catch (e) { /* 非致命 */ } }, ms);
+  const firstByteTimer = bomb(15_000);
+  const totalTimer = bomb(150_000);
+  let sawDone = false;
   try {
     const resp = await fetch('/api/v1/copilot/chat/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + s.token },
-      body: JSON.stringify({ query: S.q, source: 'manual' }),
+      body: JSON.stringify({ query: q, source: 'manual' }),
+      signal: ctl.signal,
     });
     if (resp.status === 401 || resp.status === 403) {
       dropToken(k, resp.status + ' · token 失效，重新接入');
-      s.r.state = 'error'; s.r.error = { message: s.err };
-      showAuth(s.err); s.busy = false; renderAll(); return;
+      // dropToken 已清 s.r：重建一张「链路异常」卡承载这条提示
+      s.r = { q, by: null, answer: '', meta: null, refs: [], actions: [], nearMiss: [],
+              error: { message: s.err }, ttft: null, ms: null, state: 'error' };
+      showAuth(s.err); renderAll(); return;
     }
-    if (!resp.ok) {
-      s.r.state = 'error'; s.r.error = { message: 'HTTP ' + resp.status };
-      s.busy = false; renderCanvas(); renderRail(); return;
+    if (!resp.ok) {                       // #35：后端返回 {code,message}，别只显示状态码
+      s.r.state = 'error'; s.r.error = { message: await httpErrText(resp) };
+      return;
     }
 
     const reader = resp.body.getReader(); const dec = new TextDecoder();
@@ -597,6 +707,7 @@ async function stream(k) {
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
+      clearTimeout(firstByteTimer);              // 首帧到达即撤首字节看门狗
       buf += dec.decode(value, { stream: true });
       const parts = buf.split('\n\n'); buf = parts.pop();
       for (const blk of parts) {
@@ -610,10 +721,12 @@ async function stream(k) {
         if (ev === 'meta') { s.r.meta = d; renderCanvas(); }
         else if (ev === 'delta') { s.r.answer += (d.token || ''); paintAnswer(k); }
         else if (ev === 'done') {
+          sawDone = true;
           s.r.refs = d.refs || []; s.r.actions = d.actions || []; s.r.ttft = d.ttft_ms;
           s.r.nearMiss = d.near_miss || [];   // ADR-0023：拒答导航只带 service + errorCodes
           renderCanvas();
         } else if (ev === 'error') {
+          sawDone = true;   // error 是**终止帧**：流到此结束，不是"截断"
           // error 帧**刻意带上了**异常前已到手的 refs/actions（后端注释：最需要行动清单时别给空手）——
           // 原页面只取 message，把两者都丢了；这里必须渲染出来。
           s.r.error = d; s.r.refs = d.refs || []; s.r.actions = d.actions || [];
@@ -621,10 +734,31 @@ async function stream(k) {
         }
       }
     }
-    if (s.r.state === 'streaming') s.r.state = 'done';
-  } catch (e) { s.r.state = 'error'; s.r.error = { message: e.message }; }
-  s.r.ms = Math.round(performance.now() - t0);
-  s.busy = false; renderCanvas(); renderRail();
+    // #37：没有 done/error 帧就断开 = 半截答案，不能标「完成」
+    if (s.r.state === 'streaming') {
+      if (sawDone) s.r.state = 'done';
+      else { s.r.state = 'error'; s.r.error = { message: '链路异常：流被截断（未收到 done 帧）' }; }
+    }
+  } catch (e) {
+    const aborted = e && e.name === 'AbortError';
+    s.r.state = 'error';
+    s.r.error = { message: aborted
+        ? (s.stopped ? '已停止（用户取消）' : (timedOut ? '超时或无响应（已中止）' : '请求已中止'))
+        : (e && e.message ? e.message : '网关不可达') };
+  } finally {
+    clearTimeout(firstByteTimer); clearTimeout(totalTimer);
+    if (s.ctl === ctl) s.ctl = null;
+    s.stopped = false;
+    s.r.ms = Math.round(performance.now() - t0);
+    s.busy = false; renderCanvas(); renderRail();
+  }
+}
+
+/* 用户点「停止」：abort 在途 SSE，卡片落一条明确的"已停止"而不是继续转圈（#37）。 */
+function stopStream(k) {
+  const s = S[k];
+  s.stopped = true;
+  if (s.ctl) { try { s.ctl.abort(); } catch (e) { /* 非致命 */ } }
 }
 
 /* 流式期间只改答案节点：整树重建会把左栏输入框的焦点冲掉。 */
@@ -636,7 +770,9 @@ function paintAnswer(k) {
 
 function dropToken(k, msg) {
   const s = S[k];
-  s.token = null; s.open = true; s.err = msg;
+  if (s.ctl) { try { s.ctl.abort(); } catch (e) { /* 非致命 */ } s.ctl = null; }
+  s.token = null; s.tokenUser = null; s.open = true; s.err = msg;
+  s.r = null;                         // 旧身份的答案不得挂到新身份下（#3）
   try { sessionStorage.removeItem(SS(k)); } catch (e) { /* 非致命 */ }
   if (k === 'a') { S.platform = null; S.coverage = null; S.covErr = null; stopPoll(); }
 }
@@ -663,11 +799,15 @@ function metrics(r) {
     out.push('<span class="pill' + (c === 'L1' || c === 'L2' ? ' ok' : '') + '">cache ' + esc(c) + '</span>');
     const d = r.meta.degradation_level || 'L0';
     out.push('<span class="pill' + (d === 'L0' ? ' ok' : ' warn') + '">' + esc(d) + '</span>');
-    out.push('<span class="pill">' + (r.meta.fast_path ? '快路径' : '精排') + '</span>');
-    if (r.meta.deduplicated) out.push('<span class="pill">去重</span>');
-    out.push('<span class="pill">检索 ' + (r.meta.retrieval_ms | 0) + 'ms</span>');
+    // #29：clarify 是零检索/零 LLM 分支，别拿 0ms 的「精排/检索/TTFT」冒充耗时
+    if ((r.meta.gate || 'none') !== 'clarify') {
+      out.push('<span class="pill">' + (r.meta.fast_path ? '快路径' : '精排') + '</span>');
+      if (r.meta.deduplicated) out.push('<span class="pill">去重</span>');
+      out.push('<span class="pill">检索 ' + (r.meta.retrieval_ms | 0) + 'ms</span>');
+    }
   }
-  if (r.ttft != null) out.push('<span class="pill">TTFT ' + (r.ttft | 0) + 'ms</span>');
+  if (r.ttft != null && !(r.meta && r.meta.gate === 'clarify'))
+    out.push('<span class="pill">TTFT ' + (r.ttft | 0) + 'ms</span>');
   if (r.ms != null) out.push('<span class="pill">总耗时 ' + r.ms + 'ms</span>');
   return out.join('');
 }
@@ -680,9 +820,16 @@ const EMPTY_CONTRACT_TIP = '命令若在语料里，它住在「排查步骤 > �
 function contract(r) {
   const acts = r.actions || [];
   if (!acts.length) {
-    return '<div class="contract-empty" title="' + esc(EMPTY_CONTRACT_TIP) + '">'
+    // #29：需澄清 / 拒答是本轮**没有检索**，不是「检索了但引用里没代码块」——文案必须区分
+    const gate = r.meta && r.meta.gate;
+    const txt = gate === 'clarify'
+      ? '本条提问依赖上文、未做检索——因此没有命令清单（补上服务名/错误码后重问）'
+      : (gate === 'refuse'
+        ? '本轮未检索到可用文档（拒答）——因此没有命令清单'
+        : '本次引用切片不含可执行代码围栏——<strong>属引用集物理性质，非链路故障</strong>');
+    return '<div class="contract-empty" title="' + esc(gate === 'clarify' ? 'clarify：单轮系统无法据此检索' : EMPTY_CONTRACT_TIP) + '">'
       + '<span class="ic">ℹ️</span>'
-      + '<span class="txt">本次引用切片不含可执行代码围栏——<strong>属引用集物理性质，非链路故障</strong></span></div>';
+      + '<span class="txt">' + txt + '</span></div>';
   }
   return '<div class="contract">' + acts.map(a =>
     '<div class="act">'
@@ -715,7 +862,8 @@ function answer(r, k) {
     }
   }
   html += r.answer
-    ? '<div class="md" id="ans-' + k + '">' + md(r.answer)
+    ? '<div class="md" id="ans-' + k + '" aria-live="polite" aria-atomic="false"'
+      + (r.state === 'streaming' ? ' aria-busy="true"' : '') + '>' + md(r.answer)
       + (r.state === 'streaming' ? '<span class="cursor"></span>' : '') + '</div>'
     : '<div class="empty">等待首个 token…</div>';
   return html;
@@ -771,9 +919,14 @@ async function reportGap(btn) {
 
 function card(k) {
   const s = S[k], r = s.r;
+  // 抬头用 token 主体而不是输入框里的用户名：改了输入框/切了对照用例也不会把旧 token 的结果
+  // 标成新身份（#16）；换身份时旧卡片已在 login/dropToken 里清掉（#3）。
+  const who = esc(s.tokenUser || s.user);
   return '<article class="card">'
     + '<header class="card-hd">'
-    +   '<span class="who">' + esc(s.user) + '</span>' + badge(r)
+    +   '<span class="who">' + who + '</span>' + badge(r)
+    +   (r && r.state === 'streaming'
+          ? '<button class="ghost" data-act="stop" data-k="' + k + '">停止</button>' : '')
     +   '<span class="spacer"></span>' + (r ? metrics(r) : '')
     + '</header>'
     + '<div class="body">'
@@ -797,6 +950,14 @@ function nearMs(x, y) {
 }
 
 function diffTable(ra, rb) {
+  // #25：任一侧未完成时，表里出现的任何数字都会被读成「测量值」（尤其 B=0 会读成“隔离生效”）。
+  // 缺一侧就只给说明，不给表。
+  if (!ra || !rb) {
+    const who = !ra && !rb ? '两侧均未发起' : (!ra ? '身份 A 未发起' : '身份 B 未发起');
+    return '<div class="diff"><div class="diff-hd"><b>📊 双身份对照</b>'
+      + '<div class="sub">两侧都完成后才有对照——当前' + who
+      + '，本区不给出任何数字结论。</div></div></div>';
+  }
   const ids = r => new Set(((r && r.refs) || []).map(x => x.chunkId));
   const A = ids(ra), B = ids(rb);
   const onlyA = [...A].filter(x => !B.has(x));
@@ -837,16 +998,16 @@ function diffTable(ra, rb) {
 function idBlock(k, label) {
   const s = S[k];
   if (!s.open && s.token) {
-    return '<div class="fld"><label>' + label + '</label>'
+    return '<div class="fld"><div class="lbl">' + label + '</div>'
       + '<div class="idbar"><span class="dot on"></span>'
-      + '<span class="who">' + esc(s.user) + '</span>'
+      + '<span class="who">' + esc(s.tokenUser || s.user) + '</span>'
       + '<span class="pill ok">已接入</span>'
       + '<button class="sw" data-act="reopen:' + k + '">切换</button></div></div>';
   }
-  return '<div class="fld"><label>' + label + '</label>'
+  return '<div class="fld"><label for="' + k + '-user">' + label + '</label>'
     + '<div style="display:flex;gap:6px">'
-    + '<input data-bind="' + k + '.user" list="users" value="' + esc(s.user) + '" style="flex:1">'
-    + '<input data-bind="' + k + '.pass" type="password" placeholder="口令" value="" style="flex:1">'
+    + '<input id="' + k + '-user" data-bind="' + k + '.user" list="users" value="' + esc(s.user) + '" style="flex:1">'
+    + '<input id="' + k + '-pass" data-bind="' + k + '.pass" type="password" placeholder="口令" aria-label="口令" value="" style="flex:1">'
     + '</div>'
     + '<div style="display:flex;gap:6px;align-items:center;margin-top:6px">'
     + '<button class="btn ghost" data-act="login:' + k + '"' + (s.busy ? ' disabled' : '') + '>接入</button>'
@@ -865,7 +1026,8 @@ async function loadCoverage() {
     const r = await fetch('/api/v1/copilot/coverage',
       { headers: { Authorization: 'Bearer ' + S.a.token } });
     if (r.status === 401 || r.status === 403) {
-      dropToken('a', r.status + ' · token 失效，重新接入'); renderAll(); return;
+      const msg = r.status + ' · token 失效，请重新接入';
+      dropToken('a', msg); renderAll(); showAuth(msg); return;   // #22：与轮询/流式同一出口
     }
     if (!r.ok) { S.coverage = null; S.covErr = 'HTTP ' + r.status; }
     else { S.coverage = await r.json(); S.covErr = null; }
@@ -918,13 +1080,13 @@ function renderRail() {
   const a = S.a;
   let h = '<div class="railhead"><b>排障台</b><span>单次请求的协议面证据 · 证据来自 SSE 帧</span></div>';
   h += '<div class="idbar"><span class="dot' + (a.token ? ' on' : '') + '"></span>'
-    + '<span class="who">' + esc(a.token ? a.user : '未接入') + '</span>'
+    + '<span class="who">' + esc(a.token ? (a.tokenUser || a.user) : '未接入') + '</span>'
     + (a.token ? '<span class="pill ok">已接入</span>'
                : '<button class="sw" data-act="openacct">接入</button>')
     + (S.compare ? '<span class="pill acc">对照中</span>' : '')
     + '</div>';
-  h += '<div class="fld"><label>排障输入</label>'
-    + '<textarea data-bind="q" placeholder="粘贴报错堆栈或口语化描述">' + esc(S.q) + '</textarea></div>';
+  h += '<div class="fld"><label for="q">排障输入</label>'
+    + '<textarea id="q" data-bind="q" placeholder="粘贴报错堆栈或口语化描述">' + esc(S.q) + '</textarea></div>';
   h += '<div class="chips">'
     + PRESETS.map((p, i) => '<button class="chip" data-preset="' + i + '">' + esc(p.label) + '</button>').join('')
     + '</div>';
@@ -932,7 +1094,7 @@ function renderRail() {
   if (S.hint) h += '<div class="hintline">' + esc(S.hint) + '</div>';
   /* 未接入时这个按钮的职责是"接入"，不是"发起"——它直接开账号胶囊，不拿空口令去打一次注定 401 的请求 */
   h += '<button class="btn wide" data-act="' + (a.token ? 'ask' : 'openacct') + '"'
-    + (a.busy ? ' disabled' : '') + '>'
+    + (a.busy || S.asking ? ' disabled' : '') + '>'
     + (a.token ? (S.compare ? '双身份对照查询' : '发起排障查询') : '接入身份') + '</button>';
   h += '<datalist id="users">'
     + ['sre-full', 'sre-limited', 'sre-acme', 'sre-watcher'].map(u => '<option value="' + u + '">').join('')
@@ -960,11 +1122,20 @@ function renderCanvas() {
 
 /* ==================== 右上角弹层 ==================== */
 /* 顶栏是**会话级**信息（我是谁 / 系统健不健康）——它必须随登录态变，否则登录完顶栏还写着"未接入" */
+/* #23：sticky 偏移、弹层 top、左栏高度都读 --topbar-h。顶栏会因换行/去重键变长/缩放变高，
+   写死 53px 会让左栏顶部被盖住——这里实测回写，尺寸一变就同步。 */
+function syncTopbarHeight() {
+  const tb = document.querySelector('.topbar');
+  if (!tb) return;
+  document.documentElement.style.setProperty('--topbar-h', Math.round(tb.getBoundingClientRect().height) + 'px');
+}
+
 function renderHeader() {
   const a = S.a;
   $('acct').innerHTML = '<span class="dot' + (a.token ? ' on' : '') + '"></span>'
-    + esc(a.token ? a.user : '未接入');
+    + esc(a.token ? (a.tokenUser || a.user) : '未接入');
   $('healthbtn').textContent = S.platform === false ? '运行态 · 锁定' : '运行态';
+  syncTopbarHeight();   // 胶囊文案/去重键变化会改变顶栏高度（#23）
 }
 
 function renderAcct() {
@@ -986,10 +1157,77 @@ function renderAdv() {
   $('advpop').innerHTML = h;
 }
 
+/* ==================== 焦点管理（#30）====================
+   浮层要能「键盘进得去、Esc 出得来、关掉回原位」，否则纯键盘用户打开抽屉后无法关闭
+   （打开按钮被 scrim 盖住），Tab 还会跑到遮罩后面的页面控件上。 */
+let focusReturn = null;
+
+function isVisible(el) {
+  return !!el && el.offsetParent !== null;
+}
+
+function focusables(box) {
+  if (!box) return [];
+  return [...box.querySelectorAll(
+    'a[href],button:not([disabled]),input:not([disabled]),textarea:not([disabled]),select:not([disabled]),summary,[tabindex]:not([tabindex="-1"])'
+  )].filter(isVisible);
+}
+
+function openDialogFocus(box) {
+  if (!box) return;
+  focusReturn = document.activeElement;
+  const f = focusables(box)[0];
+  if (f) f.focus();
+}
+
+function restoreFocus() {
+  if (focusReturn && focusReturn.isConnected && isVisible(focusReturn)) focusReturn.focus();
+  focusReturn = null;
+}
+
+/* Tab 焦点陷阱：只在当前浮层内循环 */
+function trapTab(e, box) {
+  const f = focusables(box);
+  if (!f.length) { e.preventDefault(); return; }
+  const first = f[0], last = f[f.length - 1];
+  if (!box.contains(document.activeElement)) { e.preventDefault(); first.focus(); return; }
+  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+}
+
+/* 当前处于最上层的浮层（Esc/陷阱的作用域） */
+function currentModal() {
+  if ($('auth').style.display === 'grid') return $('auth');
+  if (!$('drawer').hidden) return $('drawer');
+  return document.querySelector('[data-pop]:not([hidden])');
+}
+
+function openDrawer() {
+  closePops();
+  $('scrim').hidden = false;
+  $('drawer').hidden = false;
+  renderDrawer();
+  openDialogFocus($('drawer'));
+}
+
+function closeDrawer() {
+  $('scrim').hidden = true;
+  $('drawer').hidden = true;
+  restoreFocus();
+}
+
+function closeAuth() {
+  $('auth').style.display = 'none';
+  document.body.classList.remove('sat');
+  restoreFocus();
+}
+
 function openPop(id) {
+  const el = $(id);
   document.querySelectorAll('[data-pop]').forEach(p => { p.hidden = p.id !== id; });
   $('acct').setAttribute('aria-expanded', String(id === 'acctpop'));
   $('advbtn').setAttribute('aria-expanded', String(id === 'advpop'));
+  openDialogFocus(el);
 }
 function togglePop(id) {
   const el = $(id);
@@ -998,15 +1236,20 @@ function togglePop(id) {
   el.hidden = !wasHidden;
   $('acct').setAttribute('aria-expanded', String(!el.hidden && id === 'acctpop'));
   $('advbtn').setAttribute('aria-expanded', String(!el.hidden && id === 'advpop'));
+  if (el.hidden) restoreFocus(); else openDialogFocus(el);
 }
 function closePops() {
+  const hadOpen = !!document.querySelector('[data-pop]:not([hidden])');
   document.querySelectorAll('[data-pop]').forEach(p => { p.hidden = true; });
   $('acct').setAttribute('aria-expanded', 'false');
   $('advbtn').setAttribute('aria-expanded', 'false');
+  if (hadOpen) restoreFocus();
 }
 
 /* ==================== 健康抽屉 ==================== */
-function renderDrawer() {
+/* metrics/prev 显式传入：抽屉要显示**当前轮**计数与相对上一轮的增量。
+   历史实现把 prevMetrics 既当当前值又当前值相减（差值恒 0、数字慢一拍，#27）。 */
+function renderDrawer(metrics, prev) {
   const box = $('drawerbody');
   if (!S.a.token) {
     box.innerHTML = '<div class="locked"><b>未接入</b><br>'
@@ -1029,8 +1272,9 @@ function renderDrawer() {
     box.innerHTML = '<div class="locked" style="border-left-color:var(--line)">正在读取运行态…</div>';
     return;
   }
-  const m = prevMetrics || {};
-  const d = k => prevMetrics ? (m[k] | 0) - (prevMetrics[k] | 0) : 0;
+  const m = metrics || (drawerState ? drawerState.metrics : null) || {};
+  const before = prev !== undefined ? prev : drawerPrev;
+  const d = k => before ? (m[k] | 0) - (before[k] | 0) : 0;
   const hits = (m.l1_cache_hits | 0) + (m.l2_cache_hits | 0);
   const deg = drawerState && drawerState.runtime ? drawerState.runtime.degradation : null;
   const rt = drawerState && drawerState.runtime ? drawerState.runtime : null;
@@ -1067,11 +1311,15 @@ function renderDrawer() {
 }
 
 /* ==================== 视图装配 ==================== */
-function setView(v) {
+function setView(v, opts) {
   S.view = v;
+  // #35：视图写进 hash（刷新/后退不丢）；silent 用于 hashchange 回填，避免来回改写历史
+  if (!(opts && opts.silent) && location.hash !== '#' + v) history.replaceState(null, '', '#' + v);
   document.querySelectorAll('.tabs button').forEach(b => {
     const on = b.dataset.view === v;
-    b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on));
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-selected', String(on));
+    b.tabIndex = on ? 0 : -1;          // 键盘只在选中的 tab 上停一站（ARIA tabs 惯例）
   });
   $('v-trouble').hidden = v !== 'trouble';
   $('v-panel').hidden = v !== 'panel';
@@ -1104,12 +1352,24 @@ function renderAll() {
 
 /* ==================== 运行面板：轮询与渲染 ==================== */
 let cursor = 0, prevMetrics = null, pollTimer = null, pollPeriod = 0, alive = false,
-    lastPollFailed = false, drawerState = null, tracks = [];
+    lastPollFailed = false, drawerState = null, drawerPrev = null, pollInFlight = false, tracks = [];
+
+/* #35：非 2xx 一律丢弃响应体 → 配额 429 / query 超长 400 的具体文案到不了页面。
+   后端本来就返回 {code,message}（GlobalExceptionHandler / ErrorBodies），这里只负责读出来。 */
+async function httpErrText(r) {
+  const base = 'HTTP ' + r.status;
+  try {
+    const j = await r.json();
+    const m = j && (j.message || j.error);
+    if (m) return base + ' · ' + m;
+  } catch (e) { /* 非 JSON 响应：保留状态码 */ }
+  return base;
+}
 
 async function api(path) {
   const r = await fetch(path, { headers: S.a.token ? { Authorization: 'Bearer ' + S.a.token } : {} });
   if (r.status === 401 || r.status === 403) { throw { auth: r.status }; }
-  if (!r.ok) throw { err: 'HTTP ' + r.status };
+  if (!r.ok) throw { err: await httpErrText(r) };
   return r.json();
 }
 function stopPoll() { if (pollTimer) clearInterval(pollTimer); pollTimer = null; }
@@ -1127,14 +1387,22 @@ document.addEventListener('visibilitychange', () => { if (pollTimer && alive) re
 
 async function poll() {
   if (!S.a.token) return;
+  // 并发合并：定时 poll 与 ask() 收尾的 poll 若重叠，两轮快照会背靠背渲染——
+  // 第一轮显示 +N、第二轮立刻抹成 0，增量在屏上只闪几十毫秒（#27 残留的不可见问题）。
+  if (pollInFlight) return;
+  pollInFlight = true;
+  try {
   let s, a;
   try { s = await api('/api/v1/admin/state'); }
   catch (e) {
     if (e.auth === 401) {
-      dropToken('a', '401 · token 已过期或无效，重新接入');
+      const msg = '401 · token 已过期或无效，请重新接入';
+      dropToken('a', msg);
       $('pollstate').textContent = '凭证失效 · 已停止轮询';
       $('pollstate').style.color = 'var(--warn)';
-      renderAll(); return;
+      renderAll();
+      showAuth(msg);   // #22：后台轮询失效也要弹遮罩，不能只改页脚一行
+      return;
     }
     if (e.auth === 403) {
       /* 非 platform：门禁一字不动，渲染锁定态并停轮询（不拿 403 反复打端点） */
@@ -1149,20 +1417,100 @@ async function poll() {
   }
   try { a = await api('/api/v1/admin/audit/recent?since=' + cursor + '&limit=' + CAP); }
   catch (e) { if (e.auth) { return; } a = null; }
-  lastPollFailed = false; alive = true; S.platform = true;
-  renderHeader(); renderDrawer(); renderPanelGate();
+  if (lastPollFailed) { lastPollFailed = false; resyncInterval(); }   // #35：文案与真实 interval 一致
+  alive = true; S.platform = true;
+  renderHeader(); renderPanelGate();   // 抽屉由 renderState 用**本轮** metrics 渲染（#27）
   $('pollstate').textContent = '轮询中 · ' + (cadence() / 1000) + 's'; $('pollstate').style.color = '';
   renderState(s); if (a) renderEvents(a);
+  refreshActions();
+  } finally { pollInFlight = false; }
 }
 
+/* ---------- L1 受控恢复动作（面板确认入口，ADR-0028 §0 裁决 1） ----------
+   服务端守卫：confirmer≠proposer / 租户匹配 / 密级足够 / token 哈希原子消费 / 窗口。
+   面板只做展示与提交——所有判定在网关，这里没有第二套规则。 */
+let l1Timer = null;
+const L1_STATE_LABEL = { proposed: '待确认', confirmed: '已确认·待派发', frozen: '已冻结（开关关闭）',
+  dispatched: '已派发', executed: '执行成功', failed: '执行失败', expired: '已过期' };
+async function refreshActions() {
+  const sec = $('l1sec'); if (!sec) return;
+  sec.hidden = false;                    // platform 身份可见（panel 本身已门控）
+  try {
+    const ops = await api('/api/v1/copilot/actions?state=proposed');
+    renderActions(ops || []);
+  } catch (e) { /* 非致命：面板主数据不受影响 */ }
+}
+function renderActions(ops) {
+  const box = $('l1pending'), hint = $('l1hint');
+  clearInterval(l1Timer);
+  if (!ops.length) { box.innerHTML = ''; hint.textContent = '当前无待确认的恢复动作。'; return; }
+  hint.textContent = ops.length + ' 条待确认——确认前逐字核对命令与影响范围；窗口过期须重新提案。';
+  const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const card = o =>
+    '<div style="border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:8px">'
+    + '<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline">'
+    + '<code style="font-size:12px;color:var(--txt-2)">' + esc(o.opId) + '</code>'
+    + '<span class="num" data-exp="' + esc(o.expiresAt || '') + '" style="color:var(--warn)"></span></div>'
+    + '<pre style="margin:6px 0;padding:8px;background:var(--bg);border:1px solid var(--line-soft);border-radius:6px;font-size:12px;overflow-x:auto">'
+    + esc(o.command) + '</pre>'
+    + '<div class="sub" style="font-size:12px">提案人 ' + esc(o.proposedBy)
+    + ' · 来源 ' + esc(o.ref) + ' · 状态 ' + esc(L1_STATE_LABEL[o.state] || o.state) + '</div></div>';
+  box.innerHTML = ops.map(card).join('');
+  const tick = () => box.querySelectorAll('[data-exp]').forEach(el => {
+    const exp = el.dataset.exp; if (!exp) { el.textContent = ''; return; }
+    const s = Math.floor((new Date(exp) - Date.now()) / 1000);
+    el.textContent = s > 0 ? '窗口剩 ' + Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0') : '已过期';
+  });
+  tick(); l1Timer = setInterval(tick, 1000);
+}
+document.addEventListener('click', async e => {
+  if (e.target.id !== 'l1confirm') return;
+  const op = $('l1op').value.trim(), tok = $('l1tok').value.trim(), msg = $('l1msg');
+  if (!op || !tok) { msg.textContent = 'op_id 与一次性凭据都必填'; return; }
+  msg.textContent = '确认中…';
+  try {
+    const r = await fetch('/api/v1/copilot/actions/confirm', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + S.a.token },
+      body: JSON.stringify({ opId: op, token: tok })
+    });
+    const body = await r.json();
+    if (r.ok) { msg.textContent = '已确认（' + body.state + '）——派发由自动化系统执行。'; $('l1tok').value = ''; }
+    else msg.textContent = '被拒（' + (body.stage || r.status) + '）：' + (body.message || '');
+    refreshActions();
+  } catch (err) { msg.textContent = '网络异常：' + err; }
+});
+/* 深链：?op=act_xxx 自动填入 op_id（URL 只定位不承载权限——§0 裁决 3） */
+const qp = new URLSearchParams(location.search).get('op');
+if (qp) { const el = $('l1op'); if (el) el.value = qp; }
+
+
 /* ---------- 运行态 ---------- */
+
+/* #24：窄屏顶栏折行会把去重键串撑成两三行——只留 build 版本，完整信息进 title / 运行态抽屉。 */
+function fingerprintText(b) {
+  // #35：commit 后端早已下发（本地为 unknown），顶栏此前从不展示——“现在跑的是哪一版”答不出来。
+  const commit = b.commit && b.commit !== 'unknown' ? ' · commit ' + String(b.commit).slice(0, 7) : '';
+  const full = 'build ' + b.version + commit + ' · jvm ' + b.jvm +
+    ' · uptime ' + Math.floor(b.uptime_s / 3600) + 'h' + Math.floor(b.uptime_s % 3600 / 60) +
+    'm · pid ' + b.pid;
+  const narrow = window.matchMedia && window.matchMedia('(max-width:600px)').matches;
+  return { full, shown: narrow ? 'build ' + b.version : full };
+}
+
+/* #24：后端 last 形如 "ok @ 2026-10-27T01:14:20.063598300 (trigger=…)"——纳秒对人是噪音。
+   只做显示层格式化（语义不变），不猜时区。 */
+function fmtTs(s) {
+  if (s == null || s === '') return '—';
+  return String(s).replace(/(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}:\d{2})(?:\.\d+)?/, '$1 $2');
+}
 
 function renderState(s) {
   drawerState = s;
   const b = s.build;
-  $('fingerprint').textContent = 'build ' + b.version + ' · jvm ' + b.jvm +
-    ' · uptime ' + Math.floor(b.uptime_s / 3600) + 'h' + Math.floor(b.uptime_s % 3600 / 60) +
-    'm · pid ' + b.pid;
+  const fp = fingerprintText(b);
+  $('fingerprint').textContent = fp.shown;
+  $('fingerprint').title = fp.full;
   $('lastts').textContent = 'server ts ' + new Date(s.ts).toLocaleTimeString();
 
   const h = s.health;
@@ -1174,7 +1522,7 @@ function renderState(s) {
     dep('Qdrant', h.qdrant.status, h.qdrant.value) + dep('Redis', h.redis.status, null) +
     dep('后端', h.live_mode ? 'UP' : 'DEGRADED', h.live_mode ? 'live' : 'mock');
   const ri = s.runtime.reingest;
-  $('reingest').textContent = 'reingest ' + (ri.busy ? '执行中' : '空闲') + ' · last ' + ri.last;
+  $('reingest').textContent = 'reingest ' + (ri.busy ? '执行中' : '空闲') + ' · last ' + fmtTs(ri.last);
 
   const d = s.runtime.degradation;
   $('deg').innerHTML = ['L0', 'L1', 'L2'].map(l =>
@@ -1191,8 +1539,10 @@ function renderState(s) {
   $('quotaval').textContent = q.used.toLocaleString() + ' / ' + q.limit.toLocaleString();
   $('quotabar').style.width = Math.min(100, q.used / q.limit * 100).toFixed(1) + '%';
 
+  const prevPoll = prevMetrics;          // renderTiles 随后会把 prevMetrics 覆盖成本轮
   renderKpis(s.metrics);
-  renderDrawer();
+  renderDrawer(s.metrics, prevPoll);     // 抽屉：当前轮 vs 上一轮（#27）
+  drawerPrev = prevPoll;                 // 抽屉在两次 poll 之间被打开时，仍显示上一轮的增量
   renderTiles(s.metrics);
   pushRate(s.metrics, s.ts);
   const sfTop = s.runtime.sf_keys_top || [];
@@ -1314,23 +1664,37 @@ function drawRate(reset) {
     if (idx < 0 || idx >= buckets) continue;
     cells[idx].n += s.inc; cells[idx].gap = false;
   }
-  const peak = Math.max(1, ...cells.map(c => c.n));
+  const peakRaw = Math.max(0, ...cells.map(c => c.n));
+  const peak = Math.max(1, peakRaw);          // 只用于柱高比例，不再当作对外数字
   const totalReq = cells.reduce((a, c) => a + c.n, 0);
+  const hasData = peakRaw > 0;
+  const samples = rate.filter(r => r.t >= start).length;
   $('chart').innerHTML = cells.map(c => {
     const cls = c.n ? 'b' : (c.gap ? 'b gap' : 'b zero');
     return '<div class="' + cls + '" style="height:' + (c.n ? Math.max(8, c.n / peak * 100) : (c.gap ? 6 : 2)) + '%"></div>';
   }).join('');
   const secs = Math.round(bw / 1000);
+  // #25：没有采样就不写「合计 0 / 峰值 1」这种看起来像实测的组合；
+  // 只有基线那一格时也不给合计（那一次的请求落在基线里，标出来而不是算进去）。
   $('chartpeak').textContent = (reset ? '⚠ 网关重启，计数归零，旧序列已丢弃 · ' : '') +
-    '合计 ' + totalReq + ' 次 · 峰值 ' + peak + ' 次/' + secs + 's';
+    '合计 ' + (hasData ? totalReq + ' 次' : '—') +
+    ' · 峰值 ' + (hasData ? peakRaw : '—') + ' 次/' + secs + 's' +
+    (samples < 2 ? '（首格为基线，未计入）' : '');
   $('chartwin').textContent = '← ' + (span / 60000) + ' 分钟前 · 每格 ' + secs + 's';
 }
 
 /* ---------- 事件流 ---------- */
 
 function renderEvents(a) {
+  // #35：初始是一条空心细条——给一句空态；首条事件到达即移除。
+  const evBox = $('events');
+  const emptyHint = evBox.querySelector('.ev-empty');
+  if (a.events.length && emptyHint) emptyHint.remove();
   if (a.truncated) {
     prepend('<div class="ev lost">⚠️ 事件丢失（缓冲轮转或服务重启，游标已跳至 ' + a.max_seq + '）</div>');
+  }
+  if (!a.events.length && !a.truncated && !evBox.querySelector('.ev:not(.ev-empty)')) {
+    prepend('<div class="ev-empty">暂无新事件——发起一次查询、接入身份或触发降级后，事件会在这里滚动出现。</div>');
   }
   for (const ev of a.events) {
     cursor = Math.max(cursor, ev.seq | 0);
@@ -1385,11 +1749,11 @@ document.addEventListener('click', async e => {
 
   const act = t.dataset.act;
   if (act) {
-    if (act === 'opendrawer') { closePops(); $('scrim').hidden = false; $('drawer').hidden = false;
-      renderDrawer(); return; }
-    if (act === 'closedrawer') { $('scrim').hidden = true; $('drawer').hidden = true; return; }
+    if (act === 'opendrawer') { openDrawer(); return; }
+    if (act === 'closedrawer') { closeDrawer(); return; }
     if (act === 'openacct') { openPop('acctpop'); return; }
     if (act === 'covtoggle') { S.covOpen = !S.covOpen; renderRail(); return; }
+    if (act === 'stop') { stopStream(t.dataset.k || 'a'); return; }
     if (act === 'reportgap') { await reportGap(t); return; }
     if (act === 'ask') { await ask(); return; }
     if (act.startsWith('login:')) {
@@ -1437,11 +1801,48 @@ document.addEventListener('click', async e => {
   const c = t.dataset.contrast;
   if (c !== undefined) {
     const cfg = CONTRAST_CASES[+c];
-    S.q = cfg.q; S.compare = true; S.b.user = cfg.b; S.hint = '';
+    S.q = cfg.q; S.compare = true; S.hint = '';
+    // #16：用例的 B 身份与手里 token 的主体不一致时，**先丢掉旧 token** 并要求重新接入——
+    // 否则会用 sre-limited 的 token 跑出一条抬头写 sre-acme 的结果（安全证据面归因反转）。
+    const mismatch = S.b.token && S.b.tokenUser !== cfg.b;
+    S.b.user = cfg.b;
+    if (mismatch) {
+      dropToken('b', '身份已切换为 ' + cfg.b + '：请为它重新接入后再发起对照');
+      S.b.pass = '';
+      renderAdv(); renderRail(); renderCanvas(); openPop('advpop');
+      return;
+    }
     renderAdv(); renderRail();
     if (S.a.token && S.b.token) await ask(); else openPop('advpop');
     return;
   }
+});
+
+/* ==================== 键盘：Esc 关闭 / Tab 陷阱 / tabs 方向键（#30）==================== */
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    if ($('auth').style.display === 'grid') { closeAuth(); return; }
+    if (!$('drawer').hidden) { closeDrawer(); return; }
+    if (document.querySelector('[data-pop]:not([hidden])')) { closePops(); return; }
+    return;
+  }
+  if (e.key === 'Tab') {
+    const box = currentModal();
+    if (box) trapTab(e, box);
+  }
+});
+
+document.querySelector('.tabs').addEventListener('keydown', e => {
+  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+  const tabs = [...document.querySelectorAll('.tabs button')];
+  const i = tabs.indexOf(document.activeElement);
+  if (i < 0) return;
+  e.preventDefault();
+  const next = e.key === 'Home' ? 0
+    : e.key === 'End' ? tabs.length - 1
+    : (i + (e.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+  tabs[next].focus();
+  setView(tabs[next].dataset.view);
 });
 
 /* 正文 [参考N] ↔ 底部来源条的高亮联动 */
@@ -1463,10 +1864,10 @@ function showAuth(msg) {
   $('authmsg').textContent = msg || '';
   $('auth').style.display = 'grid';
   document.body.classList.add('sat');
+  openDialogFocus($('auth'));   // #30：键盘用户不用 Tab 遍整页才能到「重新接入」
 }
 $('authgo').onclick = () => {
-  $('auth').style.display = 'none';
-  document.body.classList.remove('sat');
+  closeAuth();
   S.a.open = true; renderAll(); openPop('acctpop');
 };
 
@@ -1478,16 +1879,30 @@ $('windows').onclick = (e) => {
   drawRate(false);
 };
 $('copy').onclick = async () => {
+  const btn = $('copy');
+  const restore = () => { btn.textContent = '复制最近 50 条 JSON'; };
   const a = await api('/api/v1/admin/audit/recent?since=' + Math.max(0, cursor - 50) + '&limit=50')
     .catch(() => null);
-  if (a) { await navigator.clipboard.writeText(JSON.stringify(a.events, null, 2));
-    $('copy').textContent = '已复制 ✓'; setTimeout(() => $('copy').textContent = '复制最近 50 条 JSON', 1500); }
+  if (!a) { btn.textContent = '取审计失败'; setTimeout(restore, 1800); return; }   // #35：不再静默
+  try {
+    await navigator.clipboard.writeText(JSON.stringify(a.events, null, 2));
+    btn.textContent = '已复制 ✓';
+  } catch (e) {
+    btn.textContent = '复制失败（剪贴板不可用）';   // 非 https/无权限时 navigator.clipboard 会抛
+  }
+  setTimeout(restore, 1800);
 };
 
 /* ==================== 启动 ==================== */
 renderAll();
+setView(location.hash === '#panel' ? 'panel' : 'trouble');   // #35：刷新后回到同一视图
+window.addEventListener('hashchange', () => {
+  setView(location.hash === '#panel' ? 'panel' : 'trouble', { silent: true });
+});
+syncTopbarHeight();
+window.addEventListener('resize', syncTopbarHeight);
+if (window.ResizeObserver) new ResizeObserver(syncTopbarHeight).observe(document.querySelector('.topbar'));
 renderTracks();
-setView('trouble');
 /* 刷新不掉线：sessionStorage 里还有 token 就同时恢复运行态轮询与覆盖范围（两者都按身份算） */
 if (S.a.token) { startPoll(); loadCoverage(); }
 </script>

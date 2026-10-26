@@ -41,6 +41,13 @@ public class SearchController {
             throw new org.springframework.web.server.ResponseStatusException(
                     org.springframework.http.HttpStatus.BAD_REQUEST, "query 不能为空");
         }
+        // #18：与 /chat/stream、/v1 同一上限（单点常量）；检索面烧的是 embedding+rerank，
+        // 超长 query 同样不该进腿——本端点没有 MVC 校验（record 无注解绑定），故显式判。
+        if (req.query().length() > com.opspilot.gateway.dto.ChatRequest.MAX_QUERY_CHARS) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST,
+                    "query 超长（上限 " + com.opspilot.gateway.dto.ChatRequest.MAX_QUERY_CHARS + " 字符）");
+        }
         int level = user.authLevel();
         // 纵深防御：JwtAuthFilter 已在入口拒绝 level<1（401）；此处兜底拦截任何绕过 filter 的调用路径
         if (level < 1) {

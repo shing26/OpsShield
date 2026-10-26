@@ -4,6 +4,7 @@
 > 判据与证据要求以 [production-gate.md](production-gate.md) 为准；逐项配置步骤见
 > [g1-external-setup.md](g1-external-setup.md)（systemd/env/webhook/中间件/Trivy/WORM/回滚）。
 > 本轮 live 实测（readiness + 真实 DashScope chat）见 [g1-live-evidence.md](g1-live-evidence.md)。
+> 按资源依赖拆的任务清单与 VM/WSL 操作步骤见 [blocker-tasks.md](blocker-tasks.md)。
 
 ## 0. 当前已验证到哪
 
@@ -32,8 +33,11 @@ Last Result=0；由任务触发备份 `backup/users-2026-10-23.zip`，`verified=
 - Redis down：02:46:38 停 Redis，20s 后 gauge=0，02:49:21 `OpsPilotRedisDown` active，receiver=human-notify；
 - Alertmanager webhook 成功通知 +4（两条 firing + 两条 resolved），无新增失败。
 
-还缺：
-- 磁盘满场景：只验证 `aiops_disk_free_bytes` 指标与 `OpsPilotDiskLow` 规则已加载，**未真的填满磁盘**。
+已完成磁盘满：Ubuntu VM 用 1G loop 盘填到 94%（`aiops_disk_free_bytes` 906MB→393MB），
+Windows Prometheus 新增 VM target；`OpsPilotDiskLow` 于 19:07:36Z active、receiver=human-notify、
+service=opspilot-vm，恢复后 resolved；Alertmanager webhook 成功通知新增。
+
+已完成：用户已确认收到飞书磁盘告警。
 
 ## 3. 失败证据 full 演练（门禁 4）
 
@@ -47,39 +51,45 @@ Last Result=0；由任务触发备份 `backup/users-2026-10-23.zip`，`verified=
 
 ## 4. 发布/回滚真实演练（门禁 5）
 
-缺：真实 systemd/容器服务上的停服、换 jar、起服、回滚。
+已完成 Ubuntu 24.04 VM 上的 systemd 演练（证据见 [g1-live-evidence.md](g1-live-evidence.md) §2.10）：
 
-已有 `release.sh` / `rollback.sh` / `drill_release_rollback.sh`（产物哈希与入口已验证），
-并已做本机进程级 previous→current→rollback（三次 health 均 True，见 live evidence §2.3）。
-还缺 **systemd 测试机上的真实停服/切换**：停服 → 换 jar → 起服 → readiness →
-`rollback.sh <prev> --apply` → `/state` 的 `build.version/commit` 与 manifest 对齐。
+- current → v-prev（commit 65cc9b3）→ current 三次切换；
+- 每次 `systemctl is-active` active、readiness UP；
+- `rollback.sh v-prev --apply` 校验 sha256 OK；
+- 注入 `OPSPILOT_BUILD_COMMIT` 后 `/state.build.commit` 分别 969e137 / 65cc9b3 / 969e137，
+  与 manifest 对齐。
+
+门禁 5 已闭环。
 
 ## 5. 单人并发压测（门禁 6）
 
-缺：**live 上游**下的单租户并发测试（mock/内存 soak 只证明背压不崩）。
+已完成一轮 live 采样（20 并发 / 10s；`scripts/live_concurrency.py`）：
+84 次加载请求、4×200、80×429、0×5xx；对照租户 1×200、0×429；
+`aiops_admission_rejected_total=80`、`requests_failed=0`、`degradation_level=L0`；
+成功 TTFT P95 18.1s，对照 8.9s。证据见 [g1-live-evidence.md](g1-live-evidence.md) §2.9。
 
-- 用 locust 或 `soak.sh` 改 live 配置，单租户 20–50 并发。
-- 记录请求数/成功率/429 比例、`aiops_admission_rejected_total`、L0→L1→L2、P95/P99 TTFT。
-- 验收：其他租户成功率不因单租户压测显著下降；L2 不因单人流量点亮。
+还缺：
+- 对照租户至少 20–30 次**同窗口**成功请求，才能比较“成功率不显著下降”；
+- 更长窗口（5–30 分钟）与 P99/容量拐点；
+- 不要用 10s 样本宣称容量通过。
 
 ## 6. SCA 真实结果（门禁 8）
 
-已完成“跑出结果”：CI run `39840772575` / `39845265817` 的 `security` job 用 Trivy SBOM 扫描，
-真实命中 **44 个 HIGH/CRITICAL CVE**（Tomcat、Jackson、Netty、Spring 等），`security` job exit 1；
-其余 job（java/smoke/sbom/static/panel/provenance/python/shell）均 green。
+已完成：CI run `39873876035` 全绿，`security` job success；Trivy artifact 中 Java vulns=0。
 
-还缺处置：
-- 逐条升级依赖或登记豁免（需要兼容性验证）；
-- 修完后 CI 全绿；
-- Dependabot 的 PR 至少一次实际合并/关闭记录。
+- 初始 37 个 HIGH/CRITICAL；同主版本补丁覆盖修复 33 个（Tomcat 10.1.59、Jackson 2.22.3、
+  Netty 4.1.137.Final、Spring 6.2.19、Micrometer 1.15.12、protobuf 3.25.5、gRPC 1.75.0）；
+- 4 个跨大版本修复的 CVE 登记在 [`.trivyignore`](../../.trivyignore) + [sca-findings.md](sca-findings.md)，
+  附补偿控制与 2027-10-23 复核到期；
+- 还缺：Dependabot 的 PR 至少一次实际合并/关闭记录。
 
-## 7. 审计异地 WORM（门禁 9）
+## 7. 审计 WORM（门禁 9）
 
-缺：真实远端/不可变存储（本地脚本与 systemd 模板已就位）。
+已完成本地 MinIO Object Lock：bucket `opspilot-audit`，COMPLIANCE 180d；两次时间戳 audit 副本；
+对象元数据锁定、版本删除被拒、下载副本验链 PASS。
 
-- 挂载只追加卷到 `/mnt/audit-offsite`，配 `AUDIT_OFFSITE_DIR`，启用 `opspilot-audit-offsite.timer`。
-- 验收：连续两次运行产生两个时间戳目录；副本验链通过；挂载侧确认对象锁/不可变。
-- 哈希链不能证明尾部未删——尾部保护由 WORM/远端只追加保证。
+**用户确认接受“本地对象锁，非异地”作为门禁 9 口径（2026-10-24）**。
+边界：若未来要求真正异地容灾，把 MinIO 换到第二台主机/云 S3 即可，脚本/验收口径不变。
 
 ## 8. Runbook 演练（门禁 10）
 

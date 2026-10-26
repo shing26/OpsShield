@@ -451,6 +451,168 @@
           "pattern": "refuse_set\\.jsonl`（(\\d+) 条"
         }
       ]
+    },
+    {
+      "id": "bench_exact_hit1_es_only",
+      "unit": "基准：es_only 精确码 Hit@1（benchmark.json）",
+      "derive": {
+        "kind": "json_field",
+        "path": "offline/eval/reports/benchmark.json",
+        "field": "retrieval.es_only.exact.hit@1"
+      },
+      "format": "percent",
+      "cited_in": [
+        {
+          "file": "docs/benchmark.md",
+          "pattern": "检索·精确码 Hit@1（es_only）\\s*\\| (\\d+)%"
+        }
+      ]
+    },
+    {
+      "id": "bench_exact_hit1_vector_only",
+      "unit": "基准：vector_only 精确码 Hit@1（benchmark.json）",
+      "derive": {
+        "kind": "json_field",
+        "path": "offline/eval/reports/benchmark.json",
+        "field": "retrieval.vector_only.exact.hit@1"
+      },
+      "format": "percent",
+      "cited_in": [
+        {
+          "file": "docs/benchmark.md",
+          "pattern": "检索·精确码 Hit@1（vector_only）\\s*\\| (\\d+)%"
+        }
+      ]
+    },
+    {
+      "id": "bench_exact_hit1_hybrid",
+      "unit": "基准：hybrid 精确码 Hit@1（benchmark.json）",
+      "derive": {
+        "kind": "json_field",
+        "path": "offline/eval/reports/benchmark.json",
+        "field": "retrieval.hybrid.exact.hit@1"
+      },
+      "format": "percent",
+      "cited_in": [
+        {
+          "file": "docs/benchmark.md",
+          "pattern": "检索·精确码 Hit@1（hybrid）\\s*\\| (\\d+)%"
+        }
+      ]
+    },
+    {
+      "id": "bench_jailbreak_leaked",
+      "unit": "基准：越狱高密级泄漏条数（benchmark.json，硬 0）",
+      "derive": {
+        "kind": "json_field",
+        "path": "offline/eval/reports/benchmark.json",
+        "field": "safety.jailbreak.leaked"
+      },
+      "format": "int",
+      "cited_in": [
+        {
+          "file": "docs/benchmark.md",
+          "pattern": "安全·越狱高密级泄漏（5 条 prompt，L1 账号）\\s*\\| (\\d+) 条"
+        }
+      ]
+    },
+    {
+      "id": "redteam_cases_total",
+      "unit": "红队对抗用例总数（offline/redteam/report/redteam_report.json）",
+      "derive": {
+        "kind": "json_field",
+        "path": "offline/redteam/report/redteam_report.json",
+        "field": "cases_total"
+      },
+      "format": "int",
+      "cited_in": [
+        {
+          "file": "docs/redteam.md",
+          "pattern": "红队·用例总数 \\| (\\d+)"
+        }
+      ]
+    },
+    {
+      "id": "redteam_leaks",
+      "unit": "红队泄漏条数（benchmark 对称的硬 0：任何一条即 FAIL）",
+      "derive": {
+        "kind": "json_field",
+        "path": "offline/redteam/report/redteam_report.json",
+        "field": "leaks"
+      },
+      "format": "int",
+      "cited_in": [
+        {
+          "file": "docs/redteam.md",
+          "pattern": "红队·泄漏 \\| (\\d+)"
+        }
+      ]
+    },
+    {
+      "id": "redteam_valid",
+      "unit": "红队实跑通过数（valid < total 即红：用例失效不得静默）",
+      "derive": {
+        "kind": "json_field",
+        "path": "offline/redteam/report/redteam_report.json",
+        "field": "pass"
+      },
+      "format": "int",
+      "cited_in": [
+        {
+          "file": "docs/redteam.md",
+          "pattern": "红队·通过 \\| (\\d+)"
+        }
+      ]
+    },
+    {
+      "id": "doc_gate_entries",
+      "unit": "条登记项（doc_numbers 自身规模；#39）",
+      "derive": {
+        "kind": "registry_entries"
+      },
+      "format": "int",
+      "cited_in": [
+        {
+          "file": "README.md",
+          "pattern": "\\*\\*(\\d+) 条文档数字"
+        }
+      ]
+    },
+    {
+      "id": "doc_gate_citations",
+      "unit": "处引用位（doc_numbers 自身规模；#39）",
+      "derive": {
+        "kind": "registry_citations"
+      },
+      "format": "int",
+      "cited_in": [
+        {
+          "file": "README.md",
+          "pattern": "条文档数字 / (\\d+) 处引用"
+        }
+      ]
+    },
+    {
+      "id": "python_test_declarations",
+      "unit": "条 Python test 函数声明（offline/tests；参数化展开后执行例数更多）",
+      "derive": {
+        "kind": "grep_count",
+        "globs": [
+          "offline/tests/**/*.py"
+        ],
+        "pattern": "^def test_"
+      },
+      "format": "int",
+      "cited_in": [
+        {
+          "file": "README.md",
+          "pattern": "Probes-(\\d+)_Passed"
+        },
+        {
+          "file": "README.md",
+          "pattern": "Python (\\d+) 条 test 函数"
+        }
+      ]
     }
   ]
 }
