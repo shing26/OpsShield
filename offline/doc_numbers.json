@@ -563,6 +563,56 @@
           "pattern": "红队·通过 \\| (\\d+)"
         }
       ]
+    },
+    {
+      "id": "doc_gate_entries",
+      "unit": "条登记项（doc_numbers 自身规模；#39）",
+      "derive": {
+        "kind": "registry_entries"
+      },
+      "format": "int",
+      "cited_in": [
+        {
+          "file": "README.md",
+          "pattern": "\\*\\*(\\d+) 条文档数字"
+        }
+      ]
+    },
+    {
+      "id": "doc_gate_citations",
+      "unit": "处引用位（doc_numbers 自身规模；#39）",
+      "derive": {
+        "kind": "registry_citations"
+      },
+      "format": "int",
+      "cited_in": [
+        {
+          "file": "README.md",
+          "pattern": "条文档数字 / (\\d+) 处引用"
+        }
+      ]
+    },
+    {
+      "id": "python_test_declarations",
+      "unit": "条 Python test 函数声明（offline/tests；参数化展开后执行例数更多）",
+      "derive": {
+        "kind": "grep_count",
+        "globs": [
+          "offline/tests/**/*.py"
+        ],
+        "pattern": "^def test_"
+      },
+      "format": "int",
+      "cited_in": [
+        {
+          "file": "README.md",
+          "pattern": "Probes-(\\d+)_Passed"
+        },
+        {
+          "file": "README.md",
+          "pattern": "Python (\\d+) 条 test 函数"
+        }
+      ]
     }
   ]
 }

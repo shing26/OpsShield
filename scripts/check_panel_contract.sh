@@ -66,5 +66,49 @@ echo "$EXPOSURE" | grep -q "prometheus" || {
 grep -qF "esc(ev.sub)" "$HTML" || {
   echo "FAIL: 面板事件流的 ev.sub 未经 esc() 转义（innerHTML 拼接 → 注入面）"; fail=1; }
 
-if [ $fail -eq 0 ]; then echo "OK：面板契约六层一致（路径/指标→面板/面板→指标/state 键集/actuator 暴露面/ev.sub 转义）"; fi
+
+# 层 7：copilot / auth 路径字面量必须存在于对应 Controller 的映射上。
+# 层 1 只查了 admin：/chat/stream 或 /coverage 改名时面板不会报错、只会永远 404——
+# 这是「面板静默失明」的另一半（2026-10-26 审查记为门闩盲区，#33）。
+copilot_map=$(grep -hoE '@(Get|Post)Mapping\((value = )?"[^"]+"' \
+  src/main/java/com/opspilot/gateway/CopilotController.java \
+  src/main/java/com/opspilot/gateway/CoverageController.java \
+  src/main/java/com/opspilot/gateway/FeedbackController.java \
+  src/main/java/com/opspilot/gateway/SearchController.java \
+  | sed -E 's/.*"([^"]+)"/\/api\/v1\/copilot\1/' | sort -u || true)
+copilot_paths=$(grep -oE "/api/v1/copilot/[a-z/-]+" "$HTML" | sort -u || true)
+for p in $copilot_paths; do
+  echo "$copilot_map" | grep -qx "$p" || { echo "FAIL: 面板 fetch 的 copilot 路径无后端映射: $p"; fail=1; }
+done
+auth_map=$(grep -hoE '@(Get|Post)Mapping\((value = )?"[^"]+"' \
+  src/main/java/com/opspilot/gateway/AuthController.java \
+  | sed -E 's/.*"([^"]+)"/\/api\/v1\/auth\1/' | sort -u || true)
+auth_paths=$(grep -oE "/api/v1/auth/[a-z/-]+" "$HTML" | sort -u || true)
+for p in $auth_paths; do
+  echo "$auth_map" | grep -qx "$p" || { echo "FAIL: 面板 fetch 的 auth 路径无后端映射: $p"; fail=1; }
+done
+
+# 层 8：SSE 帧名与 done 帧键必须两端一致（SseEvents 发 / 面板读）。
+# 帧键漂移不会 404，也不会抛错——面板只是永远拿不到那一段（例如 near_miss 改名后拒答导航消失）。
+SSE=src/main/java/com/opspilot/gateway/SseEvents.java
+sse_events=$(grep -oE 'trySend\(emitter, "[a-z_]+"' "$SSE" | sed -E 's/.*"([a-z_]+)"/\1/' | sort -u || true)
+for e in $sse_events; do
+  grep -qF "ev === '$e'" "$HTML" || { echo "FAIL: 面板未处理 SSE 事件: $e"; fail=1; }
+done
+done_keys=$(grep -oE 'done\.put\("[a-z_]+"' "$SSE" | sed -E 's/.*"([a-z_]+)"/\1/' | sort -u || true)
+for k in $done_keys; do
+  grep -qF "d.$k" "$HTML" || { echo "FAIL: done 帧键未被面板消费: $k"; fail=1; }
+done
+
+# 层 9：面板发出的 /chat/stream 请求体字段 ⊆ ChatRequest 字段。
+# 发一个后端已删的键不会 400（Jackson 默认忽略未知字段），只会静默丢掉那个语义（如 source）。
+DTO=src/main/java/com/opspilot/gateway/dto/ChatRequest.java
+dto_fields=$(sed -n '/public record ChatRequest(/,/^) *{/p' "$DTO" | grep -oE 'String [a-zA-Z0-9]+' | sed 's/String //' | sort -u || true)
+body_json=$(grep -oE 'JSON.stringify\(\{[^}]*\}\)' "$HTML" | grep -F 'query' | head -1 || true)
+body_keys=$(echo "$body_json" | grep -oE '[a-zA-Z_]+:' | tr -d ':' | sort -u || true)
+for k in $body_keys; do
+  echo "$dto_fields" | grep -qx "$k" || { echo "FAIL: 面板请求体字段不在 ChatRequest 里: $k"; fail=1; }
+done
+
+if [ $fail -eq 0 ]; then echo "OK：面板契约九层一致（路径 admin+copilot+auth / 指标双向 / state 键集 / actuator 暴露面 / ev.sub 转义 / SSE 帧 / 请求体字段）"; fi
 exit $fail

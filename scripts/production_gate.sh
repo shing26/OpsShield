@@ -81,6 +81,16 @@ static_ok "回滚目标校验"                       scripts/rollback.sh "回滚
 static_ok "trivy"                              .github/workflows/ci.yml "SCA 扫描（G1）"
 static_ok "Spring_Boot-3.5.14"                 README.md "受支持 Boot 版本（G1）"
 
+
+# ---------- 1.5 仓库卫生（#36） ----------
+# JVM 崩溃日志/回放日志与 H2 崩溃残留（*.trace.db）既不该进版本库，也不该躺在仓库根目录/数据目录。
+# repo-map 的自纠记录明确写过「根目录只留入口」——这类文件上次就是靠人眼发现的。
+clutter=$(ls -1 hs_err_pid*.log replay_pid*.log data/*.trace.db 2>/dev/null | tr '\n' ' ' || true)
+if [ -n "$clutter" ]; then
+  bad "仓库卫生：残留崩溃/回放/跟踪文件（$clutter）——见 .gitignore 与 docs/repo-map.md"
+else
+  ok "静态：根目录与 data/ 无崩溃/回放/跟踪残留（#36）"
+fi
 for f in scripts/*.sh; do
   if bash -n "$f"; then ok "shell 语法：$f"; else bad "shell 语法：$f"; fi
 done
