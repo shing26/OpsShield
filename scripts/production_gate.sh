@@ -79,8 +79,18 @@ static_ok "G1 发布 smoke"                     scripts/smoke.sh "发布 smoke �
 static_ok "sha256"                             scripts/release.sh "发布 manifest（G1）"
 static_ok "回滚目标校验"                       scripts/rollback.sh "回滚脚本（G1）"
 static_ok "trivy"                              .github/workflows/ci.yml "SCA 扫描（G1）"
-static_ok "Spring_Boot-3.5.7"                  README.md "受支持 Boot 版本（G1）"
+static_ok "Spring_Boot-3.5.14"                 README.md "受支持 Boot 版本（G1）"
 
+
+# ---------- 1.5 仓库卫生（#36） ----------
+# JVM 崩溃日志/回放日志与 H2 崩溃残留（*.trace.db）既不该进版本库，也不该躺在仓库根目录/数据目录。
+# repo-map 的自纠记录明确写过「根目录只留入口」——这类文件上次就是靠人眼发现的。
+clutter=$(ls -1 hs_err_pid*.log replay_pid*.log data/*.trace.db 2>/dev/null | tr '\n' ' ' || true)
+if [ -n "$clutter" ]; then
+  bad "仓库卫生：残留崩溃/回放/跟踪文件（$clutter）——见 .gitignore 与 docs/repo-map.md"
+else
+  ok "静态：根目录与 data/ 无崩溃/回放/跟踪残留（#36）"
+fi
 for f in scripts/*.sh; do
   if bash -n "$f"; then ok "shell 语法：$f"; else bad "shell 语法：$f"; fi
 done
@@ -98,6 +108,18 @@ if bash scripts/check_panel_contract.sh >/dev/null 2>&1; then ok "面板契约";
 if (cd offline && "$PY" provenance.py --check >/dev/null 2>&1); then ok "报告↔语料同代"; else bad "provenance --check"; fi
 if (cd offline && "$PY" doc_numbers.py --check >/dev/null 2>&1); then ok "文档数字↔产物"; else bad "doc_numbers --check"; fi
 if "$PY" scripts/check_public_copy.py --check >/dev/null 2>&1; then ok "对外用词门闩"; else bad "check_public_copy --check"; fi
+
+# L1 审计链 WORM 完整性（盲点 6）：配了 WORM 目录就强制逐条对账；未配则显式 SKIP——
+# 生产环境必须配置（审计链断层 = 事后无法回放），开发机没有 WORM 属正常。
+if [ -n "${OPSPILOT_WORM_DIR:-}" ]; then
+  if "$PY" scripts/l1_worm_gate.py --worm-dir "$OPSPILOT_WORM_DIR" >/dev/null 2>&1; then
+    ok "L1 WORM 完整性"
+  else
+    bad "L1 WORM 完整性（scripts/l1_worm_gate.py --worm-dir $OPSPILOT_WORM_DIR）"
+  fi
+else
+  warn "L1 WORM 完整性：未配置 OPSPILOT_WORM_DIR（生产必须配置）"
+fi
 
 # ---------- 3. 备份新鲜度（G0 允许"从未记录"仅告警；G1 full 必须红） ----------
 "$PY" scripts/check_backup_age.py

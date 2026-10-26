@@ -1,0 +1,21 @@
+# Trivy 豁免（2026-10-23，G1 门禁 8）
+#
+# 这些 CVE 的修复版本只在 Spring Framework 7.0.9 / Spring Data 4.0.6 线；
+# 本项目当前是 Spring Boot 3.5.14（Spring Framework 6.2.19 / Spring Data 3.5.11）。
+# 直接跨大版本升级会破坏 Boot 3.5 的兼容性，故在当前补丁线记录风险接受，
+# 迁移到 Boot 4 / Spring 7 时删除对应行。
+#
+# 复核触发条件：升级 Boot 大版本、引入 XSLT/View 渲染、引入 Spring Data Repository、
+# 或 12 个月到期（2027-10-23）——任一发生必须重新评估。
+#
+# CVE-2026-47884 / CVE-2026-47890：Spring MVC 的 XsltView / view fragment 路径；
+# 本服务控制器只返回 JSON 与原始 SSE（SseEmitter / OpenAiChatSink），不使用 XSLT View，
+# 也没有用户可控的 view name。补偿控制：无 XML/XSLT 端点、入参白名单、安全响应头。
+CVE-2026-47884
+CVE-2026-47890
+#
+# CVE-2026-41695 / CVE-2026-41716：Spring Data Commons 的 property path / cache DoS；
+# 本服务用 JdbcTemplate，不暴露 Spring Data Repository，也不接受用户 property path。
+# 补偿控制：无 Repository 端点、查询参数长度/格式校验、准入限流。
+CVE-2026-41695
+CVE-2026-41716

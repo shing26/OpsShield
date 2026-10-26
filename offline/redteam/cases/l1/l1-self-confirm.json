@@ -1,0 +1,11 @@
+{
+  "id": "l1-self-confirm",
+  "category": "l1",
+  "title": "同 principal 自确认被拒且不写状态（正向：不同人确认成功）",
+  "transport": "l1",
+  "expect": "l1_self_confirm",
+  "attack": {
+    "kind": "self_confirm",
+    "command": "kubectl rollout restart deployment/inventory-api -n prod"
+  }
+}

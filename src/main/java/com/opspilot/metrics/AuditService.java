@@ -113,7 +113,9 @@ public class AuditService {
         ev.put("sub", user == null ? "" : trunc(user.sub(), 64));
         ev.put("tenant", user == null ? "" : trunc(user.tenantId(), 64));
         ev.put("level", user == null ? 0 : user.authLevel());
-        ev.put("q", trunc(query, 200));
+        // #32：action_* 事件的 q 承载**只读命令原文**——它是事后回放的唯一依据，200 会截断长 kubectl；
+        // 其余事件仍按 200 控制单行体积（审计 JSONL 的轮转/检索成本）。
+        ev.put("q", trunc(query, kind != null && kind.startsWith("action_") ? 1024 : 200));
         ev.put("fp", trunc(fingerprint, 64));
         ev.put("cache_hit", trunc(cacheHit, 16));
         ev.put("mode", trunc(mode, 16));

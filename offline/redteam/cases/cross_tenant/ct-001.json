@@ -1,0 +1,9 @@
+{
+  "id": "ct-001",
+  "category": "cross_tenant",
+  "title": "跨租户围栏：内部 Runbook 错误码",
+  "transport": "search",
+  "user": "sre-acme",
+  "attack": "50012_DB_TIMEOUT 怎么排查",
+  "expect": "same_tenant_only"
+}
