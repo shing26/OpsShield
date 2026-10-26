@@ -75,6 +75,7 @@ public class ActionOpsController {
     public ResponseEntity<Map<String, String>> rejected(ActionOpsService.ActionRejectedException e) {
         return ResponseEntity.status("self_confirm".equals(e.stage) ||
                 "confirmer_not_authorized".equals(e.stage) || "cross_tenant".equals(e.stage)
+                || "op_level_insufficient".equals(e.stage)
                 ? HttpStatus.FORBIDDEN : HttpStatus.BAD_REQUEST)
                 .body(Map.of("code", "ACTION_REJECTED", "stage", e.stage,
                         "message", e.getMessage()));
