@@ -1,6 +1,6 @@
 package com.opspilot.gateway;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import com.opspilot.auth.UserContext;
 import com.opspilot.common.ClientAbortedException;
 import com.opspilot.action.Action;

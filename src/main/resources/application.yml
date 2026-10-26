@@ -64,7 +64,8 @@ spring:
   autoconfigure:
     exclude:
       - org.redisson.spring.starter.RedissonAutoConfigurationV2
-      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+      - org.redisson.spring.starter.RedissonAutoConfigurationV4
+      - org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration
   data:
     redis:
       host: ${REDIS_HOST:localhost}

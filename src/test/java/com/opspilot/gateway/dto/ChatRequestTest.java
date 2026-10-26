@@ -59,9 +59,10 @@ class ChatRequestTest {
     void jsonWireNameIsCamelCaseAlertId() throws Exception {
         // 与 Spring Boot 自动配置的 ObjectMapper 对齐：默认关闭 FAIL_ON_UNKNOWN_PROPERTIES，
         // 所以发错字段名不是 400，而是**静默忽略**（2026-10-17 live 验收的真实失效方式）。
-        com.fasterxml.jackson.databind.ObjectMapper mapper =
-                new com.fasterxml.jackson.databind.ObjectMapper()
-                        .disable(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+        // Jackson 3（Boot 4）：ObjectMapper 不支持链式 disable，特性走 builder。
+        tools.jackson.databind.ObjectMapper mapper = tools.jackson.databind.json.JsonMapper.builder()
+                .disable(tools.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+                .build();
         ChatRequest camel = mapper.readValue(
                 "{\"query\":\"q\",\"source\":\"alert\",\"service\":\"opspilot\",\"env\":\"local\","
                         + "\"alertId\":\"c817f438192dbb63f17859b36e149f81\"}", ChatRequest.class);

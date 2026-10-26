@@ -79,7 +79,7 @@ static_ok "G1 发布 smoke"                     scripts/smoke.sh "发布 smoke �
 static_ok "sha256"                             scripts/release.sh "发布 manifest（G1）"
 static_ok "回滚目标校验"                       scripts/rollback.sh "回滚脚本（G1）"
 static_ok "trivy"                              .github/workflows/ci.yml "SCA 扫描（G1）"
-static_ok "Spring_Boot-3.5.14"                 README.md "受支持 Boot 版本（G1）"
+static_ok "Spring_Boot-4.1.1"                 README.md "受支持 Boot 版本（G1）"
 
 
 # ---------- 1.5 仓库卫生（#36） ----------

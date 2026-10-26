@@ -4,12 +4,13 @@ import com.opspilot.config.OpsDeployProperties;
 import com.opspilot.config.OpsPilotProperties;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.actuate.autoconfigure.availability.AvailabilityProbesAutoConfiguration;
-import org.springframework.boot.actuate.autoconfigure.health.HealthContributorAutoConfiguration;
-import org.springframework.boot.actuate.autoconfigure.health.HealthEndpointAutoConfiguration;
-import org.springframework.boot.actuate.health.HealthContributorRegistry;
-import org.springframework.boot.actuate.health.HealthEndpointGroup;
-import org.springframework.boot.actuate.health.HealthEndpointGroups;
+import org.springframework.boot.health.autoconfigure.actuate.endpoint.AvailabilityProbesAutoConfiguration;
+import org.springframework.boot.health.autoconfigure.contributor.HealthContributorAutoConfiguration;
+import org.springframework.boot.health.autoconfigure.actuate.endpoint.HealthEndpointAutoConfiguration;
+import org.springframework.boot.health.autoconfigure.registry.HealthContributorRegistryAutoConfiguration;
+import org.springframework.boot.health.registry.HealthContributorRegistry;
+import org.springframework.boot.health.actuate.endpoint.HealthEndpointGroup;
+import org.springframework.boot.health.actuate.endpoint.HealthEndpointGroups;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.autoconfigure.availability.ApplicationAvailabilityAutoConfiguration;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -58,6 +59,7 @@ class HealthGroupsContextTest {
                 .withConfiguration(AutoConfigurations.of(
                         ApplicationAvailabilityAutoConfiguration.class,
                         AvailabilityProbesAutoConfiguration.class,
+                        HealthContributorRegistryAutoConfiguration.class,
                         HealthContributorAutoConfiguration.class,
                         HealthEndpointAutoConfiguration.class))
                 .withUserConfiguration(HealthCheckConfig.class)
@@ -105,6 +107,7 @@ class HealthGroupsContextTest {
                 .withConfiguration(AutoConfigurations.of(
                         ApplicationAvailabilityAutoConfiguration.class,
                         AvailabilityProbesAutoConfiguration.class,
+                        HealthContributorRegistryAutoConfiguration.class,
                         HealthContributorAutoConfiguration.class,
                         HealthEndpointAutoConfiguration.class))
                 .withUserConfiguration(HealthCheckConfig.class)
@@ -117,8 +120,8 @@ class HealthGroupsContextTest {
                 .run(ctx -> {
                     assertThat(ctx).hasNotFailed();
                     var db = ctx.getBean(HealthContributorRegistry.class).getContributor("db");
-                    assertThat(db).isInstanceOf(org.springframework.boot.actuate.health.HealthIndicator.class);
-                    var health = ((org.springframework.boot.actuate.health.HealthIndicator) db).health();
+                    assertThat(db).isInstanceOf(org.springframework.boot.health.contributor.HealthIndicator.class);
+                    var health = ((org.springframework.boot.health.contributor.HealthIndicator) db).health();
                     assertThat(health.getDetails().get("detail")).isEqualTo("SELECT 1 ok");
                 });
     }

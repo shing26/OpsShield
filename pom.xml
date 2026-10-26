@@ -23,13 +23,6 @@
     <elasticsearch.version>8.14.3</elasticsearch.version>
     <qdrant.version>1.12.0</qdrant.version>
     <jjwt.version>0.13.0</jjwt.version>
-    <!-- SCA 修复覆盖（2026-10-23）：Boot 3.5.14 管理的版本仍被 Trivy 判 HIGH/CRITICAL。
-         这些是同一主版本的补丁升级，不放宽大版本；Spring 7 专属的 CVE 逐条走豁免。 -->
-    <tomcat.version>10.1.59</tomcat.version>
-    <spring-framework.version>6.2.19</spring-framework.version>
-    <micrometer.version>1.15.12</micrometer.version>
-    <netty.version>4.1.137.Final</netty.version>
-    <jackson-bom.version>2.22.3</jackson-bom.version>
   </properties>
 
   <dependencyManagement>
@@ -80,13 +73,18 @@
       <!-- compile：UserAdminCli 的 Restore 工具与网关 JDBC 都需要；fat jar 照常携带 -->
     </dependency>
     <!-- G1（2026-10-22）：schema 版本化。此前 CREATE TABLE IF NOT EXISTS 只能保证"表在"，
-         无法回答"这库是哪一版"；加列/回滚/演练库对账都没有事实源。Flyway 10 的 H2 支持
-         仍在 flyway-core 内（已从 jar 的 internal/database/h2 核实），无需额外拆件。 -->
+         无法回答"这库是哪一版"；加列/回滚/演练库对账都没有事实源。
+         Boot 4 迁移（#8）：Flyway 12 把 H2 支持拆到 flyway-database-h2，且自动装配
+         在独立模块 spring-boot-flyway（starter-jdbc 不再传递）——两者都要显式引入，
+         否则启动期静默不迁移，表全缺（实测 ACTION_OPS not found）。 -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-flyway</artifactId>
+    </dependency>
     <dependency>
       <groupId>org.flywaydb</groupId>
       <artifactId>flyway-core</artifactId>
     </dependency>
-
     <dependency>
       <groupId>org.springframework.security</groupId>
       <artifactId>spring-security-crypto</artifactId>

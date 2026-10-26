@@ -112,9 +112,9 @@ class SseEventsTest {
         // 而系统无法保证那几段不是别的故障的手册。故在此序列化后钉住键集。
         String json;
         try {
-            json = new com.fasterxml.jackson.databind.ObjectMapper()
+            json = new tools.jackson.databind.ObjectMapper()
                     .writeValueAsString(miss.payloads.get(0).get("near_miss"));
-        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+        } catch (tools.jackson.core.JacksonException e) {
             throw new AssertionError("near_miss 必须可序列化", e);
         }
         assertEquals("[{\"service\":\"order-service\",\"errorCodes\":[\"50141_CONNECTION_POOL_EXHAUSTED\"]}]",

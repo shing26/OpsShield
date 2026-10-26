@@ -140,7 +140,7 @@ class GlobalExceptionHandlerTest {
     void missingStaticResourceIs404WithoutAudit() throws Exception {
         MockHttpServletRequest req = new MockHttpServletRequest("GET", "/favicon.ico");
         MockHttpServletResponse r = new MockHttpServletResponse();
-        handler.onNoResource(new NoResourceFoundException(HttpMethod.GET, "favicon.ico"), req, r);
+        handler.onNoResource(new NoResourceFoundException(HttpMethod.GET, "favicon.ico", "No static resource favicon.ico."), req, r);
         assertEquals(404, r.getStatus());
         assertTrue(r.getContentAsString().contains("NOT_FOUND"));
         verifyNoInteractions(audit);

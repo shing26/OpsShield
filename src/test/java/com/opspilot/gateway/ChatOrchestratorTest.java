@@ -366,7 +366,7 @@ class ChatOrchestratorTest {
     /** 绊线（fail-closed 纵深防御）：即便未来又出现别的路由把跨租户载荷送进 replay，也必须拒回放。 */
     @Test
     void replayRejectsForeignTenantPayload() throws Exception {
-        String json = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(
+        String json = new tools.jackson.databind.ObjectMapper().writeValueAsString(
                 new AnswerPayload("INTERNAL-SECRET", List.of(
                         new AnswerPayload.Ref("rb-001::s1", "面包屑", "svc")), List.of(),
                         "hybrid", false, 3, "tenant-internal", false, List.of()));
@@ -449,7 +449,7 @@ class ChatOrchestratorTest {
         // 同租户 dedup 回放（另一请求）：审计行携带 src_tenant=载荷租户
         RecordingSink follower = new RecordingSink();
         orchestrator.replay(follower,
-                new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(
+                new tools.jackson.databind.ObjectMapper().writeValueAsString(
                         new AnswerPayload("OK", List.of(), List.of(), "hybrid", true, 3, "tenant-internal",
                                 false, List.of())),
                 "L1", false, "fp1", System.nanoTime(), INTERNAL, q(), "sse", "manual");
@@ -515,7 +515,7 @@ class ChatOrchestratorTest {
      */
     @Test
     void sameAlertIdWithDifferentMessageHitsL1Replay() throws Exception {
-        String cached = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(
+        String cached = new tools.jackson.databind.ObjectMapper().writeValueAsString(
                 new AnswerPayload("缓存答案：上游限流处置", List.of(), List.of(),
                         "hybrid", true, 3, "tenant-internal", false, List.of()));
         when(l1.get("tenant-internal", 3, "fp-alert")).thenReturn(cached);
@@ -639,7 +639,7 @@ class ChatOrchestratorTest {
     @Test
     void cachedRefusalReplayKeepsAuditSemantics() throws Exception {
         // 载荷 = 拒答分支真实写进 L1 的形状：maxAuthLevel=0、refused=true
-        String json = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(
+        String json = new tools.jackson.databind.ObjectMapper().writeValueAsString(
                 new AnswerPayload("当前知识库无足够相关的参考（检索置信度不足），无法可靠作答。",
                         List.of(), List.of(), "hybrid", false, 0, "tenant-internal", true, List.of()));
         RecordingSink sink = new RecordingSink();
