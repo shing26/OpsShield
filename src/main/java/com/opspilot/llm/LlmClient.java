@@ -1,7 +1,7 @@
 package com.opspilot.llm;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import com.opspilot.common.ClientAbortedException;
 import com.opspilot.metrics.OpsMetrics;
 import java.io.BufferedReader;

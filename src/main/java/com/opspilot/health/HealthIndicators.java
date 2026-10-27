@@ -2,8 +2,8 @@ package com.opspilot.health;
 
 import com.opspilot.config.OpsDeployProperties;
 import com.opspilot.config.OpsPilotProperties;
-import org.springframework.boot.actuate.health.Health;
-import org.springframework.boot.actuate.health.HealthIndicator;
+import org.springframework.boot.health.contributor.Health;
+import org.springframework.boot.health.contributor.HealthIndicator;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**

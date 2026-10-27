@@ -1,7 +1,7 @@
 package com.opspilot.ingest;
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import io.qdrant.client.QdrantClient;
 import io.qdrant.client.grpc.Collections;
 import io.qdrant.client.grpc.Points;
@@ -74,8 +74,10 @@ public class IngestionRunner implements ApplicationRunner, InitializingBean {
     private final EmbeddingClient embedding;
     private final OpsPilotProperties props;
     private final L2SemanticCacheService l2;
-    private final ObjectMapper mapper = new ObjectMapper()
-            .setPropertyNamingStrategy(com.fasterxml.jackson.databind.PropertyNamingStrategies.SNAKE_CASE);
+    // Jackson 3（Boot 4，#8）：ObjectMapper.setPropertyNamingStrategy 已移除，改名策略走 builder。
+    private final ObjectMapper mapper = tools.jackson.databind.json.JsonMapper.builder()
+            .propertyNamingStrategy(tools.jackson.databind.PropertyNamingStrategies.SNAKE_CASE)
+            .build();
     private final String chunksPath;
     private final AtomicBoolean busy = new AtomicBoolean(false);
     private final AtomicReference<String> lastResult = new AtomicReference<>("never");

@@ -30,7 +30,7 @@ class OpenAiErrorAdviceTest {
     @Test
     void malformedBodyIsAuditedAsInvalid() throws Exception {
         MockHttpServletResponse resp = new MockHttpServletResponse();
-        advice.unreadable(new HttpMessageNotReadableException("boom"), req(), resp);
+        advice.unreadable(new HttpMessageNotReadableException("boom", (org.springframework.http.HttpInputMessage) null), req(), resp);
 
         assertEquals(400, resp.getStatus());
         verify(audit, timeout(1_000)).logInvalid(isNull(), eq("/v1/chat/completions"), anyString());

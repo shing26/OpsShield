@@ -2,7 +2,7 @@ package com.opspilot.gateway;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import com.opspilot.gateway.dto.AnswerPayload;
 import java.io.IOException;
 import java.io.UncheckedIOException;
