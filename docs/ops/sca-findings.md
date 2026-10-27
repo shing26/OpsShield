@@ -68,11 +68,28 @@
 | CVE-2026-41695 | Spring Data Commons | 3.5.12 未上 Maven Central；4.0.6 需 Boot 4 | 无 Spring Data Repository、无用户 property path；查询参数校验 + 准入限流 |
 | CVE-2026-41716 | Spring Data Commons | 同上 | 同上 |
 
+## Boot 4 重基线（2026-10-27）
+
+> 数据源：PR [#51](https://github.com/shing26/OpsShield/pull/51) 的 Trivy SBOM artifact（Spring Boot 4.1.1 初始状态）。
+> 初始 13 条 HIGH/CRITICAL（3 CRITICAL + 10 HIGH），全部为**同主版本补丁缺失**，无跨大版本豁免需求。
+
+| CVE | 严重度 | 组件 | Boot 4 默认 | 修复版本 | 处置 |
+|---|---|---|---|---|---|
+| CVE-2026-65182 / 65905 / 68525 | CRITICAL | `org.apache.tomcat.embed:tomcat-embed-core` | 11.0.24 | **11.0.25** | pom: `tomcat.version` |
+| CVE-2026-89407 / 89425 | HIGH | `com.fasterxml.jackson.core:jackson-core` | 2.21.5 | **2.22.3** | pom: `jackson-2-bom.version` |
+| CVE-2026-68497 / 91776 / 91777 | HIGH | `com.fasterxml.jackson.core:jackson-databind` | 2.21.5 | **2.22.3** | pom: `jackson-2-bom.version` |
+| CVE-2026-89407 / 89425 | HIGH | `tools.jackson.core:jackson-core` | 3.1.5 | **3.2.3** | pom: `jackson-bom.version` |
+| CVE-2026-68497 / 91776 / 91777 | HIGH | `tools.jackson.core:jackson-databind` | 3.1.5 | **3.2.3** | pom: `jackson-bom.version` |
+
+结果：CI `security` job success，artifact 中 HIGH/CRITICAL = 0；`.trivyignore` 清空
+（Boot 3 时代的 4 条 Spring 7 / Spring Data 4 豁免在新基线下已不再需要）。
+迁移前后测试均为 424 绿，冒烟见 PR #51 描述。
+
 ## 复核触发条件
 
-- 升级 Spring Boot 4 / Spring Framework 7：立即删除 `.trivyignore` 中对应项并重跑 CI；
+- ~~升级 Spring Boot 4 / Spring Framework 7：立即删除 `.trivyignore` 中对应项并重跑 CI~~ ✅ 2026-10-27 已完成（见上节）；
 - 引入 XSLT/View 渲染、Spring Data Repository、或暴露 property path 参数：重新评估；
-- 到期日：**2027-10-23**；到期前必须重跑 Trivy 并更新本矩阵。
+- 到期日：**2027-10-27**（Boot 4 重基线顺延）；到期前必须重跑 Trivy 并更新本矩阵。
 
 ## 验证
 

@@ -127,7 +127,7 @@ Java 21 虚拟线程 · ES 倒排 + Qdrant 向量双路召回（RRF 融合）· 
 | 优雅停机与发布回滚 | **Ubuntu 24.04 VM systemd 真实停服/换 jar/回滚已通过**：current→v-prev→current，readiness UP，`/state.build.commit` 与 manifest 对齐（969e137/65cc9b3） | 5 |
 | 准入控制 | 全局+租户两级许可、429+Retry-After、admission_rejected 计数已落地（[ADR-0026](docs/adr/0026-admission-control-and-degradation-scope.md)）；**live 20 并发 10s**：4×200/80×429/0×5xx，另一租户 1×200/0×429；样本短，缺 20–30 条对照与长窗口（门禁 6） | 6 |
 | 延迟分位与 SLO 测量 | TTFT/请求 Timer、SLO burn-rate 规则已落地；**已用 live 样本生成 [SLO 样本报告](docs/ops/slo-sample-2026-10-23.md)**（0×5xx、TTFT P95 18.1s）；缺 30 天连续流量与月报（门禁 7） | 7 |
-| 依赖支持窗口 | Spring Boot 4.1.1、Flyway、CycloneDX SBOM 已落地；Trivy 基线随本次大版本迁移重跑（矩阵见 [sca-findings.md](docs/ops/sca-findings.md)） | 8 |
+| 依赖支持窗口 | Spring Boot 4.1.1、Flyway、CycloneDX SBOM 已落地；Trivy：Boot 4 重基线 13→0（Tomcat/Jackson 同主版本补丁；豁免全部移除，矩阵见 [sca-findings.md](docs/ops/sca-findings.md)） | 8 |
 | 审计留存与防篡改 | 2GB 上限/180 天/异步落盘 + SHA-256 链 + `verify_audit_chain.py` 已落地；**本地 MinIO Object Lock 已验**（COMPLIANCE 180d、版本删除被拒、副本验链 PASS）；**用户已确认接受“本地对象锁，非异地”口径** | 9 |
 | 值班 5 分钟动作 | [docs/ops/runbook.md](docs/ops/runbook.md) 已拆三症状；**A/B/C 均已本地实演**：登录 500→恢复、网关停→重启、L2→L0；生产 systemd 形态仍需目标机复跑 | 10 |
 
