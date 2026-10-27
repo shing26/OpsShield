@@ -55,9 +55,10 @@ public class StoreConfig {
             @Value("${spring.data.redis.port:6379}") int port,
             @Value("${spring.data.redis.password:}") String password) {
         Config cfg = new Config();
-        cfg.useSingleServer()
-                .setAddress("redis://" + host + ":" + port)
-                .setPassword(password == null || password.isBlank() ? null : password);
+        // Redisson 4.8：per-connection 的 setPassword 已弃用（启动打印 "password setting is deprecated"），
+        // 统一改到 Config 级设置；语义等价（单连接形态下两者都作用于唯一 server 配置）。
+        cfg.setPassword(password == null || password.isBlank() ? null : password);
+        cfg.useSingleServer().setAddress("redis://" + host + ":" + port);
         try {
             RedissonClient client = Redisson.create(cfg);
             log.info("storage=live：Redis 已连接 {}:{}", host, port);

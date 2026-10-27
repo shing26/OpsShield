@@ -145,7 +145,7 @@ def build_verdicts(bench: dict, thresholds: dict,
 
 
 def aggregate(eval_report: dict, gate_matrix: dict, admission: dict,
-              thresholds: dict, commit: str) -> dict:
+              thresholds: dict, commit: str, thresholds_source: str = "benchmark_thresholds.json") -> dict:
     matrix_by_threshold = {str(row["threshold"]): row for row in gate_matrix["matrix"]}
     gate_row = matrix_by_threshold.get(str(GATE_THRESHOLD))
     if gate_row is None:
@@ -158,6 +158,7 @@ def aggregate(eval_report: dict, gate_matrix: dict, admission: dict,
         "safety": {"jailbreak": eval_report["jailbreak"]},
         "gate_matrix": matrix_by_threshold,
         "admission": admission,
+        "thresholds_source": thresholds_source,
     }
     embedding = (eval_report.get("backend") or {}).get("embedding", "")
     live_rerank = embedding.startswith("dashscope:")
@@ -170,7 +171,7 @@ def aggregate(eval_report: dict, gate_matrix: dict, admission: dict,
 def render_md(bench: dict) -> str:
     lines = ["# OpsShield 评测基准报告", "",
              f"> commit {bench['commit']} ｜ 生成于 {bench['generated_at']} ｜ "
-             f"后端 embedding={bench['backend']['embedding']}（阈值按 mock 校准）",
+             f"后端 embedding={bench['backend']['embedding']}（阈值基线 {bench.get('thresholds_source', 'benchmark_thresholds.json')}）",
              f"> 总判定：**{'PASS' if bench['pass'] else 'FAIL'}**"
              f"（{sum(1 for x in bench['verdicts'] if x['pass'])}/{len(bench['verdicts'])} 判据通过）", "",
              "## 检索质量（golden 集 HitRate/MRR）", "",
@@ -198,7 +199,8 @@ def render_md(bench: dict) -> str:
         lines.append(f"| {v['check']} | {v['observed']} | {v['threshold']} "
                      f"| {'PASS' if v['pass'] else 'FAIL'} |")
     lines += ["", "> 复现：bash scripts/benchmark.sh（起 memory/mock 栈 + 播种账号 + 全流程）。"
-              "阈值基线见 offline/eval/benchmark_thresholds.json，按 mock 实测校准。"]
+              "mock 阈值见 offline/eval/benchmark_thresholds.json；live 阈值见 "
+              "offline/eval/benchmark_thresholds_live.json（语义/门控判据只在 live 后端起判）。"]
     return "\n".join(lines)
 
 
@@ -224,7 +226,8 @@ def main() -> int:
     print(f"[benchmark] 准入探针 burst={a.burst} -> {base}", file=sys.stderr)
     admission = run_admission_probe(base, localapi.ACCOUNTS["sre_l3"], password, burst=a.burst)
 
-    bench = aggregate(eval_report, gate_matrix, admission, thresholds, git_commit())
+    bench = aggregate(eval_report, gate_matrix, admission, thresholds, git_commit(),
+                      thresholds_source=Path(a.thresholds).name)
     for path, text in ((Path(a.out_json), json.dumps(bench, ensure_ascii=False, indent=2)),
                        (Path(a.out_md), render_md(bench))):
         with open(path, "w", encoding="utf-8", newline="\n") as fh:

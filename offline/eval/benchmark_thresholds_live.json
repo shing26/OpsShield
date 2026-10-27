@@ -1,0 +1,32 @@
+{
+  "_comment": "live 评测基准阈值（按 2026-10-27 真实 DashScope/gte-rerank-v2 实测校准；mock 基线仍是 benchmark_thresholds.json）。用法：python eval/benchmark.py --thresholds eval/benchmark_thresholds_live.json。语义与门控判据只在 live 后端生效（benchmark.py 按 backend 自动判断）。",
+  "retrieval": {
+    "es_only": {
+      "exact_hit@1": 1,
+      "exact_mrr": 1,
+      "semantic_hit@1": 0.6,
+      "semantic_mrr": 0.7
+    },
+    "vector_only": {
+      "exact_hit@1": 1,
+      "exact_mrr": 1,
+      "semantic_hit@1": 0.8,
+      "semantic_mrr": 0.88
+    },
+    "hybrid": {
+      "exact_hit@1": 1,
+      "exact_mrr": 1,
+      "semantic_hit@1": 0.8,
+      "semantic_mrr": 0.88
+    }
+  },
+  "gate_matrix": {
+    "threshold": 0.2,
+    "false_refusal_rate_max": 0.15,
+    "missed_refusal_rate_max": 0.15
+  },
+  "admission": {
+    "rejected_429_min": 1,
+    "ok_min": 1
+  }
+}

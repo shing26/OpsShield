@@ -96,12 +96,14 @@ OPSPILOT_BASE=http://127.0.0.1:18082 python eval/benchmark.py --burst 12
   - 本仓 alerting profile（prometheus/alertmanager）暂停后已恢复；opspilot 中间件在验证结束后停止；
 - 因此本轮数字是「单机、低堆、无并发背景负载」下的对照，不等于生产容量结论。
 
-## 7. 残余风险
+## 7. 残余风险（已于同日收口）
 
-1. Qdrant/ES 均为单节点、无副本；本轮未测节点故障切换；
-2. 本轮 embedding/rerank 仍是 mock，真实 DashScope 的语义质量与延迟未重测；
-3. Redisson 4.8 的 password 设置 API 告警属清理项（不影响功能）；
-4. benchmark 门禁阈值按 mock 校准，live 数字只用于对照，不替换门禁基线。
+四条风险均已处置并留证，明细见 [2026-10-27-residual-risk-closure.md](2026-10-27-residual-risk-closure.md)（issue [#54](https://github.com/shing26/OpsShield/issues/54)）：
+
+1. ~~单节点无副本、未测故障切换~~ → 新增 `scripts/failover_drill.py`，ES/Qdrant/Redis 三项演练全 PASS（降级无 5xx、恢复自动）；
+2. ~~真实 DashScope 语义/延迟未重测~~ → live 存储 + 真实后端复测：语义 vector/hybrid 88.24%、冷缓存 p50 389ms；
+3. ~~Redisson 4.8 password 告警~~ → `StoreConfig` 改 `Config.setPassword`，启动告警 0 条；
+4. ~~阈值只按 mock 校准~~ → 新增 `benchmark_thresholds_live.json`，live 门禁 18/18 PASS。
 
 ## 8. 复现命令（照抄可跑）
 

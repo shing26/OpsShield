@@ -154,3 +154,51 @@ def test_main_exit_codes(tmp_path, monkeypatch):
     assert benchmark.main() == 1
     md = (reports / "benchmark.md").read_text(encoding="utf-8")
     assert "FAIL" in md and "retrieval.hybrid.exact_hit@1" in md
+
+
+LIVE_THRESHOLDS = REPO / "offline" / "eval" / "benchmark_thresholds_live.json"
+
+
+def full_bench() -> dict:
+    """live 阈值覆盖三种检索模式，判据遍历因此需要完整 bench（good_bench 只有 hybrid）。"""
+    modes = {}
+    for mode in ("es_only", "vector_only", "hybrid"):
+        modes[mode] = {"exact": {"hit@1": 1.0, "hit@3": 1.0, "mrr": 1.0},
+                       "semantic": {"hit@1": 0.88, "hit@3": 1.0, "mrr": 0.93}}
+    b = good_bench()
+    b["retrieval"] = modes
+    return b
+
+
+def test_live_thresholds_file_has_semantic_floors_and_parses():
+    """live 阈值文件必须能被 build_verdicts 直接消费，且带语义/门控判据（#54 ④）。"""
+    data = json.loads(LIVE_THRESHOLDS.read_text(encoding="utf-8"))
+    assert "semantic_hit@1" in data["retrieval"]["vector_only"]
+    assert data["gate_matrix"]["missed_refusal_rate_max"] <= 0.3
+    verdicts = benchmark.build_verdicts(full_bench(), data, live_rerank=True)
+    checks = [v["check"] for v in verdicts]
+    assert "retrieval.hybrid.semantic_hit@1" in checks
+    assert "gate_matrix@0.2.false_refusal_rate" in checks
+    assert all(v["pass"] for v in verdicts), [v for v in verdicts if not v["pass"]]
+
+
+def test_live_semantic_floor_catches_regression():
+    """真实 embedding 下语义 Hit@1 跌破 live 阈值必须 FAIL（否则阈值等于摆设）。"""
+    data = json.loads(LIVE_THRESHOLDS.read_text(encoding="utf-8"))
+    b = full_bench()
+    b["retrieval"]["hybrid"]["semantic"]["hit@1"] = 0.5   # 低于 0.8 的 live 阈值
+    failed = [v["check"] for v in benchmark.build_verdicts(b, data, live_rerank=True)
+              if not v["pass"]]
+    assert failed == ["retrieval.hybrid.semantic_hit@1"], failed
+
+
+def test_aggregate_records_thresholds_source_in_report():
+    """报告必须写明用了哪份阈值基线（mock/live 两套并存后不可混淆）。"""
+    gm = {"matrix": [{"threshold": 0.2, "false_refusal_rate": 0.088,
+                      "missed_refusal_rate": 0.083}]}
+    bench = benchmark.aggregate(eval_report_fixture(), gm, good_bench()["admission"],
+                                THRESHOLDS, "deadbeef",
+                                thresholds_source="benchmark_thresholds_live.json")
+    assert bench["thresholds_source"] == "benchmark_thresholds_live.json"
+    md = benchmark.render_md(bench)
+    assert "benchmark_thresholds_live.json" in md
