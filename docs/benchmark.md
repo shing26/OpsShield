@@ -44,7 +44,9 @@
 ## 口径与边界（诚实声明）
 
 - 语义检索指标依赖 embedding 后端：mock（词法哈希）与 live（DashScope）数字不同，
-  报告里记录 backend 供核对；对外叙事的语义召回引用 **live 实测**（见 README），
-  本基准的回归门禁只锁**后端无关**的判据（精确码检索/越权/准入）与按 mock 校准的阈值；
+  报告里记录 backend 供核对；对外叙事的语义召回引用 **live 实测**（见 README）；
+- **两套阈值并存**：`offline/eval/benchmark_thresholds.json`（mock 基线，CI 默认）与
+  `offline/eval/benchmark_thresholds_live.json`（live 基线，含语义/门控判据）。跑 live 门禁用
+  `--thresholds eval/benchmark_thresholds_live.json`，报告会写明 `thresholds_source`；
 - 门控误拒/漏拒在 mock 口径不判（同上），live 数据在 benchmark.json；
 - 全量降级演练与真实上游 429 在 fault_drill/长窗口压测，本基准不冒充。
