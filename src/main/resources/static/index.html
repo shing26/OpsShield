@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" href="data:,">
-<title>OpsShield · 统一工作台</title>
+<title>OpsShield · 智能运维监控排障工作台</title>
 <!--
   统一工作台（ADR-0021）：一个壳、两个视图，默认视图是排障台。
     · 排障台视图 = 单次请求的协议面证据（实时读 SSE 帧：有 refs/actions/gate，无 max_level/stage_ms）。
@@ -227,6 +227,34 @@
   .ref-item.hl{border-color:var(--accent);background:#16243a}
   .empty{color:var(--muted);font-size:12px;padding:var(--s3) 0}
 
+  /* ---------- 结论卡（产品化第一屏：先给结论，再给证据） ---------- */
+  .verdict{margin:0 0 16px;border:1px solid var(--line);border-left:3px solid var(--accent);
+           border-radius:8px;background:linear-gradient(180deg,var(--surface-2),var(--surface));
+           padding:13px 16px}
+  .verdict.ok{border-left-color:var(--ok)} .verdict.warn{border-left-color:var(--warn)}
+  .verdict.err{border-left-color:var(--err)}
+  .verdict-hd{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .verdict-hd .k{font-size:10.5px;letter-spacing:.10em;color:var(--muted)}
+  .verdict-hd .spacer{flex:1}
+  .verdict-line{margin:8px 0 0;font-size:14px;line-height:1.65;color:var(--txt);word-break:break-word}
+  .verdict-kpis{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+  .vk{display:inline-flex;align-items:baseline;gap:6px;background:var(--bg);
+      border:1px solid var(--line-soft);border-radius:6px;padding:4px 9px;font-size:11px;color:var(--muted)}
+  .vk b{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--txt)}
+  .verdict-sub{margin-top:9px;font-size:11px;color:var(--muted);line-height:1.6}
+
+  /* ---------- 空态引导（排障动线，替代一格灰字） ---------- */
+  .empty-hero{padding:14px 4px 6px;max-width:680px}
+  .empty-hero h2{margin:0 0 8px;font-size:17px;font-weight:600;letter-spacing:.01em}
+  .empty-hero>p{margin:0;color:var(--txt-2);font-size:12.5px;line-height:1.8}
+  .steps{display:grid;gap:8px;margin:16px 0 14px;grid-template-columns:repeat(3,1fr)}
+  .step-card{border:1px solid var(--line-soft);border-radius:8px;background:var(--surface-2);padding:10px 12px}
+  .step-card .no{font-family:var(--mono);font-size:11px;color:var(--accent)}
+  .step-card b{display:block;font-size:12.5px;margin-top:3px}
+  .step-card span{display:block;margin-top:2px;font-size:11px;color:var(--muted);line-height:1.6}
+  .empty-hero .chips{margin-top:6px}
+  .empty-hero .hint{margin-top:10px;font-size:11px;color:var(--muted);line-height:1.6}
+
   /* ---------- 权限隔离演练：底部差集对照表 ---------- */
   .diff{margin-top:20px;border:1px solid var(--line);border-radius:8px;background:var(--surface);overflow:hidden}
   .diff-hd{padding:11px 14px;border-bottom:1px solid var(--line-soft)}
@@ -384,11 +412,22 @@
     .kpi .value{font-size:24px}
     .kpi .foot{min-height:0}
   }
+
+  /* ---------- 移动端可读性下限（#36：图例/脚注 10px 在 390px 屏上过小） ---------- */
+  @media (max-width:600px){
+    .pill,.crumb,.cov-sub,.cov-lab,.cov-list .chip,.ref-item,.ref-item .svc,.sect-t,
+    .railhead span,.copy,.ref-badge,footer,footer span,
+    .fld label,.fld .lbl,.chip,.hintline,.msg,.cov-hd,.cov-hd .sw,.drawer-nums .k,
+    .drawer-nums .d,.verdict-hd .k,.verdict-sub,.vk,.topbar .brand span,#fingerprint,
+    .tabs button,.pillbtn{font-size:12px}
+    .verdict-line{font-size:15px}
+    .steps{grid-template-columns:1fr}
+  }
 </style>
 </head>
 <body>
 <header class="topbar">
-  <div class="brand"><b>OpsShield</b><span>统一工作台</span></div>
+  <div class="brand" title="统一工作台（ADR-0021）：一个壳、两个视图"><b>OpsShield</b><span>智能运维 · 监控排障</span></div>
   <nav class="tabs" role="tablist" aria-label="视图">
     <button id="tab-trouble" class="on" data-view="trouble" role="tab" aria-selected="true"
             aria-controls="v-trouble" tabindex="0">排障台</button>
@@ -796,14 +835,14 @@ function metrics(r) {
   const out = [];
   if (r.meta) {
     const c = r.meta.cache_hit || 'none';
-    out.push('<span class="pill' + (c === 'L1' || c === 'L2' ? ' ok' : '') + '">cache ' + esc(c) + '</span>');
+    out.push('<span class="pill' + (c === 'L1' || c === 'L2' ? ' ok' : '') + '" title="缓存命中：L1 精确命中（按去重键） / L2 语义相似 / none 未命中">cache ' + esc(c) + '</span>');
     const d = r.meta.degradation_level || 'L0';
-    out.push('<span class="pill' + (d === 'L0' ? ' ok' : ' warn') + '">' + esc(d) + '</span>');
+    out.push('<span class="pill' + (d === 'L0' ? ' ok' : ' warn') + '" title="降级档位：L0 正常 / L1 少一条检索腿 / L2 熔断直出静态 SOP">' + esc(d) + '</span>');
     // #29：clarify 是零检索/零 LLM 分支，别拿 0ms 的「精排/检索/TTFT」冒充耗时
     if ((r.meta.gate || 'none') !== 'clarify') {
-      out.push('<span class="pill">' + (r.meta.fast_path ? '快路径' : '精排') + '</span>');
+      out.push('<span class="pill" title="快路径=高置信直接作答；精排=经过 rerank 重排">' + (r.meta.fast_path ? '快路径' : '精排') + '</span>');
       if (r.meta.deduplicated) out.push('<span class="pill">去重</span>');
-      out.push('<span class="pill">检索 ' + (r.meta.retrieval_ms | 0) + 'ms</span>');
+      out.push('<span class="pill" title="检索阶段耗时（ES 倒排 + 向量 + RRF 融合，不含生成）">检索 ' + (r.meta.retrieval_ms | 0) + 'ms</span>');
     }
   }
   if (r.ttft != null && !(r.meta && r.meta.gate === 'clarify'))
@@ -869,6 +908,109 @@ function answer(r, k) {
   return html;
 }
 
+/* ==================== 结论卡：先给结论，再给证据 ==================== */
+/* 产品化第一屏（2026-10-27）：证据链不变，但顺序改成"结论 → 影响面 → 依据/动作/耗时 → 证据"。
+   结论行只从答案里取"问题定位"后的第一行（模型输出不可信，不额外生成任何新断言）；
+   拒答/澄清/异常各走自己的文案——不把"没检索"伪装成"没找到"。 */
+function firstLine(r) {
+  const raw = (r && r.answer || '').trim();
+  if (!raw) return '';
+  const lines = raw.split(/\r?\n/).map(x => x.trim()).filter(Boolean);
+  const idx = lines.findIndex(x => /问题定位/.test(x));
+  const pick = idx >= 0
+    ? lines.slice(idx + 1).find(x => x && !/^#{1,6}\s/.test(x))
+    : lines.find(x => x && !/^#{1,6}\s/.test(x) && !/^[-*]\s/.test(x) && !/^\d+[.)]\s/.test(x));
+  return (pick || '').replace(/^[-*>]\s*/, '').replace(/\*\*/g, '')
+    .replace(/\[参考\d+\]/g, '').replace(/（\s*来源\s*[）)]?/g, '').replace(/\(\s*来源\s*\)/g, '')
+    .replace(/\s+/g, ' ').trim().slice(0, 180);
+}
+
+function vk(label, value) {
+  return '<span class="vk">' + esc(label) + '<b>' + esc(String(value)) + '</b></span>';
+}
+
+function verdict(r, k) {
+  if (!r) return '';
+  const g = (r.meta && r.meta.gate) || 'none';
+  const refused = g === 'refuse' || (r.meta && r.meta.refused === true);
+  const clarify = g === 'clarify';
+  const err = r.state === 'error' || !!r.error;
+  const streaming = r.state === 'streaming';
+  const tone = err ? 'err' : (refused ? 'err' : (clarify ? 'warn' : 'ok'));
+  const line = err ? ((r.error && r.error.message) || '链路异常，先看下方错误与已有命令')
+    : clarify ? '这条提问缺少可检索的标识符——补上服务名或错误码后重问，才会有检索与结论。'
+    : refused ? '覆盖范围内没有足够可靠的依据：系统选择拒答，而不是拼一个像答案的东西。'
+    : firstLine(r) || (streaming ? '正在生成结论…' : '本轮已完成，结论见下方诊断分析。');
+  const refsN = (r.refs || []).length;
+  const actsN = (r.actions || []).length;
+  const total = r.ms != null ? r.ms + 'ms' : (streaming ? '…' : '—');
+  const ret = (r.meta && r.meta.retrieval_ms != null && g !== 'clarify')
+    ? (r.meta.retrieval_ms | 0) + 'ms' : '—';
+  const sub = err
+    ? '证据链与命令清单照常展示；错误分类与 request_id 见运行面板与审计。'
+    : clarify
+      ? '未做检索，因此没有引用与命令——这是状态值，不是失败。'
+      : refused
+        ? '拒答是安全信号：下方给出"最接近的标识符"与上报入口，而不是低置信度正文。'
+        : '依据 ' + refsN + ' 条引用' + (actsN ? '、' + actsN + ' 条只读命令' : '')
+          + '；下方「命令清单 → 诊断分析 → 参考来源」可逐项核对。';
+  return '<section class="verdict ' + tone + '" aria-label="结论摘要">'
+    + '<div class="verdict-hd"><span class="k">结论</span>' + badge(r)
+    + (refused ? '<span class="pill warn">拒答</span>' : '')
+    + '<span class="spacer"></span>'
+    + '<button class="copy" data-act="copymd" data-k="' + k + '">复制结论</button></div>'
+    + '<p class="verdict-line">' + esc(line) + '</p>'
+    + '<div class="verdict-kpis">' + vk('依据', refsN + ' 条')
+    + (actsN ? vk('只读命令', actsN + ' 条') : '')
+    + vk('总耗时', total) + vk('检索', ret) + '</div>'
+    + '<div class="verdict-sub">' + sub + '</div>'
+    + '</section>';
+}
+
+/* 复制结论：把这一轮的可核对结论导出成 Markdown（演示/汇报/工单三处复用）。
+   只拼已存在的字段，不重新生成内容——复制出来的每个数字都能在页面上找到。 */
+async function copyVerdict(k, btn) {
+  const r = S[k] && S[k].r;
+  if (!r) return;
+  const g = (r.meta && r.meta.gate) || 'none';
+  const refused = g === 'refuse' || (r.meta && r.meta.refused === true);
+  const status = r.state === 'error' || r.error ? '链路异常'
+    : g === 'clarify' ? '需要补充信息' : refused ? '拒答（未命中可靠依据）' : '完成';
+  const lines = ['## 排障结论（OpsShield）', ''];
+  lines.push('- 提问：' + (r.q || S.q || ''));
+  lines.push('- 状态：' + status);
+  if (r.meta) {
+    lines.push('- 档位：' + (r.meta.degradation_level || 'L0')
+      + ' ｜ 缓存：' + (r.meta.cache_hit || 'none')
+      + ' ｜ 检索：' + ((r.meta.retrieval_ms | 0) + 'ms')
+      + ' ｜ TTFT：' + (r.ttft != null ? r.ttft + 'ms' : '—')
+      + ' ｜ 总耗时：' + (r.ms != null ? r.ms + 'ms' : '—'));
+  }
+  const concl = firstLine(r);
+  if (concl) { lines.push(''); lines.push('**结论**：' + concl); }
+  const acts = r.actions || [];
+  if (acts.length) {
+    lines.push(''); lines.push('### 只读命令（网关不执行）');
+    acts.forEach((a, i) => { lines.push((i + 1) + '. ' + (a.step || '')); lines.push('   ' + (a.command || '')); });
+  }
+  const refs = r.refs || [];
+  if (refs.length) {
+    lines.push(''); lines.push('### 参考来源');
+    refs.forEach((x, i) => { lines.push('[' + (i + 1) + '] ' + (x.chunkId || '?') + (x.service ? ' · ' + x.service : '')); });
+  }
+  if (refused) { lines.push(''); lines.push('> 拒答是安全信号：覆盖范围内无可靠依据，未输出低置信度正文。'); }
+  const text = lines.join('\n');
+  try { await navigator.clipboard.writeText(text); if (btn) btn.textContent = '已复制'; }
+  catch (e) {
+    /* 无 clipboard 权限（非 https/无焦点）时退回 textarea 选中复制 */
+    const ta = document.createElement('textarea');
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); if (btn) btn.textContent = '已复制'; } catch (e2) { if (btn) btn.textContent = '复制失败'; }
+    ta.remove();
+  }
+  setTimeout(() => { if (btn && btn.isConnected) btn.textContent = '复制结论'; }, 1400);
+}
+
 /* ==================== 报告卡（四层黄金视觉流） ==================== */
 /* 拒答导航（ADR-0023 决策 5）：`done` 帧的 `near_miss` 只带 service + errorCodes——给的是
    "下一步该问什么"，不是"低置信度的答案"。把低置信度的 chunk 正文摆出来，用户就会拿它当答案用，
@@ -931,7 +1073,8 @@ function card(k) {
     + '</header>'
     + '<div class="body">'
     +   (r
-        ? '<div class="sect-t">⚡ 只读命令清单 <span class="pill ok">只读 · 网关不执行</span></div>'
+        ? verdict(r, k)
+          + '<div class="sect-t">⚡ 只读命令清单 <span class="pill ok" title="命令从本轮引用原文逐字抽取，网关只读不执行">只读 · 网关不执行</span></div>'
           + contract(r)
           + '<div class="sect-t">📋 诊断分析</div>' + answer(r, k)
           + nearMissBlock(r, k)
@@ -1110,9 +1253,20 @@ function renderCanvas() {
   cv.className = 'canvas' + (compare ? ' compare' : '');
   if (!ra && !(compare && rb)) {
     /* 空态不挂用户名——"还没有结果"的卡上顶着一个身份名，会读成"这个人问过了" */
-    cv.innerHTML = '<div class="card"><div class="body">'
-      + '<div class="empty">还没有结果。在左栏填一条排障输入，或点上面的预设。</div>'
-      + '</div></div>';
+    const examples = (typeof PRESETS !== 'undefined' ? PRESETS : []).slice(0, 3)
+      .map((p, i) => '<button class="chip" data-preset="' + i + '">' + esc(p.label) + '</button>').join('');
+    cv.innerHTML = '<div class="card"><div class="body"><div class="empty-hero">'
+      + '<h2>把一条报错贴进来，先给结论，再给依据</h2>'
+      + '<p>线上突发排障：贴错误码、异常堆栈或一句现象描述，得到「问题定位 + 可核对引用 + 只读命令」。'
+      + '每条结论都能回溯到引用切片；网关只读，不执行任何命令。</p>'
+      + '<div class="steps">'
+      +   '<div class="step-card"><span class="no">01</span><b>贴报错</b><span>错误码 / 堆栈 / 一句现象描述</span></div>'
+      +   '<div class="step-card"><span class="no">02</span><b>看结论</b><span>一句话定位 + 依据与耗时</span></div>'
+      +   '<div class="step-card"><span class="no">03</span><b>拿走动作</b><span>复制只读命令或整段结论</span></div>'
+      + '</div>'
+      + (examples ? '<div class="chips">' + examples + '</div>' : '')
+      + '<div class="hint">还没有结果——点一个示例，或直接在左栏输入。未接入时会先请你接入身份。</div>'
+      + '</div></div></div>';
     $('diff').innerHTML = '';
     return;
   }
@@ -1756,6 +1910,7 @@ document.addEventListener('click', async e => {
     if (act === 'stop') { stopStream(t.dataset.k || 'a'); return; }
     if (act === 'reportgap') { await reportGap(t); return; }
     if (act === 'ask') { await ask(); return; }
+    if (act === 'copymd') { await copyVerdict(t.dataset.k || 'a', t); return; }
     if (act.startsWith('login:')) {
       const k = act.slice(6);
       await login(k);
