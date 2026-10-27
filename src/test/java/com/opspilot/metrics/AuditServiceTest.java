@@ -172,6 +172,22 @@ class AuditServiceTest {
     }
 
     /**
+     * 成果视图（2026-10-27）：审计行携带本轮 refs/actions 条数，面板才能回答
+     * "命中几条依据、能拿走几条只读命令"；未携带（旧调用）时不落字段——"没测"与"测得 0"仍是两件事。
+     */
+    @Test
+    void auditRowCarriesRefsAndActionsCountsOnlyWhenPresent() {
+        AuditService svc = new AuditService();
+        svc.log(U, "chat", "sse", "manual", "q", "fp", "none", "hybrid", false, 3, 12, null, null, 3, 2, null, "L0");
+        svc.log(U, "chat", "sse", "manual", "q2", "fp", "none", "hybrid", false, 3, 9, null, null, null, null);
+        var r = svc.recentSince(0, 10);
+        assertEquals(3, r.events().get(0).get("refs"), "引用条数必须落审计行");
+        assertEquals(2, r.events().get(0).get("actions"), "只读命令条数必须落审计行");
+        assertFalse(r.events().get(1).containsKey("refs"), "旧调用未携带时不得落 refs");
+        assertFalse(r.events().get(1).containsKey("actions"), "旧调用未携带时不得落 actions");
+    }
+
+    /**
      * OP-A5：档位转移事件。`from/to/cause` 三者缺一即不可复核——离线时间线（读 logs/audit.jsonl）
      * 与压测结论都建立在这三个字段上，故锁死形状；`cause` 是有限词表（回归锁随状态机同步更新）。
      */

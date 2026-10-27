@@ -321,7 +321,7 @@ class ChatOrchestratorTest {
         //    本用例的 searchService 是 mock，回报 hybrid；"L1 以 es_only 检索"由上面的断言①锁。
         verify(audit, AUDIT_WAIT).log(eq(INTERNAL), eq("chat"), eq("manual"), anyString(), anyString(), anyString(),
                 eq("none"), anyString(), eq(false), anyInt(), anyLong(), isNull(), isNull(),
-                any(StageTimings.class), eq("L1"));
+                anyInt(), anyInt(), any(StageTimings.class), eq("L1"));
     }
 
     /** P0-1 主案：leader(tenant-internal,L3) 在途时，follower(tenant-acme,L3) 绝不可拿到其答案/引用。 */
@@ -461,7 +461,7 @@ class ChatOrchestratorTest {
                 "非拒答载荷回放：gate 取载荷值（refused=false ∧ mode≠clarify → none）");
         assertEquals(List.of(), follower.nearMiss, "非拒答载荷回放：near_miss 恒空表");
         verify(audit, AUDIT_WAIT).log(eq(INTERNAL), eq("chat"), anyString(), eq("manual"), anyString(), anyString(),
-                eq("L1"), anyString(), eq(false), anyInt(), anyLong(), eq("tenant-internal"), isNull(), isNull(),
+                eq("L1"), anyString(), eq(false), anyInt(), anyLong(), eq("tenant-internal"), isNull(), anyInt(), anyInt(), isNull(),
                 eq("L0"));   // 末位=档位：缓存命中在 L0（cache_hit 的 "L1" 与降级档位是两回事，别读混）
     }
 
@@ -479,7 +479,7 @@ class ChatOrchestratorTest {
         llmGate.countDown();                    // setUp 的 internal 桩阻塞在闸门上，本用例无需跨租户计时
         awaitSuccess(sink);
         verify(audit, AUDIT_WAIT).log(eq(INTERNAL), eq("chat"), eq("sse"), eq("alert"), anyString(), anyString(),
-                eq("none"), anyString(), eq(false), anyInt(), anyLong(), isNull(), isNull(), any(StageTimings.class),
+                eq("none"), anyString(), eq(false), anyInt(), anyLong(), isNull(), isNull(), anyInt(), anyInt(), any(StageTimings.class),
                 eq("L0"));
     }
 
@@ -505,7 +505,7 @@ class ChatOrchestratorTest {
         verify(l1).put(eq("tenant-internal"), eq(3), eq("fp-alert"), anyString());
         verify(audit, AUDIT_WAIT).log(eq(INTERNAL), eq("chat"), eq("sse"), eq("alert"), anyString(),
                 eq("fp-alert"), eq("none"), anyString(), eq(false), anyInt(), anyLong(),
-                isNull(), isNull(), any(StageTimings.class), eq("L0"));
+                isNull(), isNull(), anyInt(), anyInt(), any(StageTimings.class), eq("L0"));
     }
 
     /**
@@ -542,7 +542,7 @@ class ChatOrchestratorTest {
         llmGate.countDown();
         awaitSuccess(sink);
         verify(audit, AUDIT_WAIT).log(eq(INTERNAL), eq("chat"), eq("sse"), eq("manual"), anyString(), anyString(),
-                eq("none"), anyString(), eq(false), anyInt(), anyLong(), isNull(), isNull(), any(StageTimings.class),
+                eq("none"), anyString(), eq(false), anyInt(), anyLong(), isNull(), isNull(), anyInt(), anyInt(), any(StageTimings.class),
                 eq("L0"));
     }
 
@@ -589,7 +589,7 @@ class ChatOrchestratorTest {
 
         verify(audit, AUDIT_WAIT).log(eq(INTERNAL), eq("chat"), eq("sse"), eq("manual"), anyString(), anyString(),
                 eq("none"), anyString(), eq(false), anyInt(), anyLong(), isNull(),
-                argThat((Integer n) -> n != null && n >= 1), any(StageTimings.class), eq("L0"));
+                argThat((Integer n) -> n != null && n >= 1), anyInt(), anyInt(), any(StageTimings.class), eq("L0"));
         Object masked = metrics.snapshot().get("verbatim_masked");
         assertTrue(masked instanceof Number && ((Number) masked).longValue() >= 1,
                 "verbatim_masked 计数未进账: " + metrics.snapshot());
@@ -660,7 +660,7 @@ class ChatOrchestratorTest {
         verify(audit, AUDIT_WAIT).log(eq(INTERNAL), eq("chat"), eq("sse"), eq("manual"), eq("今天天气怎么样"),
                 anyString(), eq("L1"), anyString(), eq(true), eq(0), anyLong(),
                 eq("tenant-internal"),   // src_tenant 随行（回放路径既有特性）：载荷租户=请求者租户
-                isNull(), isNull(), eq("L0"));
+                isNull(), anyInt(), anyInt(), isNull(), eq("L0"));
     }
 
     /**

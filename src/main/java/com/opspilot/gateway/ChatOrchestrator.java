@@ -370,7 +370,7 @@ public class ChatOrchestrator {
                     new TtftTiming(t0, refusalNano), p, AnswerDelivery.STREAMED));
             l1.put(user.tenantId(), user.authLevel(), fp, json);
             audit.log(user, "chat", via, source, query, fp, "none", outcome.mode(), true, 0,
-                    (System.nanoTime() - t0) / 1_000_000, null, null,
+                    (System.nanoTime() - t0) / 1_000_000, null, null, 0, 0,
                     stageTimings(outcome, 0, 0, 0),   // 拒答在 LLM 前 return：llm/l2_store 恒 0（测了且为 0）
                     level.name());
             return json;
@@ -435,6 +435,7 @@ public class ChatOrchestrator {
             long l2EnqueueMs = (System.nanoTime() - l2EnqueueNano) / 1_000_000;
             audit.log(user, "chat", via, source, query, fp, "none", outcome.mode(), false, maxAuth,
                     (System.nanoTime() - t0) / 1_000_000, null, masked > 0 ? masked : null,
+                    refs.size(), actions.size(),
                     stageTimings(outcome, llmTtftMs, llmMs, l2EnqueueMs), level.name());
             return json;
         } catch (ClientAbortedException aborted) {
@@ -564,6 +565,7 @@ public class ChatOrchestrator {
         // grep 不等即可发现任何新的跨租户共享旁路。
         audit.log(user, "chat", via, source, query, fp, cacheHit + (deduplicated ? "+dedup" : ""),
                 p.mode(), p.refused(), p.maxAuthLevel(), (System.nanoTime() - t0) / 1_000_000, p.tenant(), null,
+                p.refs() == null ? 0 : p.refs().size(), p.actionsOrEmpty().size(),
                 null,   // 回放路径：无检索/LLM 分段
                 lvl.name());
     }

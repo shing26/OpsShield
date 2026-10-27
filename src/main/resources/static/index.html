@@ -271,6 +271,40 @@
   table.diff-t tr.diff td.k{box-shadow:inset 3px 0 0 var(--warn)}
   table.diff-t .val{font-family:var(--mono);word-break:break-word}
 
+  /* ---------- 运行面板视图 · 成果视图（2026-10-27 产品化二期） ---------- */
+  .panel-main .pagehead{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;margin:0}
+  .panel-main .pagehead h1{margin:0;font-size:20px;font-weight:600;letter-spacing:.01em}
+  .panel-main .pagehead p{margin:4px 0 0;color:var(--muted);font-size:12px}
+  .panel-main .pagehead .win{margin-left:auto;font-size:11px;color:var(--muted);
+        border:1px solid var(--line-soft);border-radius:999px;padding:3px 11px;white-space:nowrap}
+  .panel-main .kpi .value{font-size:28px;letter-spacing:-.01em}
+  .panel-main .kpi .foot b{color:var(--txt-2)}
+  table.res{width:100%;border-collapse:collapse;font-size:12.5px}
+  table.res th{text-align:left;font-size:11px;color:var(--muted);font-weight:500;
+               padding:0 8px 8px;border-bottom:1px solid var(--line-soft);white-space:nowrap}
+  table.res td{padding:9px 8px;border-bottom:1px solid var(--line-soft);color:var(--txt-2);vertical-align:top}
+  table.res tr:last-child td{border-bottom:0}
+  table.res td.q{color:var(--txt);max-width:300px;line-height:1.5}
+  table.res td.num{font-family:var(--mono);text-align:right;white-space:nowrap}
+  table.res td.rl{color:var(--muted);font-family:var(--mono);white-space:nowrap}
+  .results-empty{padding:12px 2px;color:var(--muted);font-size:12px;line-height:1.7}
+  .results-empty code{font-family:var(--mono);font-size:11.5px;background:var(--surface-2);
+                      padding:1px 5px;border-radius:4px}
+  @media(min-width:1100px){ .panel-main .row.split{grid-template-columns:minmax(0,1.65fr) minmax(300px,1fr)} }
+  @media(max-width:600px){
+    .panel-main .pagehead h1{font-size:17px}
+    #results{overflow-x:auto}
+    table.res{min-width:0}
+    table.res td.q{max-width:none}
+    /* 手机只留「提问 / 状态 / 依据 / 耗时」：时间与动作两列在 390px 下会迫使整表横向滚动 */
+    table.res th:nth-child(1),table.res td:nth-child(1),
+    table.res th:nth-child(5),table.res td:nth-child(5){display:none}
+    .panel-main .legend,.panel-main .chain,.panel-main .tile .k,.panel-main .tile .delta,
+    .panel-main .caption,.panel-main .sub,.panel-main h2 .tag,.panel-main table.res th,
+    .panel-main table.res td,.panel-main .dep .k,.panel-main .pagehead .win,.panel-main .kpi .foot,
+    .panel-main .kpi .foot b,.panel-main .seg button,button.ghost{font-size:12px}
+  }
+
   /* ---------- 运行面板视图 ---------- */
   .panel-main{max-width:1560px;margin:0 auto;padding:var(--s4) var(--s5) var(--s5);
               display:flex;flex-direction:column;gap:var(--s4)}
@@ -416,7 +450,7 @@
   /* ---------- 移动端可读性下限（#36：图例/脚注 10px 在 390px 屏上过小） ---------- */
   @media (max-width:600px){
     .pill,.crumb,.cov-sub,.cov-lab,.cov-list .chip,.ref-item,.ref-item .svc,.sect-t,
-    .railhead span,.copy,.ref-badge,footer,footer span,
+    .railhead span,.copy,.ref-badge,footer,footer span,button.ghost,
     .fld label,.fld .lbl,.chip,.hintline,.msg,.cov-hd,.cov-hd .sw,.drawer-nums .k,
     .drawer-nums .d,.verdict-hd .k,.verdict-sub,.vk,.topbar .brand span,#fingerprint,
     .tabs button,.pillbtn{font-size:12px}
@@ -465,14 +499,23 @@
 <div id="v-panel" class="view" role="tabpanel" aria-labelledby="tab-panel" hidden>
   <div id="panel-lock" hidden></div>
   <div class="panel-main" id="panel-main">
+    <div class="pagehead">
+      <div><h1>运行面板</h1><p>把内部指标翻译成排障成果 · 数据源 /admin/state + 审计行 · 轮询刷新</p></div>
+      <span class="win">进程内累计</span>
+    </div>
     <div class="kpis" id="kpis"></div>
     <div class="row split">
       <section>
-        <h2>运行状态 <span class="tag" id="reingest"></span></h2>
-        <div class="deps" id="lights"></div>
+        <h2>排障成果流 <span class="tag">最近请求 · 依据/动作条数取自审计行 refs/actions</span></h2>
+        <div id="results"></div>
+        <h2 style="margin-top:18px">请求处理轨迹 <span class="tag">每笔请求实际走的路与时间去向（数据源：审计行，非推断）</span></h2>
+        <div class="tracks" id="tracks"></div>
+        <div class="legend" id="stagelegend"></div>
       </section>
       <section>
-        <h2>降级状态机 <span class="tag" id="degtag"></span></h2>
+        <h2>运行状态 <span class="tag" id="reingest"></span></h2>
+        <div class="deps" id="lights"></div>
+        <h2 style="margin-top:18px">降级状态机 <span class="tag" id="degtag"></span></h2>
         <div class="steps" id="deg"></div>
         <div class="facts" id="degfacts"></div>
         <div class="meter">
@@ -481,11 +524,6 @@
         </div>
       </section>
     </div>
-    <section>
-      <h2>请求处理轨迹 <span class="tag">每笔请求实际走的路与时间去向（数据源：审计行，非推断）</span></h2>
-      <div class="tracks" id="tracks"></div>
-      <div class="legend" id="stagelegend"></div>
-    </section>
     <div class="row split">
       <section>
         <h2>请求到达率
@@ -1695,6 +1733,7 @@ function renderState(s) {
 
   const prevPoll = prevMetrics;          // renderTiles 随后会把 prevMetrics 覆盖成本轮
   renderKpis(s.metrics);
+  renderResults();
   renderDrawer(s.metrics, prevPoll);     // 抽屉：当前轮 vs 上一轮（#27）
   drawerPrev = prevPoll;                 // 抽屉在两次 poll 之间被打开时，仍显示上一轮的增量
   renderTiles(s.metrics);
@@ -1706,22 +1745,63 @@ function renderState(s) {
 }
 function maskKey(k) { const p = k.split(':'); return p.length > 2 ? p[0] + ':' + p[1].slice(0, 8) + ':' + p[2] : k; }
 
+/* 成果口径（2026-10-27）：只统计审计行里真实存在的字段——
+   refs/actions 是"本轮命中的引用条数 / 只读命令条数"（后端写入审计行），took_ms 是真实耗时。
+   **不引入"节省时间"等推断值**：那类数字无法从现有事实派生，放上面板就是把估算伪装成测量。 */
+function panelStats() {
+  const items = tracks.filter(t => t.ev === 'chat' || t.ev === 'search');
+  const done = items.filter(t => !t.refused && t.mode !== 'clarify').length;
+  const refs = items.reduce((n, t) => n + (t.refs | 0), 0);
+  const acts = items.reduce((n, t) => n + (t.actions | 0), 0);
+  const took = items.map(t => t.took_ms | 0).filter(n => n >= 0).sort((a, b) => a - b);
+  const pct = q => took.length ? took[Math.min(took.length - 1, Math.floor((took.length - 1) * q))] : null;
+  return { items, done, refs, acts, p50: pct(0.5), p95: pct(0.95) };
+}
+
 function renderKpis(m) {
-  const req = m.total_requests | 0, llm = m.llm_calls | 0, dedup = m.dedup_aggregated | 0;
-  const hits = (m.l1_cache_hits | 0) + (m.l2_cache_hits | 0);
-  const d = k => prevMetrics ? (m[k] | 0) - (prevMetrics[k] | 0) : 0;
+  const st = panelStats();
+  const total = m ? (m.total_requests | 0) : 0;
+  const n = st.items.length;
   const card = (label, value, foot, lead) =>
     '<div class="kpi' + (lead ? ' lead' : '') + '"><div class="label">' + label +
     '</div><div class="value num">' + value +
     '</div><div class="foot">' + foot + '</div></div>';
   $('kpis').innerHTML =
-    card('请求总数', req.toLocaleString(), plus(d('total_requests'))) +
-    card('LLM 调用', llm.toLocaleString(), plus(d('llm_calls'))) +
-    card('风暴收敛请求', dedup.toLocaleString(),
-         '占请求 <b>' + (req ? (dedup / req * 100).toFixed(1) : '0.0') + '%</b>') +
-    card('缓存命中', hits.toLocaleString(), 'L1 ' + (m.l1_cache_hits | 0) + ' · L2 ' + (m.l2_cache_hits | 0)) +
-    card('每请求 LLM 调用', req ? (llm / req).toFixed(3) : '—',
-         llm > 0 && req > 20 && llm / req < 0.2 ? '<span class="up">收敛生效</span>' : '', true);
+    card('完成排障', n ? st.done.toLocaleString() : '—',
+         n ? '最近 <b>' + n + '</b> 次请求中完成 <b>' + st.done + '</b> 次'
+           : '进程内累计 <b>' + total.toLocaleString() + '</b> 次请求', true) +
+    card('命中可核对依据', n ? st.refs.toLocaleString() : '—',
+         n ? '平均 <b>' + (st.refs / n).toFixed(1) + '</b> 条 / 次' : '等待首次请求') +
+    card('可执行只读动作', n ? st.acts.toLocaleString() : '—',
+         '网关只读 · 不执行') +
+    card('结论耗时 P50', st.p50 != null ? st.p50 + 'ms' : '—',
+         st.p95 != null ? 'P95 <b>' + st.p95 + 'ms</b> · 最近 ' + n + ' 次' : '等待首次请求');
+}
+
+/* 排障成果流：逐条列"问了什么 / 状态 / 命中几条依据 / 能拿走几条命令 / 花了多久"。
+   数据全部来自审计行（q/refused/mode/refs/actions/took_ms），没有推断字段。 */
+function renderResults() {
+  const box = $('results');
+  if (!box) return;
+  const st = panelStats();
+  if (!st.items.length) {
+    box.innerHTML = '<div class="results-empty">还没有请求。在排障台发起一次查询，或跑 '
+      + '<code>python offline/console_client.py "50012_DB_TIMEOUT 怎么排查"</code>，'
+      + '这里会逐条列出：提问、状态、依据条数、动作条数与耗时。</div>';
+    return;
+  }
+  const status = t => t.mode === 'clarify' ? '<span class="pill warn">需澄清</span>'
+    : t.refused ? '<span class="pill err">拒答</span>' : '<span class="pill ok">完成</span>';
+  box.innerHTML = '<table class="res"><thead><tr><th>时间</th><th>提问</th><th>状态</th>'
+    + '<th class="num">依据</th><th class="num">动作</th><th class="num">耗时</th></tr></thead><tbody>'
+    + st.items.map(t => '<tr>'
+      + '<td class="rl">' + new Date(t.ts).toLocaleTimeString() + '</td>'
+      + '<td class="q">' + esc(t.q || '(无查询文本)') + '</td>'
+      + '<td>' + status(t) + '</td>'
+      + '<td class="num">' + (t.refs | 0) + '</td>'
+      + '<td class="num">' + (t.actions | 0) + '</td>'
+      + '<td class="num">' + (t.took_ms | 0) + 'ms</td></tr>').join('')
+    + '</tbody></table>';
 }
 function plus(n) { return n > 0 ? '<span class="up">+' + n + ' 本轮</span>' : ''; }
 
@@ -1773,7 +1853,9 @@ function renderTracks() {
         '<span>降级 <b>' + esc(t.degrade_level || '—') + '</b></span>' +
         '<span>权限上限 <b>L' + (t.max_level != null ? t.max_level : '—') + '</b></span>' +
         '<span>主体 <b>' + esc(t.sub || '—') + '</b></span>' +
-        (t.refused ? '<span class="rfs">置信度门控拒答</span>' : '') +
+        (t.refused ? (t.mode === 'clarify'
+            ? '<span class="rfs" style="color:var(--warn)">回指澄清（零检索）</span>'
+            : '<span class="rfs">置信度门控拒答</span>') : '') +
         (t.verbatim_masked ? '<span class="rfs">逐字拦截</span>' : '') +
         (t.fp ? '<span>去重键 <b>' + esc(String(t.fp).slice(0, 12)) + '</b></span>' : '') +
       '</div>' +
@@ -1870,6 +1952,8 @@ function renderEvents(a) {
   }
   if (tracks.length > TRACK_N) tracks.length = TRACK_N;
   renderTracks();
+  renderResults();
+  renderKpis(drawerState ? drawerState.metrics : null);
   if (a.max_seq < cursor) cursor = a.max_seq;   // 服务端重启后游标对齐
 }
 function prepend(html) {

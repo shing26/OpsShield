@@ -105,6 +105,19 @@ public class AuditService {
     public void log(UserContext user, String kind, String via, String source, String query, String fingerprint,
                     String cacheHit, String mode, boolean refused, int maxResultAuthLevel, long tookMs,
                     String srcTenant, Integer verbatimMasked, StageTimings stages, String degradeLevel) {
+        log(user, kind, via, source, query, fingerprint, cacheHit, mode, refused, maxResultAuthLevel, tookMs,
+                srcTenant, verbatimMasked, null, null, stages, degradeLevel);
+    }
+
+    /**
+     * 带「本轮引用/动作条数」的重载（2026-10-27 运行面板成果视图）：面板要回答"这次排障命中了
+     * 几条可核对依据、能拿走几条只读命令"，而旧审计行只有计数器侧的聚合量。两个字段只存**条数**
+     * （不含正文/命令），随 refs/actions 载荷同源，回放路径也从缓存载荷里取。
+     */
+    public void log(UserContext user, String kind, String via, String source, String query, String fingerprint,
+                    String cacheHit, String mode, boolean refused, int maxResultAuthLevel, long tookMs,
+                    String srcTenant, Integer verbatimMasked, Integer refs, Integer actions,
+                    StageTimings stages, String degradeLevel) {
         Map<String, Object> ev = new LinkedHashMap<>();
         ev.put("ts", System.currentTimeMillis());
         ev.put("ev", kind);
@@ -125,6 +138,8 @@ public class AuditService {
         ev.put("took_ms", tookMs);
         if (srcTenant != null) ev.put("src_tenant", srcTenant);
         if (verbatimMasked != null) ev.put("verbatim_masked", verbatimMasked);
+        if (refs != null) ev.put("refs", refs);
+        if (actions != null) ev.put("actions", actions);
         if (stages != null) ev.put("stage_ms", stages.toMap());
         writeEvent(ev);
     }
