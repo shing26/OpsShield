@@ -23,6 +23,12 @@
     <elasticsearch.version>8.14.3</elasticsearch.version>
     <qdrant.version>1.12.0</qdrant.version>
     <jjwt.version>0.13.0</jjwt.version>
+    <!-- SCA 覆盖（Boot 4 基线，2026-10-27）：Trivy 对 Boot 4.1.1 默认版本报 3 CRITICAL + 10 HIGH；
+         按同一主版本补丁升级（不改大版本）：Tomcat 11.0.24→11.0.25、Jackson2 2.21.5→2.22.3、
+         Jackson3 3.1.5→3.2.3。属性名沿用 Boot 4 BOM 的 ${tomcat.version}/${jackson-2-bom.version}/${jackson-bom.version}。 -->
+    <tomcat.version>11.0.25</tomcat.version>
+    <jackson-2-bom.version>2.22.3</jackson-2-bom.version>
+    <jackson-bom.version>3.2.3</jackson-bom.version>
   </properties>
 
   <dependencyManagement>
