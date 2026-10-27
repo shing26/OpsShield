@@ -119,3 +119,26 @@ def test_form_labels_are_associated() -> None:
     html = _html()
     assert '<label for="q">' in html, "排障输入 label 需要 for=q"
     assert "-user\" data-bind=" in html, "身份输入框需要 id（label for 才能工作）"
+
+
+def test_verdict_card_precedes_evidence_and_derives_from_answer() -> None:
+    """产品化（2026-10-27）：结论必须先于证据；结论行只从答案「问题定位」派生，不许另造文案。"""
+    html = _html()
+    assert "function verdict(" in html, "结论卡渲染缺失"
+    assert 'aria-label="结论摘要"' in html, "结论卡需要可访问名称"
+    assert "function firstLine(" in html and "问题定位" in html, "结论行必须从答案的问题定位段派生"
+    assert 'data-act="copymd"' in html, "缺「复制结论」导出入口"
+    body_start = html.index("+ '<div class=\"body\">'")
+    assert html.index("verdict(r, k)", body_start) < html.index("只读命令清单", body_start), \
+        "结论卡必须排在证据链（命令清单）之前"
+
+
+def test_mobile_font_floor_for_small_labels() -> None:
+    """可读性（#36）：≤600px 时图例/脚注/页脚不得低于 12px（此前 10px）。"""
+    html = _html()
+    m = re.search(r"移动端可读性下限.*?@media \(max-width:600px\)\{(.*?)\n  \}", html, re.S)
+    assert m, "缺移动端可读性下限块"
+    block = m.group(1)
+    for sel in (".pill", ".copy", "footer", ".ref-badge"):
+        assert sel in block, f"移动端字号下限缺少 {sel}"
+    assert "grid-template-columns:1fr" in html, "窄屏步骤卡必须单列"
