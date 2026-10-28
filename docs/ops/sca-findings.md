@@ -101,3 +101,9 @@ CI java/smoke/sbom/static/python    success
 
 修复后 CI 产物为 0 条未处置 HIGH/CRITICAL（豁免项由 `.trivyignore` 过滤）；
 最终 run `39873876035` 的 security job 为 success，artifact 中 Java vulns=0。
+
+## 2026-10-28 新增豁免（Boot 4 基线后首次）
+
+| CVE | 严重度 | 组件 | 当前 | 修复版本 | 处置 | 说明 |
+|---|---|---|---|---|---|---|
+| CVE-2026-102554 | HIGH | `com.google.guava:guava` | 32.1.3-android | 33.7.2 | **豁免（临时）** | guava DoS via Java 原生反序列化（CompactHashMap/Set、MapMakerInternalMap）。**修复版 33.7.2 未发布**（Maven Central/aliyun 均 404，2026-10-28 实测），无可升级目标。补偿控制：本服务无 Java 原生反序列化入口（`ObjectInputStream`/`readObject` 全仓 0 处），外部输入只走 JSON（Jackson 3）；guava 仅由 Qdrant gRPC 客户端内部使用。复核触发：33.7.2 发布后 7 天内升级，或引入反序列化/序列化流输入。到期 **2027-10-28**。 |
