@@ -239,3 +239,11 @@ bash scripts/demo_self_alert.sh --quick  # 只演到"告警 + 收敛"，跳过�
 护栏含单实例锁、每规则冷却 300s、每小时上限 20 条、本主体配额保留线、登录失败退避、出口环回白名单。
 **已知盲区**：网关自身挂掉时生产者无法自证，只能记 `unreachable`——单进程自举的固有边界，不假装覆盖。
 实测台账：[docs/qa/2026-09-16-self-alert-loop.md](qa/2026-09-16-self-alert-loop.md)。
+
+## 6. 演示资产（2026-10-28 重录）
+
+- README 首屏动线：`docs/assets/readme-workbench.gif`（18s，10fps，1000px，memory/mock 零依赖栈）；
+- 完整演示录像：`docs/demo/opspilot-console.webm`（约 23s，**不入库**，按本文原则留在本机/交付物里）；
+- 重录方式：起 memory/mock 实例（`SERVER_PORT=18087`，账号库用演示库）→ 用 Playwright 以 1440×900 录屏
+  （空态 → 接入 → 预设排障 → 结论卡/命令清单 → 运行面板成果视图）→ `ffmpeg` 转 GIF（palette 160 色）与 VP9 webm；
+- 画面口径：面板展示的完成排障/命中依据/可执行动作/结论耗时来自当次真实 SSE 帧与审计行，数字随运行变化，不用于对外引用。

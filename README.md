@@ -7,10 +7,10 @@
 *告警风暴打不穿、模型挂了不雪崩、运维指令零幻觉。*
 
 <p align="center">
-  <img src="docs/assets/panel-preview.png" alt="OpsShield 统一工作台：排障台输入错误码后返回结论卡、只读命令清单与引用来源；运行面板（成果视图）展示完成排障数、命中依据数、可执行动作数与结论耗时，以及逐条排障成果流" width="920">
+  <img src="docs/assets/readme-workbench.gif" alt="OpsShield 统一工作台 18 秒动线：空态三步引导 → 账号接入 → 预设一键排障 → 结论卡与只读命令清单 → 运行面板成果视图（完成排障 / 命中依据 / 可执行动作 / 结论耗时 + 逐条成果流）" width="920">
 </p>
 
-<p align="center"><sub>运行面板「成果视图」静态截图（memory + mock 零依赖试跑；面板上的数字用于说明视图结构，不用于复述 live 指标）：完成排障 / 命中依据 / 可执行动作 / 结论耗时 → 逐条成果流 → 处理轨迹 → 系统健康</sub></p>
+<p align="center"><sub>18 秒动线（memory + mock 零依赖试跑；画面上的数字用于说明视图结构，不用于复述 live 指标）：空态三步引导 → 预设一键排障 → 结论卡 + 只读命令清单 → 运行面板「成果视图」（成果 KPI / 逐条成果流 / 处理轨迹 / 系统健康）｜静态图：<a href="docs/assets/panel-preview.png">panel-preview.png</a></sub></p>
 
 [![CI Status](https://github.com/shing26/OpsShield/actions/workflows/ci.yml/badge.svg)](https://github.com/shing26/OpsShield/actions)
 [![Java](https://img.shields.io/badge/Java-21-ED8B00?style=flat&logo=openjdk&logoColor=white)](https://openjdk.org/)
