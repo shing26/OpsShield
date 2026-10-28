@@ -7,10 +7,10 @@
 *告警风暴打不穿、模型挂了不雪崩、运维指令零幻觉。*
 
 <p align="center">
-  <img src="docs/assets/panel-preview.png" alt="OpsShield 统一工作台：排障台输入错误码后返回结论卡、只读命令清单与引用来源；运行面板（成果视图）展示完成排障数、命中依据数、可执行动作数与结论耗时，以及逐条排障成果流" width="920">
+  <img src="docs/assets/readme-workbench.gif" alt="OpsShield 统一工作台 18 秒动线：空态三步引导 → 账号接入 → 预设一键排障 → 结论卡与只读命令清单 → 运行面板成果视图（完成排障 / 命中依据 / 可执行动作 / 结论耗时 + 逐条成果流）" width="920">
 </p>
 
-<p align="center"><sub>运行面板「成果视图」静态截图（memory + mock 零依赖试跑；面板上的数字用于说明视图结构，不用于复述 live 指标）：完成排障 / 命中依据 / 可执行动作 / 结论耗时 → 逐条成果流 → 处理轨迹 → 系统健康</sub></p>
+<p align="center"><sub>18 秒动线（memory + mock 零依赖试跑；画面上的数字用于说明视图结构，不用于复述 live 指标）：空态三步引导 → 预设一键排障 → 结论卡 + 只读命令清单 → 运行面板「成果视图」（成果 KPI / 逐条成果流 / 处理轨迹 / 系统健康）｜静态图：<a href="docs/assets/panel-preview.png">panel-preview.png</a></sub></p>
 
 [![CI Status](https://github.com/shing26/OpsShield/actions/workflows/ci.yml/badge.svg)](https://github.com/shing26/OpsShield/actions)
 [![Java](https://img.shields.io/badge/Java-21-ED8B00?style=flat&logo=openjdk&logoColor=white)](https://openjdk.org/)
@@ -127,7 +127,7 @@ Java 21 虚拟线程 · ES 倒排 + Qdrant 向量双路召回（RRF 融合）· 
 | 优雅停机与发布回滚 | **Ubuntu 24.04 VM systemd 真实停服/换 jar/回滚已通过**：current→v-prev→current，readiness UP，`/state.build.commit` 与 manifest 对齐（969e137/65cc9b3） | 5 |
 | 准入控制 | 全局+租户两级许可、429+Retry-After、admission_rejected 计数已落地（[ADR-0026](docs/adr/0026-admission-control-and-degradation-scope.md)）；**live 20 并发 10s**：4×200/80×429/0×5xx，另一租户 1×200/0×429；样本短，缺 20–30 条对照与长窗口（门禁 6；补证节奏见 [30 天观察清单](docs/ops/gate6-7-30day-observation.md)） | 6 |
 | 延迟分位与 SLO 测量 | TTFT/请求 Timer、SLO burn-rate 规则已落地；**已用 live 样本生成 [SLO 样本报告](docs/ops/slo-sample-2026-10-23.md)**（0×5xx、TTFT P95 18.1s）；缺 30 天连续流量与月报（门禁 7；补证节奏见 [30 天观察清单](docs/ops/gate6-7-30day-observation.md)） | 7 |
-| 依赖支持窗口 | Spring Boot 4.1.1、Flyway、CycloneDX SBOM 已落地；Trivy：Boot 4 重基线 13→0（Tomcat/Jackson 同主版本补丁；豁免全部移除，矩阵见 [sca-findings.md](docs/ops/sca-findings.md)） | 8 |
+| 依赖支持窗口 | Spring Boot 4.1.1、Flyway、CycloneDX SBOM 已落地；Trivy：Boot 4 重基线 13→0（Tomcat/Jackson 同主版本补丁）；2026-10-28 新增 1 条 guava 临时豁免（修复版 33.7.2 未发布，补偿：无 Java 反序列化入口），矩阵见 [sca-findings.md](docs/ops/sca-findings.md) | 8 |
 | 审计留存与防篡改 | 2GB 上限/180 天/异步落盘 + SHA-256 链 + `verify_audit_chain.py` 已落地；**本地 MinIO Object Lock 已验**（COMPLIANCE 180d、版本删除被拒、副本验链 PASS）；**用户已确认接受“本地对象锁，非异地”口径** | 9 |
 | 值班 5 分钟动作 | [docs/ops/runbook.md](docs/ops/runbook.md) 已拆三症状；**A/B/C 均已本地实演**：登录 500→恢复、网关停→重启、L2→L0；生产 systemd 形态仍需目标机复跑 | 10 |
 

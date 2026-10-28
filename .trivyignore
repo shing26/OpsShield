@@ -7,3 +7,10 @@
 #
 # 复核触发条件（保留）：升级 Boot/Spring 大版本、引入 XSLT/View 渲染、引入 Spring Data Repository、
 # 或 12 个月到期（2027-10-27）——任一发生必须重新评估并在 docs/ops/sca-findings.md 更新矩阵。
+
+# CVE-2026-102554（guava DoS via Java 反序列化，HIGH；2026-10-28）
+# 修复版本 33.7.2 尚未发布：Maven Central 与 aliyun 镜像均 404（2026-10-28 实测），无可升级目标。
+# 补偿控制：本服务没有 Java 原生反序列化入口（src 全量 grep：ObjectInputStream/readObject/ObjectInputFilter 0 处），
+# 外部输入全部是 JSON（Jackson 3）；guava 仅由 Qdrant gRPC 客户端在进程内使用，不接受用户提供的序列化流。
+# 复核触发：① 33.7.2 发布后 7 天内升级并删除本行；② 引入 Java 反序列化 / 接受序列化流 / 暴露 guava API 给不可信输入。
+CVE-2026-102554
