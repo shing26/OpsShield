@@ -7,6 +7,10 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    ignore:
+      # io.qdrant:client 1.12→1.13+ 为破坏性 API 变更（#64 编译失败 25 处），迁移工作
+      # 按 OPS §5 触发线挂起：待 Qdrant 服务端升级需求出现时一并处理。
+      - dependency-name: io.qdrant:client
   - package-ecosystem: github-actions
     directory: /
     schedule:
