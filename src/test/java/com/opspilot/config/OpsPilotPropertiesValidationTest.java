@@ -48,6 +48,8 @@ class OpsPilotPropertiesValidationTest {
             "opspilot.dashscope.mode=auto",
             "opspilot.es.connect-timeout-ms=3000",
             "opspilot.es.read-timeout-ms=10000",
+            "opspilot.es.pool-max-total=100",
+            "opspilot.es.pool-max-per-route=100",
             "opspilot.qdrant.grpc-port=6334",
             "opspilot.jwt.ttl-seconds=86400",
             "opspilot.cache.l1-ttl-hours=2",
@@ -96,6 +98,9 @@ class OpsPilotPropertiesValidationTest {
             assertThat(props.dashscope().connectTimeoutMs()).isEqualTo(3000);
             assertThat(props.dashscope().readTimeoutMs()).isEqualTo(15000);
             assertThat(props.es().readTimeoutMs()).isEqualTo(10000);
+            // 压测收口（2026-11-02）：池上限同走绑定路径，且不得退回库默认 per-route=10
+            assertThat(props.es().poolMaxTotal()).isEqualTo(100);
+            assertThat(props.es().poolMaxPerRoute()).isEqualTo(100);
         });
     }
 

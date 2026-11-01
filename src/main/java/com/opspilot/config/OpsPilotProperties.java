@@ -126,7 +126,8 @@ public record OpsPilotProperties(
     }
 
     public record Es(String uri, String index, String username, String password,
-                     @Min(1) int connectTimeoutMs, @Min(1) int readTimeoutMs) {}
+                     @Min(1) int connectTimeoutMs, @Min(1) int readTimeoutMs,
+                     @Min(1) int poolMaxTotal, @Min(1) int poolMaxPerRoute) {}
 
     public record Qdrant(String host, @Min(1) @Max(65535) int grpcPort, String collection,
                          String cacheCollection, String apiKey) {}

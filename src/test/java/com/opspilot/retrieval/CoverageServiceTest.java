@@ -76,7 +76,7 @@ class CoverageServiceTest {
     private static OpsPilotProperties props() {
         return new OpsPilotProperties(
                 new OpsPilotProperties.DashScope("http://mock", "", "m", 1024, "m", "m", 30, 3000, 15000, "mock"),
-                new OpsPilotProperties.Es("http://localhost:9200", "opspilot-chunks-read", "elastic", "", 3000, 10000),
+                new OpsPilotProperties.Es("http://localhost:9200", "opspilot-chunks-read", "elastic", "", 3000, 10000, 100, 100),
                 new OpsPilotProperties.Qdrant("localhost", 6334, "c", "cache", ""),
                 new OpsPilotProperties.Jwt("secret", 3600),
                 new OpsPilotProperties.Cache(2, 0.95),
