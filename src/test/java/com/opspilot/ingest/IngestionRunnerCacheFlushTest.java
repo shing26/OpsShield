@@ -125,7 +125,7 @@ class IngestionRunnerCacheFlushTest {
                 new OpsPilotProperties.DashScope("https://dashscope.aliyuncs.com", "k", "text-embedding-v3",
                         2, "gte-rerank-v2", "qwen-plus", 60, 3000, 15000, "mock"),
                 null,
-                new OpsPilotProperties.Es("http://localhost:9200", "opspilot-chunks-read", null, null, 3000, 10000),
+                new OpsPilotProperties.Es("http://localhost:9200", "opspilot-chunks-read", null, null, 3000, 10000, 100, 100),
                 new OpsPilotProperties.Qdrant("localhost", 6334, "opspilot-vectors-live", CACHE, ""),
                 null, new OpsPilotProperties.Cache(2, 0.95), null, null, null);
     }

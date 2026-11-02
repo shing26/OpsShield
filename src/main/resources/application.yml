@@ -86,7 +86,8 @@ opspilot:
     # 容器/反代形态才置 true：strict 下允许 SERVER_ADDRESS=0.0.0.0/::（裸机生产保持 false）
     allow-public-bind: ${OPSPILOT_ALLOW_PUBLIC_BIND:false}
   dashscope:
-    base-url: https://dashscope.aliyuncs.com
+    # 占位符化（2026-11-02）：压测需要把上游指到本地 stub 以剥离供应商限速变量，见 offline/load/
+    base-url: ${DASHSCOPE_BASE_URL:https://dashscope.aliyuncs.com}
     api-key: ${DASHSCOPE_API_KEY:}
     mode: ${DASHSCOPE_MODE:auto}   # auto=有Key走live否则mock | live | mock
     embedding-model: text-embedding-v3
@@ -107,6 +108,11 @@ opspilot:
     # B3（2026-09-21 补）：socket 兜底，不是 SLO——ES 挂住时不让检索线程无限等
     connect-timeout-ms: ${ES_CONNECT_TIMEOUT_MS:3000}
     read-timeout-ms: ${ES_READ_TIMEOUT_MS:10000}
+    # 压测收口（2026-11-02）：出站连接池上限进配置。此前吃库默认（total=30 / per-route=10），
+    # 单路由 10 连接把检索在途卡在 ~11（详见 offline/load/reports/ 压测报告），高并发档
+    # 延迟随队列深度爆炸、且 inflight 永远够不到降级阈值。默认 100/100，按部署形态覆写。
+    pool-max-total: ${ES_POOL_MAX_TOTAL:100}
+    pool-max-per-route: ${ES_POOL_MAX_PER_ROUTE:100}
   qdrant:
     host: ${QDRANT_HOST:localhost}
     grpc-port: 6334

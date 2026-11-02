@@ -38,6 +38,18 @@ public class EsConfig {
     }
 
     /**
+     * 出站连接池：上限来自 {@code opspilot.es.pool-*}，不再交给库默认。
+     * <p>库默认 total=30 / per-route=10——单 ES 主机就是单路由，10 个连接把检索在途
+     * 卡在 ~10 量级，高并发档延迟随队列深度爆炸（压测实证，报告见
+     * {@code offline/load/reports/}），且 inflight 永远够不到降级阈值。
+     * 单独抽成静态方法与 {@link #applyTimeouts} 同一理由：测试打的就是生产这条路径。
+     */
+    static org.apache.http.impl.nio.client.HttpAsyncClientBuilder applyHttpConfig(
+            org.apache.http.impl.nio.client.HttpAsyncClientBuilder builder, OpsPilotProperties.Es es) {
+        return builder.setMaxConnTotal(es.poolMaxTotal()).setMaxConnPerRoute(es.poolMaxPerRoute());
+    }
+
+    /**
      * memory 模式下**不建**（ADR-0022）。两个理由，第二个才是关键：
      * ① 零依赖模式不该存在一条连不上的客户端，那只会给人"它可能被用到"的错觉；
      * ② Boot 会按 {@code RestClient} bean 自动注册 {@code ElasticsearchRestClientHealthIndicator}，
@@ -53,14 +65,18 @@ public class EsConfig {
                 .setRequestConfigCallback(rc -> applyTimeouts(rc, props.es()));
         // P3：xpack security 形态下 Basic 认证；口令空保持无认证（CI/本地）
         String pass = props.es().password();
-        if (pass != null && !pass.isBlank()) {
-            org.apache.http.impl.client.BasicCredentialsProvider creds =
-                    new org.apache.http.impl.client.BasicCredentialsProvider();
-            creds.setCredentials(
-                    new org.apache.http.auth.AuthScope(host.getHostName(), host.getPort()),
-                    new org.apache.http.auth.UsernamePasswordCredentials(props.es().username(), pass));
-            builder = builder.setHttpClientConfigCallback(c -> c.setDefaultCredentialsProvider(creds));
-        }
+        builder = builder.setHttpClientConfigCallback(c -> {
+            applyHttpConfig(c, props.es());
+            if (pass != null && !pass.isBlank()) {
+                org.apache.http.impl.client.BasicCredentialsProvider creds =
+                        new org.apache.http.impl.client.BasicCredentialsProvider();
+                creds.setCredentials(
+                        new org.apache.http.auth.AuthScope(host.getHostName(), host.getPort()),
+                        new org.apache.http.auth.UsernamePasswordCredentials(props.es().username(), pass));
+                c.setDefaultCredentialsProvider(creds);
+            }
+            return c;
+        });
         return builder.build();
     }
 
