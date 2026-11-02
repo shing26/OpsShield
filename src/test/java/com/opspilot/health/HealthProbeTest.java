@@ -34,7 +34,7 @@ class HealthProbeTest {
         when(kv.exists(anyString())).thenReturn(false);
         OpsPilotProperties props = new OpsPilotProperties(
                 new OpsPilotProperties.DashScope("http://mock", "", "m", 1024, "m", "m", 30, 3000, 15000, "mock"),
-                new OpsPilotProperties.Es("http://localhost:9200", "opspilot-chunks-read", "elastic", "", 3000, 10000),
+                new OpsPilotProperties.Es("http://localhost:9200", "opspilot-chunks-read", "elastic", "", 3000, 10000, 100, 100),
                 new OpsPilotProperties.Qdrant("localhost", 6334, "opspilot-vectors-live", "semantic-cache", ""),
                 new OpsPilotProperties.Jwt("secret", 3600), null, null, null, null);
         // live 用例：两个客户端 bean 在场（provider 给真 mock），内存索引缺席

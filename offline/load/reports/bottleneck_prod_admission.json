@@ -1,0 +1,85 @@
+{
+  "measured_at": "2026-11-02T04:25:01+08:00",
+  "subject": "sre-full",
+  "backend": {
+    "rerank": "dashscope:gte-rerank-v2",
+    "llm": "dashscope:qwen-plus",
+    "embedding": "dashscope:text-embedding-v3"
+  },
+  "scenario": "unique",
+  "llm_failure_threshold": 3,
+  "inflight_threshold": 40,
+  "quota_limit": 300000,
+  "ramp_seconds": 5,
+  "duration_per_level": "15s",
+  "points": [
+    {
+      "level": 25,
+      "ramp_rate": 5,
+      "max_users": 25,
+      "degradation_worst": "L0",
+      "manual_lock_seen": false,
+      "max_inflight": 4,
+      "failure_rate": 0.6618705035971223,
+      "failure_detail": [
+        {
+          "error": "CatchResponseError('HTTP 429')",
+          "occurrences": 92
+        }
+      ],
+      "requests": 139,
+      "failures": 92,
+      "rps": 8.973901616153706,
+      "p50_ms": 2100.0,
+      "p95_ms": 2500.0,
+      "p99_ms": 3400.0,
+      "max_ms": 3370.2639999974053
+    },
+    {
+      "level": 100,
+      "ramp_rate": 20,
+      "max_users": 100,
+      "degradation_worst": "L0",
+      "manual_lock_seen": false,
+      "max_inflight": 4,
+      "failure_rate": 0.9103448275862069,
+      "failure_detail": [
+        {
+          "error": "CatchResponseError('HTTP 429')",
+          "occurrences": 528
+        }
+      ],
+      "requests": 580,
+      "failures": 528,
+      "rps": 39.445898361385034,
+      "p50_ms": 2100.0,
+      "p95_ms": 2300.0,
+      "p99_ms": 2300.0,
+      "max_ms": 2385.116100002051
+    },
+    {
+      "level": 300,
+      "ramp_rate": 60,
+      "max_users": 300,
+      "degradation_worst": "L0",
+      "manual_lock_seen": false,
+      "max_inflight": 4,
+      "failure_rate": 0.9691943127962085,
+      "failure_detail": [
+        {
+          "error": "CatchResponseError('HTTP 429')",
+          "occurrences": 1636
+        }
+      ],
+      "requests": 1688,
+      "failures": 1636,
+      "rps": 112.6468009585881,
+      "p50_ms": 2100.0,
+      "p95_ms": 2300.0,
+      "p99_ms": 2300.0,
+      "max_ms": 2351.2733000025037
+    }
+  ],
+  "first_degraded_level": null,
+  "note": "后端必须 live：曲线形状依赖真实 embedding/rerank 延迟，mock 是词法代理、曲线偏平。降级档位取每档运行期间的**最高**档（轮询 1s，瞬时采样会漏脉冲）；manual_lock_seen=true 表示该档期间存在人工锁定，其档位不纯由负载导致。原始 locust 产物在 load/_sweep_raw/（不入库），本报告是唯一入库的汇总。**配额口径须一并读**：多数档合计请求数可能超出默认配额（5000/天/主体），故网关常以抬高的 OPSPILOT_QUOTA_DAILY_LIMIT 启动——本报告记录的 quota_limit 即当时真值；曲线测的是延迟/吞吐，不是配额护栏，配额耗尽后 locust 会把 429 记成失败使曲线失真，故抬高并披露。各档 failure_rate 即该档是否被 429 污染的判据。**实到并发必须看**：`-r` × 时长为并发上限，固定 ramp 速率会让高档位爬不到目标（曾出现「u=500 实到只有 290」，标签与事实不符）；本脚本按 `档位/ramp-seconds` 自适应 ramp 并逐档记录实到值。**失败要分性质**：`HTTP 0` 是连接层（容量/本地栈极限），`HTTP 5xx` 才是应用缺陷；且连接层失败可能**非单调**（本地临时端口耗尽等粘性资源会让相邻档出现「低档失败、高档反而干净」），故单看某一档的失败率不足以下结论。  **本报告是 `unique` 场景**：每请求唯一指纹（纯字母 nonce——数字/UUID 会被指纹归一化掩码掉，那样所有请求同指纹、被 Single-Flight 折成一个 leader，在途永远上不去），占空比≈1，故在途 ≈ 并发数，这才够得着 L1 触发线。判据不能只看本报告的档位：还须核审计行（`ev=degrade_transition` 的 cause、以及 chat 行的 `degrade_level` + `stage_ms.vector==0`）——`mode=es_only` 单独不作为降级证据（它有两个来源）。"
+}
