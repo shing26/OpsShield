@@ -3,6 +3,7 @@ package com.opspilot.gateway;
 import com.opspilot.auth.UserContext;
 import com.opspilot.gateway.dto.FeedbackRequest;
 import com.opspilot.metrics.AuditService;
+import com.opspilot.metrics.OpsMetrics;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -19,6 +20,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *
  * 为什么这三条值得锁：反馈是"人 → 系统"的唯一人工信号入口，而它同时是"复盘→知识回灌"
  * 在案债务的前置。若它静默失效（无痕、或被未认证者灌入），那条债务链会断在这里而无人察觉。
+ *
+ * <p>2026-11-05 起反馈多了一个出口：Prometheus 的 {@code aiops.feedback{verdict}}。它和审计行
+ * **同生同死**——要么都写，要么都不写。拒绝路径（403）必须两个出口都没动过，否则"被拒绝的
+ * 反馈"会污染质量闭环的分子，让复核队列看到一条根本不存在的反馈。
  */
 class FeedbackControllerTest {
 
@@ -26,7 +31,8 @@ class FeedbackControllerTest {
     private static final String FP_VALID = "ab3fdc9c0e1a4f8e9c1d2b3a4c5d6e7f";
 
     private final AuditService audit = mock(AuditService.class);
-    private final FeedbackController controller = new FeedbackController(audit);
+    private final OpsMetrics metrics = mock(OpsMetrics.class);
+    private final FeedbackController controller = new FeedbackController(audit, metrics);
 
     private static MockHttpServletRequest withUser(int level) {
         MockHttpServletRequest req = new MockHttpServletRequest();
@@ -42,6 +48,7 @@ class FeedbackControllerTest {
                         new MockHttpServletRequest()));
         assertEquals(HttpStatus.FORBIDDEN, ex.getStatusCode());
         verifyNoInteractions(audit);
+        verifyNoInteractions(metrics);
     }
 
     @Test
@@ -53,6 +60,7 @@ class FeedbackControllerTest {
             assertEquals(HttpStatus.FORBIDDEN, ex.getStatusCode());
         }
         verifyNoInteractions(audit);
+        verifyNoInteractions(metrics);
     }
 
     @Test
@@ -62,6 +70,7 @@ class FeedbackControllerTest {
         assertEquals(Boolean.TRUE, resp.get("ok"));
         verify(audit).logFeedback(argThat(u -> "tenant-demo".equals(u.tenantId()) && u.authLevel() == 2),
                 eq(FP_VALID), eq("down"), eq("答案里的错误码是编的"));
+        verify(metrics).feedback("down");
     }
 
     /** 未知 fingerprint 不是错误：系统不认识它也不该崩——反馈的价值在"收下"，不在"先校验"。 */
@@ -71,6 +80,7 @@ class FeedbackControllerTest {
                 withUser(1));
         assertEquals(Boolean.TRUE, resp.get("ok"));
         verify(audit).logFeedback(any(), eq("00000000000000000000000000000000"), eq("up"), isNull());
+        verify(metrics).feedback("up");
     }
 
     /**
@@ -83,8 +93,9 @@ class FeedbackControllerTest {
     @Test
     void malformedFingerprintIsRejectedWith400AndAudited() throws Exception {
         AuditService audit2 = mock(AuditService.class);
+        OpsMetrics metrics2 = mock(OpsMetrics.class);
         var mvc = org.springframework.test.web.servlet.setup.MockMvcBuilders
-                .standaloneSetup(new FeedbackController(audit2))
+                .standaloneSetup(new FeedbackController(audit2, metrics2))
                 .setControllerAdvice(new GlobalExceptionHandler(audit2))
                 .build();
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
@@ -94,5 +105,7 @@ class FeedbackControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
         verify(audit2).logInvalid(isNull(), eq("/api/v1/copilot/feedback"), contains("fingerprint"));
+        // 校验层就拒掉的行不该在指标里留下痕迹——否则复核队列会去追一条从未被接收的反馈。
+        verifyNoInteractions(metrics2);
     }
 }
