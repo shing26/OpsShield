@@ -131,11 +131,21 @@ def test_healthy_sample_passes():
     assert sr.judge_sample(sample()) == ("PASS", [])
 
 
-def test_sample_without_429_is_invalid_not_pass():
+def test_sample_without_429_is_unproven_not_pass():
+    # 2026-11-05 live 实测：c4 并发数在许可之内，0×429 是预期，不是违规。
+    # 判 FAIL 会让按周固定跑的低并发档永久打红门禁——那是在惩罚按文档办事的人。
     verdict, reasons = sr.judge_sample(sample(load={
         "total": 80, "ok": 80, "rejected_429": 0, "other": 0,
-        "retry_after_ok": 0, "retry_after_missing": 0}))
-    assert verdict == "FAIL" and "没有出现 429" in reasons[0]
+        "retry_after_ok": 0, "retry_after_missing": 0}, concurrency=4))
+    assert verdict == "UNPROVEN" and "未触发削峰" in reasons[0]
+
+
+def test_no_429_with_other_hard_violations_still_fails():
+    # UNPROVEN 只兜"证据不够"，不掩盖真违规：5xx 与对照租户被连带仍判 FAIL。
+    verdict, reasons = sr.judge_sample(sample(load={
+        "total": 80, "ok": 78, "rejected_429": 0, "other": 2,
+        "retry_after_ok": 0, "retry_after_missing": 0}, concurrency=4))
+    assert verdict == "FAIL" and "非 200/429" in reasons[0]
 
 
 def test_load_5xx_fails():

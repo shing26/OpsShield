@@ -226,31 +226,34 @@ def _sample_day(data: dict, path: Path) -> date | None:
 
 
 def judge_sample(data: dict) -> tuple[str, list[str]]:
-    """门禁 6 的单样本判定：三条硬判据 + 一条"证据是否足够"。
+    """门禁 6 的单样本判定：硬判据违规 → FAIL；证据不够 → UNPROVEN；全齐 → PASS。
 
-    schema 1 的样本没有 Retry-After 与降级档字段——那个年代**无法证明**这两条判据，
-    所以判 `UNPROVEN` 而不是 `PASS`（也不判 FAIL：没证据不等于不合规）。
+    "没出现 429"是 **UNPROVEN** 而不是 FAIL：c4 档并发数可能恰在许可数之内，
+    削峰本来就不该触发（2026-11-05 live 实测：c4 全 200、0×429，属预期）。
+    背压判据由更高并发档（c8/c20）证明；把"没触发"判 FAIL 会让按周固定跑的
+    低并发档永久性把门禁打红——那是在惩罚按文档办事的人。
     """
     load = data.get("load") or {}
     control = data.get("control") or {}
-    reasons: list[str] = []
+    unproven: list[str] = []
     if load.get("rejected_429", 0) <= 0:
-        reasons.append("加载租户没有出现 429（削峰没被触发，样本无效）")
+        unproven.append(f"并发 {data.get('concurrency', '?')} 未触发削峰（无 429）——"
+                        "背压判据需更高并发档证明")
     if load.get("other", 0) > 0:
-        reasons.append(f"加载租户出现 {load.get('other')} 条非 200/429（5xx 或连接错误）")
+        return "FAIL", [f"加载租户出现 {load.get('other')} 条非 200/429（5xx 或连接错误）"]
     if control.get("total", 0) <= 0 or control.get("ok") != control.get("total"):
-        reasons.append("对照租户未全部 200（隔离失败或被连带限流）")
-    if reasons:
-        return "FAIL", reasons
+        return "FAIL", ["对照租户未全部 200（隔离失败或被连带限流）"]
     if data.get("schema", 1) < 2:
-        return "UNPROVEN", ["schema 1 缺 Retry-After 与降级档字段，门禁 6 两条判据无法证明"]
+        return "UNPROVEN", ["schema 1 缺 Retry-After 与降级档字段，门禁 6 两条判据无法证明"] + unproven
     if load.get("retry_after_missing", 0) > 0:
         return "FAIL", [f"{load.get('retry_after_missing')} 条 429 缺 Retry-After"]
     degradation = (data.get("degradation") or {}).get("level")
     if degradation is None:
-        return "UNPROVEN", ["样本未记录降级档（aiops_degradation_state 不可读）"]
+        return "UNPROVEN", ["样本未记录降级档（aiops_degradation_state 不可读）"] + unproven
     if degradation != "L0":
         return "FAIL", [f"压测后降级档为 {degradation}（对照租户/系统未保持 L0）"]
+    if unproven:
+        return "UNPROVEN", unproven
     return "PASS", []
 
 
