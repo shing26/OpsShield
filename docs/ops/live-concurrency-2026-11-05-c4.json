@@ -1,0 +1,111 @@
+{
+  "schema": 2,
+  "started_at": "2026-11-05T19:59:57+0800",
+  "elapsed_s": 17.38,
+  "load_user": "sre-full",
+  "load_tenant": "tenant-internal",
+  "control_user": "sre-acme",
+  "control_tenant": "tenant-acme",
+  "concurrency": 4,
+  "seconds": 10,
+  "load": {
+    "total": 4,
+    "ok": 4,
+    "rejected_429": 0,
+    "other": 0,
+    "ok_rate": 1.0,
+    "retry_after_ok": 0,
+    "retry_after_missing": 0,
+    "ttft_p50": 13.029,
+    "ttft_p95": 13.03,
+    "ttft_p99": 13.03,
+    "ttft_max": 13.03
+  },
+  "control": {
+    "total": 1,
+    "ok": 1,
+    "rejected_429": 0,
+    "other": 0,
+    "ok_rate": 1.0,
+    "retry_after_ok": 0,
+    "retry_after_missing": 0,
+    "ttft_p50": 3.911,
+    "ttft_p95": 3.911,
+    "ttft_p99": 3.911,
+    "ttft_max": 3.911
+  },
+  "metrics": {
+    "aiops_admission_rejected_total": 0.0,
+    "aiops_degradation_state": 0.0,
+    "aiops_llm_calls_total": 2.0,
+    "aiops_llm_rate_limited_total": 0.0,
+    "aiops_requests_total": 5.0,
+    "aiops_requests_failed_total": 0.0
+  },
+  "metrics_before": {
+    "aiops_admission_rejected_total": 0.0,
+    "aiops_degradation_state": 0.0,
+    "aiops_llm_calls_total": 0.0,
+    "aiops_llm_rate_limited_total": 0.0,
+    "aiops_requests_total": 0.0,
+    "aiops_requests_failed_total": 0.0
+  },
+  "metrics_delta": {
+    "aiops_requests_total": 5.0,
+    "aiops_requests_failed_total": 0.0,
+    "aiops_admission_rejected_total": 0.0,
+    "aiops_llm_calls_total": 2.0,
+    "aiops_llm_rate_limited_total": 0.0
+  },
+  "degradation": {
+    "state": 0.0,
+    "level": "L0"
+  },
+  "raw": {
+    "load": [
+      {
+        "status": 200,
+        "ttft_s": 3.905,
+        "total_s": 13.022,
+        "refs": 3,
+        "error": null,
+        "retry_after_s": null
+      },
+      {
+        "status": 200,
+        "ttft_s": 13.03,
+        "total_s": 13.033,
+        "refs": 3,
+        "error": null,
+        "retry_after_s": null
+      },
+      {
+        "status": 200,
+        "ttft_s": 13.027,
+        "total_s": 13.03,
+        "refs": 3,
+        "error": null,
+        "retry_after_s": null
+      },
+      {
+        "status": 200,
+        "ttft_s": 13.029,
+        "total_s": 13.034,
+        "refs": 3,
+        "error": null,
+        "retry_after_s": null
+      }
+    ],
+    "control": [
+      {
+        "status": 200,
+        "ttft_s": 3.911,
+        "total_s": 15.375,
+        "refs": 3,
+        "error": null,
+        "retry_after_s": null,
+        "at_s": 15.4
+      }
+    ]
+  }
+}
