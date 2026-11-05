@@ -95,7 +95,8 @@ python offline/feedback_review.py --json --stdout
 python offline/feedback_review.py --audit logs --out /tmp
 ```
 
-输出文件名由**数据窗口**的日期决定，不是今天：同一份审计重跑得到同名文件，可复现。
+输出文件名由**数据窗口**的日期（UTC）决定，不是今天：同一份审计重跑得到同名文件，换台机器
+（或 CI 的 UTC runner）也是同名——报表里的时间同样是 UTC，不带机房时区。
 报表是派生件，落在 `offline/staging/`（`.gitignore` 覆盖），随时重生成，不要在上面做人工批注。
 
 退出码：`0` 成功（队列可以为空）；`2` 审计里没有任何反馈行。
@@ -111,7 +112,7 @@ python offline/feedback_review.py --audit logs --out /tmp
 
 - Java：`FeedbackControllerTest` 5 条（拒绝路径两个出口都不得落痕）、
   `OpsMetricsTest` 11 条（预注册 0 基线、tag 基数收口、仍在面板契约之外）。
-- Python：`offline/tests/test_feedback_review.py` 22 条——归并口径（up-only 不进队列、
+- Python：`offline/tests/test_feedback_review.py` 23 条——归并口径（up-only 不进队列、
   未知 verdict 只计数、无 fp 的行不被塞进 unknown 桶）、优先级分档、上下文缺失显式化、
   台账富化、可疑文档排序、坏行容忍、轮转片拼合、空队列/无反馈的区分、JSON 形态、
   `--stdout` 不落盘、表格转义、确定性。

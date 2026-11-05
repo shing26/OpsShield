@@ -204,10 +204,17 @@ def test_empty_queue_still_renders_a_report(tmp_path):
 
 
 def test_filename_comes_from_the_data_window_not_the_clock(tmp_path):
+    # 1_700_000_000_000 ms = 2023-11-14 22:13:20 **UTC**（本机 UTC+8 会是 15 日）：
+    # 时间一律按 UTC 渲染，否则同一份审计在不同时区会得到不同文件名，派生报表就不可复现了。
     path = write_jsonl(tmp_path / "audit.jsonl", [chat(1), fb(1_700_000_000_000, FP_A, "down")])
     _main(["--audit", str(path), "--out", str(tmp_path)])
-    assert (tmp_path / "queue_2023-11-15.md").exists()
+    assert (tmp_path / "queue_2023-11-14.md").exists()
     assert len(list(tmp_path.glob("queue_*.md"))) == 1
+
+
+def test_timestamps_render_in_utc_not_local():
+    # 本机是 UTC+8：这条在本地就会红，不必等 CI 的 UTC runner 才暴露。
+    assert fr._iso(1_700_000_000_000) == "2023-11-14 22:13:20"
 
 
 def test_render_is_deterministic():

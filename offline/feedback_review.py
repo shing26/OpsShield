@@ -35,7 +35,7 @@ import argparse
 import json
 import sys
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 OFFLINE = Path(__file__).resolve().parent
@@ -68,8 +68,10 @@ def _num(value: object) -> int:
 
 
 def _iso(ts: object) -> str:
+    """**UTC**，不是本地时区：报表可能在本机与 CI 各生成一次，本地时区会让同一份审计
+    得到不同的文件名（以及日界附近不同的日期）——派生报表要可复现，就不该带机房时区。"""
     try:
-        return datetime.fromtimestamp(_num(ts) / 1000).strftime("%Y-%m-%d %H:%M:%S")
+        return datetime.fromtimestamp(_num(ts) / 1000, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
     except (OverflowError, OSError, ValueError):
         return "—"
 
@@ -283,7 +285,7 @@ def render(queue: list[Item], stats: dict, suspects: list[dict]) -> str:
 
     add("# 反馈复核队列")
     add("")
-    add(f"> 由 `offline/feedback_review.py` 生成；数据窗口 {stats['window_start']} → "
+    add(f"> 由 `offline/feedback_review.py` 生成；数据窗口（UTC）{stats['window_start']} → "
         f"{stats['window_end']}。")
     add("> 本文件是**派生报表**（落在 `offline/staging/`，不入库）：可以随时重生成，"
         "不要在上面做人工批注。")
