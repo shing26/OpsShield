@@ -261,16 +261,19 @@ python scripts/verify_audit_chain.py <下载副本> --head <副本 head>
 已有样本：[live-concurrency-2026-10-23.json](live-concurrency-2026-10-23.json)、
 [slo-sample-2026-10-23.md](slo-sample-2026-10-23.md)。
 
-补长窗口：
+补长窗口（脚本已升 schema 2，产物自带 Retry-After 与降级档，门禁判据可从文件自证）：
 
 ~~~bash
-OPSPILOT_BASE=http://127.0.0.1:8081 python scripts/live_concurrency.py --seconds 300 --concurrency 20 --out docs/ops/live-concurrency-long.json
+OPSPILOT_BASE=http://127.0.0.1:8081 python scripts/live_concurrency.py --seconds 300 --concurrency 20
+python offline/slo_report.py --kind weekly      # 生成 docs/ops/slo-weekly-<末日>.md/.json
 ~~~
 
 当前脚本对照探针每 2s 一次；长窗口前建议改成 2–3 个并发对照探针，目标 20–30 条成功对照。
 验收：对照 20+ 条、5–30 分钟窗口、429/5xx/TTFT P95/P99、L2 未被点亮。
 
 月度 SLO 需要连续 30 天 Prometheus 数据；不能用手工 10s 样本冒充月度。
+收口时用 `python scripts/check_observation.py` 对已提交的 `slo-*.json` 求并集——
+退 2 表示观察期未满，退 1 表示有硬失败（样本 FAIL / 保留期不足 / 覆盖断档）。
 
 ## 6. T7/T8
 

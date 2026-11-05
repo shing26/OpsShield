@@ -12,17 +12,29 @@
 
 | 门禁 | 现状 | 转绿需要 | 证据落点 |
 |---|---|---|---|
-| 6 准入控制 | 黄（部分）：单次 live 20 并发样本通过 | **≥ 20–30 条对照样本**（多并发档 × 加载/对照租户 × 跨周），且 5xx=0、对照租户降级档不亮、429 带 Retry-After | 周报 §准入对照 + `docs/ops/live-concurrency-*.json` |
+| 6 准入控制 | 黄（部分）：单次 live 20 并发样本通过 | **≥ 20–30 条对照样本**（多并发档 × 加载/对照租户 × 跨周），且 5xx=0、对照租户降级档不亮、429 带 Retry-After | 周报 `docs/ops/slo-weekly-*.md` + `docs/ops/live-concurrency-*.json` |
 | 7 延迟分位与 SLO | 黄（部分）：分位与抓取已接线，样本仅 ~24s | **连续 30 天抓取留存** + 一份固定格式**月报**（含 SLI 表与 SLO 判定） | 月报 `docs/ops/slo-monthly-YYYY-MM.md` + Prometheus 数据 |
 
 **两条门禁都要求**：证据必须能指到「路径 + 时间点 + 可重跑命令」，不接受口头结论（production-gate §1.2）。
+
+两件工具把"手工抄表"换成"一条命令 + 一份可提交的产物"：
+
+| 工具 | 作用 | 产物 |
+|---|---|---|
+| `offline/slo_report.py` | 读 Prometheus + 并发样本，生成固定格式周报/月报，并给出逐项判定 | `docs/ops/slo-weekly-<末日>.md/.json`、`slo-monthly-<YYYY-MM>.md/.json` |
+| `scripts/check_observation.py` | 只读已提交的 `slo-*.json`，对覆盖天数与样本求并集，收口判定 | 终端/JSON 判定（0=绿，1=红，2=观察期未满） |
+
+**连续性为什么按周固化**：Prometheus 保留期是 30 天，第 30 天回看时第 1 天正好在过期边缘。
+每周把当周的 `coverage.covered` 写进 `slo-weekly-*.json`，30 天的覆盖由这些文件求并集证明——
+不依赖"30 天后 Prometheus 还记得"。同理，样本判定随报表固化：判据变了也只影响新报表，旧证据不被追溯改写。
 
 ---
 
 ## 1. Day 0：一次性准备（半天）
 
 - [ ] 部署形态确认：live 栈（Redis + ES + Qdrant + 真实 DashScope key），网关以 systemd/compose 常驻；
-- [ ] Prometheus 抓取 `opspilot` 目标为 UP，且保留期 ≥ 30 天（默认 15d 需调到 30d 或接远端存储）；
+- [ ] Prometheus 抓取 `opspilot` 目标为 UP，且保留期 ≥ 30 天（`docker-compose.yml` 已设 `--storage.tsdb.retention.time=30d`；
+      用 `python offline/slo_report.py --kind weekly --stdout` 核一遍，报表表头会打印实际保留期，不靠读 compose 猜）；
 - [ ] 告警规则加载：`ops/alerting/rules/opspilot.yml`（含 `opspilot:slo_*` 记录规则与 burn-rate 告警）；
 - [ ] 备份计划任务/服务在跑（门禁 1 已绿，确认仍绿）；
 - [ ] 基线快照：
@@ -54,31 +66,42 @@
 
 ## 3. 每周一 15 分钟（周报模板，复制到观察 issue）
 
-### 3.1 本周证据采集（固定 3 组准入样本）
+### 3.1 本周证据采集（固定 3 组准入样本 + 一条命令出周报）
 
 每组 = 一次加载压测 + 一次对照租户探测，共 6 条对照记录；4 周累计 ≥ 24 条（满足门禁 6 的 20–30 条）。
 
 ~~~bash
-# 第 N 周：三个并发档（4 / 8 / 20），每档 10s；产出 docs/ops/live-concurrency-YYYY-MM-DD-cN.json
-python scripts/live_concurrency.py --concurrency 4  --seconds 10 --out docs/ops/live-concurrency-YYYY-MM-DD-c4.json
-python scripts/live_concurrency.py --concurrency 8  --seconds 10 --out docs/ops/live-concurrency-YYYY-MM-DD-c8.json
-python scripts/live_concurrency.py --concurrency 20 --seconds 10 --out docs/ops/live-concurrency-YYYY-MM-DD-c20.json
+# 三个并发档（4 / 8 / 20），每档 10s
+# 默认产物 docs/ops/live-concurrency-<今天>-c<N>.json；同名已存在会拒绝，避免覆盖历史证据
+python scripts/live_concurrency.py --concurrency 4  --seconds 10
+python scripts/live_concurrency.py --concurrency 8  --seconds 10
+python scripts/live_concurrency.py --concurrency 20 --seconds 10
+
+# 生成本周周报（Prometheus 需在跑）：docs/ops/slo-weekly-<末日>.md 与 .json
+python offline/slo_report.py --kind weekly
 ~~~
 
-同时导出本周 SLO 分位（Prometheus 查询后贴表）：
+周报的每个判定都由工具算出，人只负责复核并补"事件与处置"：
+
+- **样本要求 schema 2**：`retry_after_s`（429 是否带 Retry-After）、`degradation.state`（压测后降级档）、`metrics_delta`（计数增量）。
+  旧 schema 1 样本缺后两项，工具判 `UNPROVEN`（证明不了 ≠ 通过），不计入 24 条——旧样本原地保留，不追溯改写。
+- **单样本判定**：加载租户出现 429、5xx=0、对照租户全 200 且降级档 L0、429 全部带 Retry-After → `PASS`；
+  任一硬判据不满足 → `FAIL`；缺字段 → `UNPROVEN`。
+- **读不到就写"无数据"**：Prometheus 没有序列时报表写"无数据"，不补 0——没接线不能被渲染成零故障。
+
+PromQL 底稿（报表 §1/§2 即由这些查询算出；需手工核对时用）：
 
 ~~~promql
-# 可用性（近 7d，5xx 口径）
-sum(rate(aiops_requests_failed_total[7d])) / clamp_min(sum(rate(aiops_requests_total[7d])), 1e-9)
-# TTFT P95/P99（近 7d）
+sum(increase(aiops_requests_total[7d]))
+sum(increase(aiops_requests_failed_total[7d]))
+sum(increase(aiops_admission_rejected_total[7d]))
 histogram_quantile(0.95, sum(rate(aiops_ttft_seconds_bucket[7d])) by (le))
 histogram_quantile(0.99, sum(rate(aiops_ttft_seconds_bucket[7d])) by (le))
-# 准入拒绝与在途峰值
-sum(increase(aiops_admission_rejected_total[7d]))
+max_over_time(aiops_degradation_state[7d])
 max_over_time(aiops_inflight[7d])
-# 错误预算燃烧（记录规则）
-opspilot:slo_app_failure_ratio:1h
 ~~~
+
+> 周报产物直接提交仓库，表格数字以产物为准、不手抄；§3.2 的模板只在观察 issue 里补"事件与处置"与结论时用。
 
 ### 3.2 周报模板
 
@@ -134,7 +157,14 @@ opspilot:slo_app_failure_ratio:1h
 
 ## 4. 第 30 天：月报与门禁复核
 
-### 4.1 月报模板（固定格式，存 `docs/ops/slo-monthly-YYYY-MM.md`）
+### 4.1 月报（一条命令生成，固定格式，存 `docs/ops/slo-monthly-YYYY-MM.md`）
+
+~~~bash
+python offline/slo_report.py --kind monthly --month YYYY-MM
+~~~
+
+产物含 SLI 表、抓取覆盖天数、保留期与门禁 6/7 判定，均可重跑复现。下面的模板是它的形状：
+**数字不要手改**，需要人写的是 §4 事件复盘与 §5 遗留风险。
 
 ~~~markdown
 # SLO 月报 · YYYY-MM
@@ -179,9 +209,18 @@ opspilot:slo_app_failure_ratio:1h
 - 遗留风险（含单节点无 HA 的边界复述）：
 ~~~
 
-### 4.2 写回门禁复核记录
+### 4.2 收口判定与写回门禁复核记录
 
-在 `docs/ops/production-gate.md` §4 追加两行（**不覆盖旧行**，格式照现有行）：
+先让聚合器核一遍（只读、不触网、可重跑）：
+
+~~~bash
+python scripts/check_observation.py        # 人读；加 --json 给机器
+~~~
+
+退出码：**0** 两条门禁 GREEN；**1** 有硬失败（样本 FAIL / 保留期不足 / 覆盖断档 / 报表读不了）；**2** 观察期未满。
+只有退 0 才能写"绿"；退 1 先按 §6 处置；退 2 说明天数还不够，继续观察，不冒充绿。
+
+然后在 `docs/ops/production-gate.md` §4 追加两行（**不覆盖旧行**，格式照现有行）：
 
 ~~~markdown
 | YYYY-MM-DD | G1 | 6 | full | **绿**（或黄，列边界） | 30 天观察期内 24 条对照样本：加载租户 429+Retry-After、5xx=0、对照租户 L0；证据：月报 §2 + live-concurrency-*.json |
@@ -196,9 +235,11 @@ opspilot:slo_app_failure_ratio:1h
 
 | 类型 | 路径 | 频率 |
 |---|---|---|
-| 准入样本 JSON | `docs/ops/live-concurrency-YYYY-MM-DD-cN.json` | 每周 3 个 |
-| 周报 | 观察 issue 评论（模板见 §3.2） | 每周 1 次 |
-| 月报 | `docs/ops/slo-monthly-YYYY-MM.md` | 第 30 天 |
+| 准入样本 JSON | `docs/ops/live-concurrency-YYYY-MM-DD-cN.json`（schema 2） | 每周 3 个 |
+| 周报 | `docs/ops/slo-weekly-YYYY-MM-DD.md/.json`（`slo_report.py --kind weekly`） | 每周 1 次 |
+| 周报补充 | 观察 issue 评论（§3.2 的"事件与处置"与结论） | 每周 1 次 |
+| 月报 | `docs/ops/slo-monthly-YYYY-MM.md/.json`（`slo_report.py --kind monthly`） | 第 30 天 |
+| 收口判定 | `python scripts/check_observation.py` 输出（贴进复核行） | 第 30 天 |
 | 每日用量 | `logs/usage.log`（gitignored） | 每日 |
 | Prometheus 数据 | 保留期 30d（或远端存储） | 连续 |
 | 门禁复核行 | `docs/ops/production-gate.md` §4 | 第 30 天 |
@@ -220,8 +261,8 @@ opspilot:slo_app_failure_ratio:1h
 |---|---|---|
 | Day 0 | §1 准备 + 基线样本 + 建观察 issue | 基线 JSON / issue |
 | 每日 | §2 八项检查 | usage.log / 异常记录 |
-| 每周一 | §3 三组准入 + 周报评论 | 3×JSON + 周报 |
-| Day 30 | §4 月报 + 门禁复核行 | `slo-monthly-YYYY-MM.md` + production-gate §4 两行 |
+| 每周一 | §3 三组准入 + `slo_report.py --kind weekly` | 3×JSON + `slo-weekly-*.md/.json` |
+| Day 30 | §4 `slo_report.py --kind monthly` + `check_observation.py` 退 0 + 门禁复核行 | `slo-monthly-*` + production-gate §4 两行 |
 
 ---
 

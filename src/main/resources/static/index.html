@@ -1663,11 +1663,24 @@ document.addEventListener('click', async e => {
   try {
     const r = await fetch('/api/v1/copilot/actions/confirm', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + S.a.token },
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + S.a.token,
+                 'X-Opshilot-Surface': 'panel' },
       body: JSON.stringify({ opId: op, token: tok })
     });
     const body = await r.json();
-    if (r.ok) { msg.textContent = '已确认（' + body.state + '）——派发由自动化系统执行。'; $('l1tok').value = ''; }
+    // 走链记录缺口 2：confirmed（派发未启用，诚实挂起）与 failed（派发投递失败）是两个终态，
+    // 混成一句"派发由自动化系统执行"对 failed 是误导——确认动作本身成了，派发没出去。
+    if (r.ok) {
+      if (body.state === 'failed') {
+        msg.textContent = '已确认，但派发失败（webhook 未送达）——状态停在 failed；'
+          + '恢复=解除派发障碍后由人重新走 unfreeze 或新 op_id 重新提案。';
+      } else if (body.state === 'dispatched') {
+        msg.textContent = '已确认并派发（' + body.state + '）。';
+      } else {
+        msg.textContent = '已确认（' + body.state + '）——派发未启用，op 诚实挂起在该状态。';
+      }
+      $('l1tok').value = '';
+    }
     else msg.textContent = '被拒（' + (body.stage || r.status) + '）：' + (body.message || '');
     refreshActions();
   } catch (err) { msg.textContent = '网络异常：' + err; }
