@@ -202,4 +202,28 @@ class ActionOpsServiceTest {
                 "审计不得声称已派发而真实状态是 " + state + "：" + events);
         assertTrue(events.contains("action_expired"), "缺 action_expired：" + events);
     }
+
+    /**
+     * 走链记录缺口 1（2026-11-06）：面板与 API 走同一端点，via 恒为 action-api——
+     * "这条确认来自面板 UI"在审计链里证明不了。surface 白名单透传进 via：panel → action-panel；
+     * 未知/缺省 → action-api（不信任客户端自报，伪造无法把自己洗成面板）。
+     */
+    @Test
+    void auditViaDistinguishesPanelFromApi() {
+        loadL1Chunk();
+        var p1 = ops.propose(PROPOSER, "rb-l1::恢复动作", CMD, "panel");
+        var p2 = ops.propose(PROPOSER, "rb-l1::恢复动作", CMD, null);
+        var p3 = ops.propose(PROPOSER, "rb-l1::恢复动作", CMD, "forged");
+        ops.confirm(CONFIRMER, p1.opId(), p1.confirmToken(), "panel");
+        ops.confirm(CONFIRMER, p2.opId(), p2.confirmToken(), null);
+        ops.confirm(CONFIRMER, p3.opId(), p3.confirmToken(), "forged");
+
+        var viaByEvent = audit.recentSince(0, 500).events().stream()
+                .filter(ev -> String.valueOf(ev.get("ev")).startsWith("action_"))
+                .map(ev -> ev.get("ev") + "=" + ev.get("via")).toList();
+        long panel = viaByEvent.stream().filter(v -> v.endsWith("=action-panel")).count();
+        long api = viaByEvent.stream().filter(v -> v.endsWith("=action-api")).count();
+        assertTrue(panel >= 2, "panel surface 应落在 action-panel（proposed + confirmed 各一）：" + viaByEvent);
+        assertTrue(api >= 4, "未知/缺省 surface 落回 action-api，不得采信自报：" + viaByEvent);
+    }
 }

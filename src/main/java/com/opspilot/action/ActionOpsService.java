@@ -74,6 +74,11 @@ public class ActionOpsService {
 
     /** L1 提案：全部服务端复核通过后落库，返回一次性确认 token（明文只出现这一次）。 */
     public ProposeResult propose(UserContext proposer, String chunkId, String command) {
+        return propose(proposer, chunkId, command, null);
+    }
+
+    /** 带 surface 的提案：surface 进审计 via，让"来自面板"与"来自 API"在审计链可辨（走链记录缺口 1）。 */
+    public ProposeResult propose(UserContext proposer, String chunkId, String command, String surface) {
         if (!dispatch.l1Enabled()) {                 // 灰度总开关：红队全绿前任何环境不开
             reject(proposer, chunkId, "l1_disabled", "L1 未启用（opspilot.l1.enabled）");
         }
@@ -115,7 +120,7 @@ public class ActionOpsService {
                 doc.chunk().service(), doc.chunk().authLevel(), proposer.tenantId(),
                 proposer.sub(), java.sql.Timestamp.from(Instant.now()), "proposed",
                 sha256Hex(token), java.sql.Timestamp.from(expires));
-        auditEvent(proposer, "action_proposed", opId + " " + command);
+        auditEvent(proposer, "action_proposed", opId + " " + command, surface);
         l1Metrics.proposed(proposer.tenantId());
         return new ProposeResult(opId, token, expires.toString());
     }
@@ -125,6 +130,11 @@ public class ActionOpsService {
      * token 一次性：哈希校验通过后立刻置 NULL——同 token 二次确认必然失败。
      */
     public StatusResult confirm(UserContext confirmer, String opId, String token) {
+        return confirm(confirmer, opId, token, null);
+    }
+
+    /** 带 surface 的确认：终态审计（confirmed / dispatched / not_dispatched）都带同一来源。 */
+    public StatusResult confirm(UserContext confirmer, String opId, String token, String surface) {
         if (!dispatch.l1Enabled()) {                 // 开关覆盖全链路：关闭后 confirm 也拒
             throw rejection(confirmer, opId, "l1_disabled", "L1 未启用（opspilot.l1.enabled）");
         }
@@ -162,7 +172,7 @@ public class ActionOpsService {
         if (updated != 1) {     // 并发双击/竞态：CAS 只允许一次成功
             throw rejection(confirmer, opId, "cas_conflict", "确认已被并发消费");
         }
-        auditEvent(confirmer, "action_confirmed", opId);
+        auditEvent(confirmer, "action_confirmed", opId, surface);
         l1Metrics.confirmed(confirmer.tenantId());
         dispatch.stampDispatchDeadline(opId);       // 契约 3：confirm 即定派发期限
         dispatch.dispatchConfirmed(opId);           // §2：confirmed→dispatched 系统自动
@@ -172,7 +182,7 @@ public class ActionOpsService {
                 .stream().findFirst().orElse("");
         boolean dispatched = "dispatched".equals(after);
         auditEvent(confirmer, dispatched ? "action_dispatched" : "action_not_dispatched",
-                opId + (dispatched ? "" : " (state=" + after + ")"));
+                opId + (dispatched ? "" : " (state=" + after + ")"), surface);
         return status(confirmer, opId);
     }
 
@@ -336,7 +346,17 @@ public class ActionOpsService {
     }
 
     private void auditEvent(UserContext user, String ev, String detail) {
-        audit.log(user, ev, "action-api", "manual", detail, null, "none", null, false, 0, 0,
+        auditEvent(user, ev, detail, null);
+    }
+
+    /**
+     * surface 进审计 via：面板与 API/自动化走同一端点，此前 via 恒为 action-api，
+     * "这条确认来自面板 UI"在审计链里证明不了（ADR-0028 裁决 1 的"审计链短"只兑现了身份绑定）。
+     * 未知/缺省 surface 落回 action-api——不信任客户端报的值，只认白名单词表。
+     */
+    private void auditEvent(UserContext user, String ev, String detail, String surface) {
+        String via = "panel".equals(surface) ? "action-panel" : "action-api";
+        audit.log(user, ev, via, "manual", detail, null, "none", null, false, 0, 0,
                 null, null, null, null);
     }
 

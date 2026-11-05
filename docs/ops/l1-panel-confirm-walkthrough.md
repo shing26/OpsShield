@@ -61,3 +61,19 @@ ADR-0028 评审增补 3「confirm 同步写死，返回态即终态三选一：d
 
 - **服务端 + 审计链**（本次已证）：确认守卫、一次性 token、终态语义、审计三连；
 - **UI 渲染层**（待补）：pending 列表字段契约已核对（§2 步 2），点击层与 `failed` 文案待真实浏览器走查。
+
+## 5. 缺口修复（2026-11-06）
+
+§3 两缺口当轮修掉（PR #77 追加提交）：
+
+1. **审计 via 来源标识**：采用"前端来源标识"案。面板 confirm fetch 带 `X-Opshilot-Surface: panel`，
+   控制器白名单透传（只认 `panel` 一个值，其它/缺省一律落 `action-api`）——不信任客户端自报，
+   伪造无法把自己洗成面板。审计行新增 `action-panel` via；服务端用例
+   `auditViaDistinguishesPanelFromApi` 锁极性（panel→action-panel、forged/null→action-api）。
+   面板契约门闩加**层 10**：删掉头或后端不再读，CI 红。
+2. **failed 态文案**：面板确认后的提示按终态分流——`failed`（派发投递失败）明说"已确认但派发失败，
+   恢复=unfreeze 或新 op_id 重新提案"；`dispatched` 说"已确认并派发"；其余（confirmed 挂起）说
+   "派发未启用，op 诚实挂起"。三句各自只承诺该终态真实发生的事。
+
+边界保留：UI 点击层的真实浏览器走查仍未做（浏览器预览不可用），本节修复亦经"代码 + 单测 +
+面板契约门闩"验证，渲染层人工走查待补。
