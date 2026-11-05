@@ -26,6 +26,9 @@ logs/
 # 并发曲线扫描的**原始** locust 产物：六档 × 五文件 = 30 个文件会淹掉 reports/，
 # 而曲线的价值在汇总表（reports/concurrency_sweep.{json,md} 入库且内含复现命令），故原始件留本地。
 offline/load/_sweep_raw/
+# 复盘草稿（offline/postmortem_draft.py 的输出）：**未人审**的草稿不是语料。
+# 人审通过后按 docs/ops/postmortem-draft.md 的清单改名移入 offline/corpus/，那时才入库。
+offline/staging/
 
 # OS
 Thumbs.db
