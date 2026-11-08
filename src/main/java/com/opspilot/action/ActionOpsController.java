@@ -28,11 +28,21 @@ public class ActionOpsController {
     public record ProposeReq(String ref, String command) {}
     public record ConfirmReq(String opId, String token) {}
 
+    /**
+     * 来源标识（走链记录缺口 1）：面板 fetch 带 `X-Opshilot-Surface: panel`，审计 via 记 `action-panel`；
+     * 缺失/其它值一律当 API（`action-api`）——白名单词表之外的声明不采信，伪造无法把自己洗成面板。
+     */
+    static final String SURFACE_HEADER = "X-Opshilot-Surface";
+
+    private static String surface(HttpServletRequest http) {
+        return "panel".equals(http.getHeader(SURFACE_HEADER)) ? "panel" : null;
+    }
+
     /** L1 提案：返回一次性确认 token（明文只出现这一次；URL 只定位不承载权限——§0 裁决 3）。 */
     @PostMapping("/propose")
     public Map<String, Object> propose(@RequestBody ProposeReq req, HttpServletRequest http) {
         UserContext user = JwtAuthFilter.from(http);
-        ActionOpsService.ProposeResult r = ops.propose(user, req.ref(), req.command());
+        ActionOpsService.ProposeResult r = ops.propose(user, req.ref(), req.command(), surface(http));
         return Map.of("op_id", r.opId(), "confirm_token", r.confirmToken(),
                 "expires_at", r.expiresAt(),
                 "note", "token 一次性且窗口 15 分钟；确认须由不同 principal 在面板完成");
@@ -42,7 +52,7 @@ public class ActionOpsController {
     @PostMapping("/confirm")
     public ActionOpsService.StatusResult confirm(@RequestBody ConfirmReq req,
                                                  HttpServletRequest http) {
-        return ops.confirm(JwtAuthFilter.from(http), req.opId(), req.token());
+        return ops.confirm(JwtAuthFilter.from(http), req.opId(), req.token(), surface(http));
     }
 
     /** 本租户待确认 op 列表（面板确认入口的数据面；?state= 可过滤）。 */

@@ -39,6 +39,7 @@
 | `offline/eval/observed_probe.py` | **真实输入探测（G4）**：在系统自己跑出的 query 上测三件**无需真值**的事（零召回率 / 快路径命中率 / 门控拒答率）。query 集不入库，报告只含聚合 | ✅ |
 | `offline/provenance.py` | **报告↔语料同代判据**（面一）：CI 门闩 `--check` + 出处登记 `--stamp`（内容摘要，非 mtime） | ✅ |
 | `offline/doc_numbers.py` | **文档数字↔产物同代判据**（面二）：按 `doc_numbers.json` 每次**现算**产物真值比对文档字面量（不存快照、无 `--stamp`） | ✅ |
+| `offline/slo_report.py` | **门禁 6/7 周报/月报生成器**：读 Prometheus + `live-concurrency-*.json`，把抓取连续性与逐样本判定固化成可提交的 `.md/.json`。读不到写"无数据"、证明不了写 `UNPROVEN`——连续性靠周报固化，不赌 30 天后 Prometheus 还记得 | ✅ |
 | `offline/load/` | Locust 压测脚本与报告 | ✅ |
 | `offline/load/sweep.py` | **并发-延迟曲线**：扫 25/50/100/200/300/500 六档出 P50/P95/P99 + 失败率 + RPS，标出**首次 L1 触发档**与各档**实到并发/在途峰值**。原始 locust 产物留本地（`.gitignore`），只入汇总报告 | ✅ |
 | `offline/load/cache_savings.py` | **缓存节省账**：受控混合负载 → 命中/未命中延迟差 × 命中率 = 单请求平均节省。归因靠本脚本自己的负载（`hits/total_requests` 的分母含 Single-Flight follower，是浑的） | ✅ |
@@ -88,6 +89,8 @@
 | `daily_usage.py` | 从审计日志聚合当日用量（cron 友好） |
 | `check_panel_contract.sh` | 面板↔后端字面量契约（CI 零依赖，后端改名即红） |
 | `check_public_copy.py` | **对外面用词门闩**（[ADR-0023](adr/0023-public-surface-terminology.md)）：canonical 词不得漏到 README + 页面文案；词表**从 `CONTEXT.md` 的 `_对外_` 行现取**（不手写，登记表空了即红）；反向启发式只报不闸。判据极性由 `tests/test_public_copy.py` 逐词变异钉住 |
+| `live_concurrency.py` | **门禁 6 活体采样（schema 2）**：单租户 N 并发 + 另一租户对照，记录 429 的 `Retry-After`、`aiops_degradation_state` 与计数器增量（旧 schema 1 缺后两项，样本不可自证）；产物按日期命名，同名默认拒绝覆盖，避免重跑改写历史证据 |
+| `check_observation.py` | **门禁 6/7 收口判定**（只读、不触网，可进 CI）：对已提交的 `docs/ops/slo-*.json` 求覆盖天数与样本并集——0 两条绿 / 1 有硬失败 / 2 观察期未满 |
 | `py.sh` | Python 解释器三档探测（跨平台单点，被多个脚本复用） |
 | `pack_evidence.py` | 证据链一键打包：产出自述快照（`MANIFEST.md` 逐项注明出处与"当前模式能否复核"）；出包前自检"报告↔语料同代"，分叉即拒绝（`--allow-stale` 可显式放行并留痕） |
 

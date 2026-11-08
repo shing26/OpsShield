@@ -1,0 +1,85 @@
+{
+  "schema": 1,
+  "kind": "weekly",
+  "window": {
+    "start": "2026-10-30",
+    "end": "2026-11-05",
+    "days": 7
+  },
+  "prometheus": {
+    "url": "http://127.0.0.1:9090",
+    "job": "opspilot"
+  },
+  "coverage": {
+    "covered": [],
+    "missing": [
+      "2026-10-30",
+      "2026-10-31",
+      "2026-11-01",
+      "2026-11-02",
+      "2026-11-03",
+      "2026-11-04",
+      "2026-11-05"
+    ],
+    "notes": [
+      "2026-11-05: 仅 19 个抓取点（门槛 240）"
+    ],
+    "retention_days": 30.0,
+    "min_scrapes_per_day": 240
+  },
+  "sli": {
+    "requests_total": 101.74999999999999,
+    "requests_failed": 0.0,
+    "admission_rejected": 53.44444444444444,
+    "ttft_p50": 1.6106127355,
+    "ttft_p95": 1.77167400895,
+    "ttft_p99": 1.78599056659,
+    "req_p95": null,
+    "req_p99": null,
+    "degradation_max": 0.0,
+    "inflight_max": 5.0
+  },
+  "samples": [
+    {
+      "file": "live-concurrency-2026-11-05-c20.json",
+      "concurrency": 20,
+      "started_at": "2026-11-05T20:02:47+0800",
+      "schema": 2,
+      "verdict": "PASS",
+      "reasons": []
+    },
+    {
+      "file": "live-concurrency-2026-11-05-c4.json",
+      "concurrency": 4,
+      "started_at": "2026-11-05T19:59:57+0800",
+      "schema": 2,
+      "verdict": "UNPROVEN",
+      "reasons": [
+        "并发 4 未触发削峰（无 429）——背压判据需更高并发档证明"
+      ]
+    },
+    {
+      "file": "live-concurrency-2026-11-05-c8.json",
+      "concurrency": 8,
+      "started_at": "2026-11-05T20:02:19+0800",
+      "schema": 2,
+      "verdict": "PASS",
+      "reasons": []
+    }
+  ],
+  "gate6": {
+    "samples": 3,
+    "passing_samples": 2,
+    "records": 6,
+    "passing_records": 4,
+    "required_records": 24,
+    "verdict": "INCOMPLETE"
+  },
+  "gate7": {
+    "days_covered": 0,
+    "days_missing": 7,
+    "required_days": 30,
+    "retention_days": 30.0,
+    "verdict": "INCOMPLETE"
+  }
+}
