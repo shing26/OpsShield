@@ -25,7 +25,7 @@
 | `src/main/java/com/opspilot/` | 在线面：`gateway`(协议/编排) `retrieval` `llm` `resilience` `auth` `cache` `storm` `metrics` `health` `ingest` `chunk` `config` `common`(跨层控制信号) `store`(存储接缝) | ✅ |
 | `src/main/java/com/opspilot/store/` | **存储接缝**（[ADR-0022](adr/0022-standalone-storage-mode.md)）：`KvStore` 窄接口（15 操作）+ `RedisKvStore`/`MemoryKvStore` 两实现 + `StoreConfig` 按 `opspilot.storage.mode` 装配。内存实现**刻意复刻 Redis 语义**（TTL 仅建于创建、闭区间窗口裁剪、成员去重、`mapValues` 无顺序承诺）——不是"够用就行"，否则两套实现会在窗口计数/配额水位上悄悄分叉 | ✅ |
 | `src/main/java/com/opspilot/retrieval/` | 检索腿接缝（[ADR-0022](adr/0022-standalone-storage-mode.md)）：`RetrievalLeg` 接口（ES/Qdrant 与内存腿同形）+ `IdentityFilter`（`tenant × auth_level` 过滤**单一事实源**，检索与覆盖范围共用）+ `InMemoryIndex`/`InMemoryLegs`/`Vectors`（内存词法+向量腿，词法哈希非神经语义）+ `RetrievalWiring`（`lexicalLeg`/`vectorLeg` 命名 bean）。**权限过滤复用同一份判据是构造保证**，不是两套实现各自承诺 | ✅ |
-| `src/test/java/` | 单测与集成（428 用例，`@Test` 声明数） | ✅ |
+| `src/test/java/` | 单测与集成（429 用例，`@Test` 声明数） | ✅ |
 | `docs/adr/` | 28 项架构决策（每份含否决项与后果）——**改架构先写 ADR**；0027=MCP 入口、0028=L1 受控行动契约 | ✅ |
 | `docs/agents/` | **engineering skills 的 repo 配置**：issue tracker 约定 / triage label 映射 / 领域文档位置与消费规则（根级 `AGENTS.md` 的 `## Agent skills` 块指向这里）。由 `/setup-matt-pocock-skills` 写入，切换 tracker 或从头开始时才需重跑 | ✅ |
 | `docs/qa/` | 红队缺陷台账 / 模块复验台账（缺陷与验证的单一事实源） | ✅ |
@@ -39,6 +39,7 @@
 | `offline/eval/observed_probe.py` | **真实输入探测（G4）**：在系统自己跑出的 query 上测三件**无需真值**的事（零召回率 / 快路径命中率 / 门控拒答率）。query 集不入库，报告只含聚合 | ✅ |
 | `offline/provenance.py` | **报告↔语料同代判据**（面一）：CI 门闩 `--check` + 出处登记 `--stamp`（内容摘要，非 mtime） | ✅ |
 | `offline/doc_numbers.py` | **文档数字↔产物同代判据**（面二）：按 `doc_numbers.json` 每次**现算**产物真值比对文档字面量（不存快照、无 `--stamp`） | ✅ |
+| `offline/slo_report.py` | **门禁 6/7 周报/月报生成器**：读 Prometheus + `live-concurrency-*.json`，把抓取连续性与逐样本判定固化成可提交的 `.md/.json`。读不到写"无数据"、证明不了写 `UNPROVEN`——连续性靠周报固化，不赌 30 天后 Prometheus 还记得 | ✅ |
 | `offline/load/` | Locust 压测脚本与报告 | ✅ |
 | `offline/load/sweep.py` | **并发-延迟曲线**：扫 25/50/100/200/300/500 六档出 P50/P95/P99 + 失败率 + RPS，标出**首次 L1 触发档**与各档**实到并发/在途峰值**。原始 locust 产物留本地（`.gitignore`），只入汇总报告 | ✅ |
 | `offline/load/cache_savings.py` | **缓存节省账**：受控混合负载 → 命中/未命中延迟差 × 命中率 = 单请求平均节省。归因靠本脚本自己的负载（`hits/total_requests` 的分母含 Single-Flight follower，是浑的） | ✅ |
@@ -88,6 +89,8 @@
 | `daily_usage.py` | 从审计日志聚合当日用量（cron 友好） |
 | `check_panel_contract.sh` | 面板↔后端字面量契约（CI 零依赖，后端改名即红） |
 | `check_public_copy.py` | **对外面用词门闩**（[ADR-0023](adr/0023-public-surface-terminology.md)）：canonical 词不得漏到 README + 页面文案；词表**从 `CONTEXT.md` 的 `_对外_` 行现取**（不手写，登记表空了即红）；反向启发式只报不闸。判据极性由 `tests/test_public_copy.py` 逐词变异钉住 |
+| `live_concurrency.py` | **门禁 6 活体采样（schema 2）**：单租户 N 并发 + 另一租户对照，记录 429 的 `Retry-After`、`aiops_degradation_state` 与计数器增量（旧 schema 1 缺后两项，样本不可自证）；产物按日期命名，同名默认拒绝覆盖，避免重跑改写历史证据 |
+| `check_observation.py` | **门禁 6/7 收口判定**（只读、不触网，可进 CI）：对已提交的 `docs/ops/slo-*.json` 求覆盖天数与样本并集——0 两条绿 / 1 有硬失败 / 2 观察期未满 |
 | `py.sh` | Python 解释器三档探测（跨平台单点，被多个脚本复用） |
 | `pack_evidence.py` | 证据链一键打包：产出自述快照（`MANIFEST.md` 逐项注明出处与"当前模式能否复核"）；出包前自检"报告↔语料同代"，分叉即拒绝（`--allow-stale` 可显式放行并留痕） |
 

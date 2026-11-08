@@ -118,5 +118,11 @@ for k in $body_keys; do
   echo "$dto_fields" | grep -qx "$k" || { echo "FAIL: 面板请求体字段不在 ChatRequest 里: $k"; fail=1; }
 done
 
-if [ $fail -eq 0 ]; then echo "OK：面板契约九层一致（路径 admin+copilot+auth / 指标双向 / state 键集 / actuator 暴露面 / ev.sub 转义 / SSE 帧 / 请求体字段）"; fi
+# 层 10：L1 确认动线的来源标识（2026-11-06 走链缺口 1）：面板 confirm fetch 必须带
+# X-Opshilot-Surface: panel——审计 via 靠它区分"来自面板"与"来自 API"。删了它审计退回
+# action-api，"面板动线"再度证明不了（这正是走链记录发现缺口的方式）。
+grep -qF "'X-Opshilot-Surface': 'panel'" "$HTML"   || { echo "FAIL: 面板 confirm 缺 X-Opshilot-Surface: panel（审计 via 不可辨来源）"; fail=1; }
+grep -qF '"X-Opshilot-Surface"' src/main/java/com/opspilot/action/ActionOpsController.java   || { echo "FAIL: 后端 confirm 不再读 X-Opshilot-Surface"; fail=1; }
+
+if [ $fail -eq 0 ]; then echo "OK：面板契约十层一致（路径 admin+copilot+auth / 指标双向 / state 键集 / actuator 暴露面 / ev.sub 转义 / SSE 帧 / 请求体字段 / L1 来源标识）"; fi
 exit $fail
