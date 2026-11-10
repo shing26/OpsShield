@@ -138,6 +138,7 @@ cron（Linux 部署版；本机手动跑同样有效）：
 | 门控拒答写入 L1（TTL 2h）导致语料更新后短窗回放旧拒答（2026-10-03 登记，live QA F-4） | reingest 补上新语料后，同 query（同指纹）在 2h 内仍收拒答回放**且造成漏检**——判据：能指出具体 query 与重灌时间点（审计行 `cache_hit:L1` + `refused:true` 晚于 reingest） | 与"SOP 直出不写 L1"（A2-6）同一取舍家族：拒答入缓存换"同 query 重发零成本"，代价窗上限 = TTL。运维 SOP：reingest 后用**改变措辞**的 query 验证新语料（不同指纹绕开旧条目）；若要根治可缩短拒答类条目 TTL，未到触发线不做 |
 
 | 静态 SOP 缺 `auth_level` 维度（ADR-0020 理由③ 登记：`IngestionRunner.warmSop` 只按 tenant 分区、`SopFallbackService.lookup` 不收 `authLevel`，L2 直出时 level-2 止损段对 level-1 主体可达） | 出现一次"低密级主体在 L2 静态 SOP 直出中读到高于自身 `auth_level` 的止损段"且被真人/QA 复现（判据：能指到具体 query 与 `auth_level` 组合的审计行）→ 立项给 `warmSop` 分区键与 `lookup` 签名加 `auth_level` 维度 | 只读立场不豁免：它是 ADR-0008 在 L2 静态 SOP 面上的缺口。**在它修掉之前，对外不得宣称"静态 SOP 也按密级隔离"**（ADR-0020 已写此口径）；L2 直出只在降级期发生，故暴露面受限 |
+| 插件契约提取（[ADR-0029](docs/adr/0029-reuse-boundary-trust-base-vs-domain-plugins.md) 决策 2 五件事的接口化：去重键归一化策略 / 命令白名单数据 / Runbook 提供方 / Prompt 模板 / 语料来源声明为契约） | **rule of three**：第三个真实用例需要同一接口点时才提取（第一个=排障、第二个=ADR-0028 执行闭环的 runbook 引擎落位），不为不存在的用例提前抽象；每次提取独立走验收链路 | 分层判据已立（底座包不含领域词汇，可升级为 CI 词法门闩）；五件事的接口点现状登记在 ADR-0029 决策 2 的表中，触发前**不动代码** |
 
 ### 5.1 历史遗留项的触发线收敛（2026-09-17）
 
