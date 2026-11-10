@@ -35,10 +35,9 @@ public class SopFallbackService {
                 appendStep(sb, store.mapGet(stepsKey, docId));
             }
         }
-        if (sb.isEmpty()) {
-            // 兜底：返回本租户任意一篇含错误码上下文的 SOP（绝不越租户）
-            store.mapValues(stepsKey).stream().limit(2).forEach(v -> appendStep(sb, v));
-        }
+        // N-11：无命中就返回 null（由 ChatOrchestrator 的 sop==null 分支给固定兜底文案）。
+        // 原先"任意两篇"的兜底被删除：mapValues 顺序不承诺（KvStore 契约），返回哪两篇是
+        // 不可复现的随机选择——对排障者不是帮助而是误导，且会让人误以为命中了相关 SOP。
         return sb.isEmpty() ? null : sb.toString();
     }
 
