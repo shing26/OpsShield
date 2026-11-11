@@ -286,3 +286,138 @@ AC-6 的 CI 侧判据由 PR 的 `redteam` check 提供；Verifier 须记录 chec
 ## 人审签收
 
 （待 Verifier 证据包出具后由 Lead 填写；未签收不得合并。）
+
+---
+
+## Verifier 证据包（2026-11-11）
+
+> 由独立 Verifier 会话出具。全部 Verification command 由 Verifier 亲手重跑，未采信 Implementer 的任何自评、转述或贴出的日志。判据只取冻结契约与当前工作区真实状态。
+
+### 1. 证据绑定
+
+| 项 | 值 |
+|---|---|
+| 分支 | `feat/l1-exec-closure-hardening` |
+| 核验开始 HEAD | `8dad2eaef4487a2913013099ea0a1c569d7202be` |
+| 核验开始 `git status --short` | （空，工作树干净） |
+| 核验结束 HEAD | `8dad2eaef4487a2913013099ea0a1c569d7202be` |
+| 核验结束 `git status --short` | （空，工作树干净） |
+| 一致性 | **一致**。AC-1 极性核验的临时改动已复原，`ActionL1BindingRegressionTest.java` 复原前后 sha256 均为 `297d439b144a42fd3251c5376a31d8e4ba5ad9be11af1313f322f702da7d6055`；`redteam.sh` 重写的两个报告产物已 `git checkout --` 还原 |
+
+环境：`java -version` = `openjdk version "21.0.12.1"`（Zulu21.52+203-CA）。未 `source scripts/java_home.sh`（worktree 守卫拒绝），改用等价显式 `JAVA_HOME=/e/java/jdk21`。
+
+### 2. 命令实跑表
+
+| # | 命令 | 退出码 | 关键输出（原样摘录） |
+|---|---|---|---|
+| 1 | `git rev-parse HEAD && git status --short` | 0 | `8dad2eaef4487a2913013099ea0a1c569d7202be`，status 空 |
+| 2 | `git diff origin/main...HEAD --stat` | 0 | 12 files changed, 646 insertions(+), 10 deletions(-) |
+| 3 | `git diff origin/main...HEAD -- src/test/` | 0 | 仅新增：`ActionDispatchServiceTest` +97、`ActionL1BindingRegressionTest` +116（新文件）、`SopFallbackServiceTest` +64（新文件）。删除行过滤命中数 **0** |
+| 4 | `mvn -o test`（JDK 21） | 0 | `Tests run: 438, Failures: 0, Errors: 0, Skipped: 0` / `BUILD SUCCESS`（surefire 报告 tests 属性求和 = 438） |
+| 5 | `git diff origin/main...HEAD -- .../ActionOpsService.java` | 0 | **0 行**（空） |
+| 6 | `git diff origin/main...HEAD -- src/main/resources/` | 0 | **0 行**（空） |
+| 7 | `cd offline && python -m pytest tests -q` | 0 | `527 passed, 1 warning in 44.17s` |
+| 8 | `python doc_numbers.py --check && python provenance.py --check` | 0 | `OK   33 条文档数字与产物一致（48 处引用全部命中且相符）` / `OK   报告与语料同代（mode=live，chunks=448 行，golden=68 样本，语料 69 篇）` |
+| 9 | `python scripts/check_public_copy.py --check` | 0 | `OK 对外面用词一致：7 个 canonical 词在 README + 页面文案里零出现` |
+| 10 | `bash scripts/check_panel_contract.sh` | 0 | `OK：面板契约十层一致（路径 admin+copilot+auth / 指标双向 / state 键集 / actuator 暴露面 / ev.sub 转义 / SSE 帧 / 请求体字段 / L1 来源标识）` |
+| 11 | 随机口令 + `bash scripts/redteam.sh` | 0 | `redteam: 32 用例 / 通过 32 / SKIP 0 / 泄漏 0 → PASS 零泄漏` |
+| 12 | `grep -rn "label 白名单" docs/` | 0 | 唯一命中 `docs/ops/roadmap.md:99`（对 `docs/adr` 与 `docs/ops/l1-action-contract.md` 同 grep 退出码 1 = 零命中） |
+| 13 | `git diff origin/main...HEAD -- docs/ops/roadmap.md` | 0 | **0 行**（空） |
+| 14 | `grep -n "redteam" .github/workflows/ci.yml` | 0 | `57:  redteam:` / `71:        run: bash scripts/redteam.sh`；`grep -n "continue-on-error"` 退出码 1（无）；`grep -nF "\|\| true"` 退出码 1（无）；job 内无 `if:` |
+| 15 | `git diff origin/main...HEAD -- README.md docs/repo-map.md` | 0 | 恰两处、各一行：`429 单测` → `438 单测`；`（429 用例` → `（438 用例`，其余文字逐字相同 |
+| 16 | `git diff --name-status` / `--diff-filter=D` | 0 | 12 项，无删除文件；新增仅 `plans/…accept.md`、`ActionL1BindingRegressionTest.java`、`SopFallbackServiceTest.java` |
+| 17 | `git remote -v` / `git rev-parse --abbrev-ref @{u}` / `git branch -r --contains HEAD` / `gh pr list --head …` | — | `origin https://github.com/shing26/OpsShield.git`；`fatal: no upstream configured`；远端分支包含结果为空；`gh pr list` 无输出 → **无 push、无 PR** |
+| 18 | `mvn -o test -Dtest='ActionDispatchServiceTest,SopFallbackServiceTest,ActionL1BindingRegressionTest'` | 0 | `Tests run: 21, Failures: 0, Errors: 0, Skipped: 0` / `BUILD SUCCESS`（15 + 3 + 3） |
+
+补充说明（透明起见）：曾用 `-Dtest='A+B+C'` 这种 surefire 不支持的 `+` 分隔写法调用一次，surefire 直接 BUILD FAILURE（未运行任何用例）；改用逗号分隔后为第 18 行的结果。该次失败是调用语法错误，不构成对实现的证据。
+
+#### AC-1 极性核验（契约强制，已完整复原）
+
+1. 核验前 sha256：`297d439b…6055`，`git status --short` 空。
+2. 把 `ActionL1BindingRegressionTest.java:38` 的 `DOC_SPELLING = "OPSPILOT_L1_ALLOWEDTARGETS"` 改为 `"OPSPILOT_L1_ALLOWED_TARGETS_BOGUS"`（只改这一处；第 97 行负向对照里原本就有的 `_BOGUS` 未动）。改动期间 status 为 `M src/test/java/com/opspilot/action/ActionL1BindingRegressionTest.java`。
+3. 只跑该测试类，**转红**：
+
+```
+[ERROR] Tests run: 3, Failures: 1, Errors: 0, Skipped: 0
+[ERROR] ActionL1BindingRegressionTest.documentedSpellingBindsToTheRealValueKey:86 ... ==> expected: <deployment/inventory-api> but was: <null>
+[INFO] BUILD FAILURE
+```
+
+   注意：失败的是**正极性用例**，负向对照与等价性用例仍绿——说明该用例不是恒绿空断言。
+4. 复原（sed 反向替换）后 sha256 回到 `297d439b…6055`，`git status --short` 回到空。
+5. 重跑同类：`Tests run: 3, Failures: 0, Errors: 0, Skipped: 0` / `BUILD SUCCESS`。
+6. 未使用改 `@Value`、改 yml、删 `ConfigurationPropertySources.attach` 的方式。
+
+#### AC-3 "nonce 未被消耗" 核验（亲自读码 + 读测试）
+
+- 生产代码位置（`src/main/java/com/opspilot/action/ExecutorCallbackController.java`）：
+  - 签名校验：第 **49–55** 行（`callbackSignatureMaterial` → `signatureMatches` → 401）
+  - status 白名单：第 **56–64** 行（注释 + `if (!VALID_STATUSES.contains(req.status()))` 返回 400 `INVALID_STATUS`）
+  - `callbackFreshnessReason`：第 **66** 行
+  → 白名单**在签名校验之后、在 `callbackFreshnessReason` 之前**，两条约束同时成立。
+- 用例 `ActionDispatchServiceTest.unknownCallbackStatusRejectedWithoutSideEffects`（第 339–379 行）实际断言：
+  - 第 356–360 行：`success` / `OK` / `Executed` / `executed `（尾空格）四种值 → `assertEquals(400, …)` 且 `assertEquals("INVALID_STATUS", resp.getBody().get("code"))`；
+  - 第 362–363 行：`assertEquals("dispatched", ops.status(PROPOSER, p.opId()).state(), "未知 status 不得改动 action_ops.state")`；
+  - 第 364–368 行：审计里 `ev == "action_result"` 且 `q` 含该 op_id 的事件计数 `assertEquals(0, resultEvents, "未知 status 不得写 action_result 审计")`；
+  - 第 370–378 行：**同一 nonce** 的合法 `executed` 回调 → `assertEquals(200, ok.getStatusCode().value(), "同 nonce 的合法回调应 200——证明未知 status 未消耗 nonce")`，且终态 `assertEquals("executed", …)`。
+- 既有 `callbackFreshnessReasonIsLayered`（第 105 行起）与 `callbackExemptFromL1Switch`（第 248 行起）在 `git diff origin/main...HEAD -- src/test/` 中出现次数为 **0**，未被改动。
+
+#### AC-7 断言无弱化核验
+
+`git diff origin/main...HEAD -- src/test/` 全文只有 `+` 行与上下文行，**无任何 `-` 行**（删除行过滤命中 0）。逐条列出新增：
+
+- `ActionDispatchServiceTest` 新增 3 个用例 + 1 个私有辅助方法：
+  - `nonceRetentionIsDerivedFromCallbackWindow`（AC-2，断言保留期 = 2×`CALLBACK_WINDOW_S`）
+  - `purgeExpiredNoncesKeepsWindowRowsAndReplayProtection`（AC-2，过期删/窗口内留/nonce_reused）
+  - `unknownCallbackStatusRejectedWithoutSideEffects`（AC-3）
+  - `nonceCount(JdbcTemplate, String)` 辅助
+- `ActionL1BindingRegressionTest`（新文件，116 行，3 个用例）：`documentedSpellingBindsToTheRealValueKey`、`bogusSpellingDoesNotBind`、`underscoredSpellingIsEquivalent`
+- `SopFallbackServiceTest`（新文件，64 行，3 个用例）：`errorCodeHitReturnsThatSop`、`noHitWithNonEmptyStepsReturnsNull`、`emptyStepsReturnsNull`
+
+**明确回答：有无删除或放宽？无。** 无删除、无放宽、无 `@Disabled` / `@Ignore` / `Assumptions`（grep 零命中）。新增 `@Test` 9 条：429（origin/main 计数）→ 438（工作区计数与 surefire 执行数均为 438）。
+
+### 3. AC 逐条裁定
+
+| AC | 裁定 | 判据出处 |
+|---|---|---|
+| AC-1 绑定回归锁 | **通过** | 第 4 行（438 全绿）；第 5/6 行（`ActionOpsService.java` 与 `src/main/resources/` diff 皆空 → 未改 `@Value`、未加 yml 块）；`ActionL1BindingRegressionTest.java:44-58` 反射读构造器 `@Value` 键（`ActionOpsService.java:59`，测试内无硬抄字面值）；`envWithOnly` 用 `SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME` + `ConfigurationPropertySources.attach`；类 javadoc 写明两条硬要求与两种拼写结论；正极性 + 负向对照 + 等价性三例齐备；**极性核验转红/复原转绿见 AC-1 专节**。`docs/ops/l1-action-contract.md:190-194` 已加 §8.5 绑定说明 |
+| AC-2 nonce 表有界 | **通过** | `ActionDispatchService.java:44-46` `NONCE_RETENTION_S = 2 * CALLBACK_WINDOW_S`（非字面量 600）；`:318-328` `@Scheduled` + 包级可见 `purgeExpiredNonces()`，时间源仅 `Instant.now(clock)`（`:323`，`clock` 字段 `:60`）；`DELETE … WHERE seen_at < ?`（严格小于保留期 cutoff，不误删未过期行）；用例双向见 `ActionDispatchServiceTest:296-325` |
+| AC-3 回调 status 白名单 | **通过** | 合法集 `VALID_STATUSES = Set.of("executed","failed")`（`ExecutorCallbackController.java:23`）；白名单第 62–64 行，位于签名 49–55 之后、`callbackFreshnessReason` 66 行之前；理由已写入 56–61 行注释；用例双向与"未消耗 nonce"断言见 AC-3 专节逐行引用；既有两用例零改动 |
+| AC-4 删除 SOP 任意兜底 | **通过** | `SopFallbackService.java:38-41` 兜底块已删，`return sb.isEmpty() ? null : sb.toString()`；`mapIsEmpty` 早退（:23）、错误码索引（:26-32）、服务名索引（:33-37）三段未动（diff 仅 7 行删 / 3 行加注释）；`ChatOrchestrator` diff 为 **0 行**；三向用例见 `SopFallbackServiceTest` 三个 `@Test` |
+| AC-5 文档矛盾消解 | **通过** | `docs/adr/0028…:73` 改为"灰度配置白名单" + `:75` 修订注记（日期/原措辞/裁决 4·A），ADR 其余行未动（diff 仅 `@@ -71,5 +71,7 @@` 一处）；`docs/ops/l1-action-contract.md` 原 :216/:219（现 :222/:225-227）同口径修正并写明否决 K8s label 理由；对 `docs/adr` 与 `docs/ops/l1-action-contract.md` grep "label 白名单" **零命中**；全 `docs/` 仅 `roadmap.md:99` 一处命中且该文件 diff 为 0 行；`:185` 与 `.workbuddy/audit/backend.md` 未动 |
+| AC-6 红队入 CI | **未验证 / 待 PR** | 代码侧已具备：`.github/workflows/ci.yml:57-71` 的 `redteam` job（`ubuntu-latest`、temurin JDK 21、`mvn -B -DskipTests package`、`bash scripts/redteam.sh`），口令运行时 `openssl rand -hex 16` 写入 `$GITHUB_ENV` 不落库，无 `continue-on-error`、无 `\|\| true`、无 `if:` 旁路。**但契约明写本判据的实证是 PR 自身 CI 的 `redteam` check success**；第 17 行证据显示该分支无 upstream、无远端分支、无 PR，故 CI 侧**不可能成立**。本机 `32/32 / SKIP 0 / 泄漏 0` 只是前置条件，不构成 AC-6 判据 |
+| AC-7 回归不破 + 无弱化 | **通过** | 第 4 行 438（≥435）、0 failed/0 errors/0 skipped；第 7–10 行 offline pytest 527 passed 且四个门闩全绿；第 11 行 redteam 32/32；`src/test/` diff 无删除/放宽/`@Disabled`（见 AC-7 专节）；R1 两处文档数字 429→438 与门闩派生值一致（`doc_numbers --check` OK） |
+
+### 4. Forbidden 事件清单（10 条逐条）
+
+1. 改/删/弱化既有断言或门闩 — **无**。`src/test/` diff 无 `-` 行，无 `@Disabled`；`doc_numbers.py`、`provenance.py`、`check_public_copy.py`、`check_panel_contract.sh`、`scripts/redteam.sh` 均不在 diff 内（各自 diff 0 行）。
+2. 跳过 Verification command — **无**。15 条命令全部亲跑（第 4 行以显式 `JAVA_HOME` 等价替代 `source scripts/java_home.sh`，原因见环境说明）。
+3. 触碰 Allowed paths 之外的文件 — **无**。12 个变更文件逐一比对 Allowed 清单：`ci.yml` / `README.md` / `repo-map.md` / ADR-0028 / l1-action-contract / 契约文件 / 三个 main 文件（AC-2/3/4 各自授权）/ 三个 test 文件，全部在清单内；新增文件仅 `plans/…accept.md`（清单内）与两个 test 类（清单内）。无新增 main 代码、脚本或文档。
+4. 为 N-11 新增降级文案或改 `ChatOrchestrator` — **无**。`ChatOrchestrator` diff 0 行。
+5. AC-3 状态校验放在 nonce 消耗之后 — **无**。白名单 62–64 行，`callbackFreshnessReason` 66 行。
+6. CI 用 `continue-on-error` / 吞退出码 / 删 job 消红 — **无**。两者 grep 退出码均为 1；`redteam` job 存在且无 `if:`。
+7. 改写 ADR-0028 第 73 行以外内容，或改写 `roadmap.md` — **无**。ADR diff 仅 :73 一行改写 + :75 一行注记（含空行）；`roadmap.md` diff 0 行。
+8. 改动 `scripts/redteam.sh` 判定逻辑 — **无**。该文件 diff **0 行**（连平台兼容性修复都未发生，说明本机 Git Bash 下无需改脚本）。
+9. Implementer 自宣通过 — 本报告由独立 Verifier 出具，未采信任何实现方自评或贴出的日志。
+10. 提交 token / 凭据 / 派发密钥 — **无**。PR diff 内无口令字面值（`ci.yml:69` 是运行时 `openssl rand`）；`scripts/redteam.sh` 只读 `DEMO_PASSWORD` 环境变量。**备注**：`ci.yml:112` 有一处 `DEMO_PASSWORD` 的 GitHub secret 引用，但该行**在 origin/main 已存在（origin/main 的 `ci.yml:89`）**，不在本 PR diff 内，不构成本 PR 的 Forbidden 事件。
+
+### 5. 人审四问
+
+1. **Verification commands 是否全部亲跑且退出码 0？** 是，除 AC-6 CI 侧本就不存在可跑对象。15 条命令退出码均为 0；对 `docs/adr` 与 `docs/ops/l1-action-contract.md` grep "label 白名单" 退出码 1 是"零命中"的期望结果。摘要见第 2 节。
+2. **AC-1…AC-7 各判在哪份证据？** 见第 3 节表格。重点两项：AC-1 正极性回归锁 = 第 2 节 AC-1 专节（改名为 `_BOGUS` → `expected: <deployment/inventory-api> but was: <null>` 转红；复原后 sha256 一致、3/3 转绿）；AC-3 "nonce 未被消耗" = `ActionDispatchServiceTest:370-378` 同 nonce 合法回调 200 + `:362-368` state 仍 `dispatched`、`action_result` 计数 0，且生产代码白名单位于 62–64 行（签名 49–55 之后、`callbackFreshnessReason` 66 行之前）。
+3. **有无 Forbidden 事件？** 无。10 条逐条核对见第 4 节。
+4. **遗留边界是否接受为已知项？** 需 Lead 决定。客观事实：AC-6 的 CI 实证在本次核验中不存在（分支无 upstream、无 PR），本机为 Git Bash 而非 ubuntu-latest；`scripts/redteam.sh` 的 Linux 行为只能由 PR CI 证明。此外 `redteam` job 首次在 ubuntu-latest 跑时是否撞平台假设，目前无任何证据。
+
+### 6. 结论
+
+**验收不通过。**
+
+唯一不通过项：**AC-6 未验证** —— 契约规定该判据的实证是"本 PR 自身的 CI 运行（`redteam` check success）"，而 `feat/l1-exec-closure-hardening` 尚未 push、无远端分支、无 PR（`git rev-parse --abbrev-ref @{u}` → `fatal: no upstream configured`；`git branch -r --contains HEAD` 为空；`gh pr list --head …` 无输出），因此该证据在本次核验中不可能成立。本机 `32/32、SKIP 0、泄漏 0` 只是 AC-6 的前置条件，不能替代 CI 实证。
+
+其余 AC-1、AC-2、AC-3、AC-4、AC-5、AC-7 六项全部通过，Forbidden 零事件，工作树干净且与核验开始时逐字一致。补齐路径：push 分支、开 PR，等 `redteam` check 为 success 后，由 Verifier 复核该 check 结论即可完成 AC-6 收口。
+
+关键文件（仓库相对路径）：
+- 契约：`plans/l1-exec-closure-hardening-accept.md`
+- 白名单位置：`src/main/java/com/opspilot/action/ExecutorCallbackController.java:62-66`
+- 极性锁：`src/test/java/com/opspilot/action/ActionL1BindingRegressionTest.java:38,83-88`
+- CI job：`.github/workflows/ci.yml:57-71`
