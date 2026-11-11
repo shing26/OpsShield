@@ -409,3 +409,49 @@ AC-1 的 ADR 计数以 `doc_numbers --check` 的现算为准；AC-3 的统计量
 
 除此之外，实现与文档质量满足契约，未发现其它实现缺陷或契约矛盾。
 
+---
+
+## Verifier 补充证据（2026-11-11，AC-6 复核）
+
+> 转录自同一独立 Verifier 会话的第二轮复核（Verifier 受只读约束无法写文件）。
+> 判定：**AC-6 PASS → 整体 PASS**。
+
+**背景**：首轮判定 FAIL，唯一阻断项为 AC-6 的 `docs/adr/0029-…:78` 残留。Lead 书面裁决
+走「补注」路径，并修订契约（Allowed paths 增列 ADR-0029；AC-6 判据增补「ADR-0029:78 残留
+若有近旁指向 ADR-0030 的修订注即视为可解释」）。本次仅复核受影响面。
+
+**绑定**：
+- 新 HEAD：`f7147c4ef6b033fa6a9e9fca45dd848221f1d9a0`（前一 HEAD：`56adbba…`）
+- `git status --short`：**空**（clean）
+
+**复核命令与结果**：
+
+| # | 命令 | 退出码 | 关键输出 |
+|---|---|---|---|
+| 1 | `git rev-parse HEAD && git status --short` | 0 | `f7147c4…`；status 空 |
+| 2 | `git diff --name-only origin/main...HEAD` | 0 | 14 文件；新增 `docs/adr/0029-…md`，与修订后 Allowed paths 相符 |
+| 3 | `git diff 56adbba..HEAD --numstat` | 0 | `0029…md 5/0`、`plans/…accept.md 123/0`（仅两份 Markdown，ADR-0029 为 5 增 0 删） |
+| 3b | `git diff 56adbba..HEAD --stat` | 0 | 2 files changed, 128 insertions(+), 0 deletions |
+| 4 | `git diff 56adbba..HEAD -- docs/adr/0029-…md` | 0 | 纯追加 5 行 blockquote 于第 77-78 行项目符号之后；第 78 行原文未改 |
+| 5 | `grep -n "永久非目标" docs/adr/0029-…md` | 0 | 仅 `:78`；其近旁 `:80-84` 为指向 ADR-0030 的修订注 |
+| 6 | `python offline/doc_numbers.py --check` | 0 | `adr_count=30`、`python_test_declarations=538`，33 条/48 处一致（未漂移） |
+| 7 | `python scripts/check_public_copy.py --check` | 0 | `7 个 canonical 词零出现` |
+| 8 | `git diff origin/main...HEAD -- src` | 0 | **空** |
+| 9 | `git diff 56adbba..HEAD --stat` | 0 | 只含上述两个文件；无源码/测试/门闩改动 |
+
+**AC-6 判定：PASS**。
+- 六处文档修订维持首轮结论（positioning :12-13/:36/:76/:18/:105；roadmap :84-85；OPS :126；
+  ADR-0013 :59-65；QA :299-301）。
+- 残留经复核：0013、QA、positioning（分类/章节名/纪律，非 ①② 断言）、ADR-0030 自身引用旧措辞，
+  均可解释；**`0029:78` 现在 :80-84 紧邻处有指向 ADR-0030 的修订注，符合修订后判据**，
+  且原断言逐字保留（历史纪律）。
+
+**整体结论：PASS**。
+- 15 条 Verification commands 于 `56adbba` 全部按预期退出（14 条 0、第 15 条 grep 1 为"零命中"）；
+  红队 32/32 零泄漏零 SKIP；Java 438/0/0/0；Python 598 passed；`src` diff 为空；Forbidden 十条无违规。
+- 自 `56adbba` 以来的增量仅两份 Markdown（ADR-0029 追加修订注 + 契约修订/证据转录取），
+  不触及 mvn / redteam / pytest 的验证对象，故上述证据继续有效；本次对文档门闩
+  （doc_numbers、check_public_copy）与 `src` 空 diff 做了重跑确认。
+- 遗留边界（Prometheus 可达且有足够样本方成立；基线为自身历史；不做趋势外推/根因；
+  MAD=0 仅绝对差分支）接受为已知项。无其它遗留阻断项。
+
