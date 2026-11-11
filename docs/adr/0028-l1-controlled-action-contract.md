@@ -70,7 +70,9 @@ Agent 说"怎么办"之后，值班人还要手工敲一遍 kubectl rollout rest
 4. **reference verifier 约束**：constant-time 比较、固定校验顺序签名→哈希→过期→幂等、
    可区分状态码 401/422/410/409；verifier 本身入库带 sha256 清单（防改靶子让红队变绿）；
 5. **WORM 门禁**：任一 L1 事件缺 WORM 记录即 FAIL（可从 WORM 重放整条链取证）；
-6. **灰度 label 白名单**：目标资源带指定 label 才允许 L1，防手滑重启整个 namespace。
+6. **灰度配置白名单**：目标资源须在 OpsShield 配置白名单内才允许 L1，防手滑重启整个 namespace。
+
+> 修订注记（2026-11-11）：原措辞按目标资源的 K8s label 筛白名单，与裁决 4·A「配置定义而非 K8s label——有 RBAC 即可打 label，白名单形同虚设」不一致，现按裁决 4·A 改为配置白名单。
 
 执行顺序修正：reference verifier 与签名派发**同步交付**（verifier 既是派发的验收目标
 也是红队靶子，先派发后写 verifier 会让红队无靶可打）。

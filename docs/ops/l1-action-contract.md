@@ -187,6 +187,12 @@ OpsShield：payload + HMAC → POST 自动化系统 webhook（ev=action_dispatch
 | 密钥卫生 | `OPSPILOT_DISPATCH_KEY_FILE` 优先 | 生产读挂载 Secret（K8s/600 文件）；环境变量明文仅限开发 |
 | 密钥轮换 | `OPSPILOT_DISPATCH_KEY_PREVIOUS_FILE` | 旧 key **只验不签**，窗口内回调不断流；轮换完成后清空 |
 
+**绑定形态（2026-11-11 实测，勿"简化"）**：`OPSPILOT_L1_ALLOWEDTARGETS` 这类**无下划线**写法由
+Spring Boot 的 relaxed binding 接受（点/连字符→下划线、连字符可选剥离），与
+`OPSPILOT_L1_ALLOWED_TARGETS` 等价；代码侧 `@Value` 已用规范属性名 `opspilot.l1.allowed-targets`，
+两种环境变量拼写都能绑定。**勿改成仅下划线形态**——文档与红队都用无下划线写法，改动即破坏外部契约。
+回归锁见 `ActionL1BindingRegressionTest`（反射读 `@Value` 键，不在测试里硬抄字面值）。
+
 ## 8.6 指标与告警 + webhook SSRF（盲点 4/5 落地，2026-10-26）
 
 - **指标面**（`L1Metrics`，Prometheus-only 不进面板契约）：`aiops_l1_{proposed,confirmed,dispatched,executed,failed,expired,callback_conflict,frozen}_total`；
@@ -213,11 +219,12 @@ OpsShield：payload + HMAC → POST 自动化系统 webhook（ev=action_dispatch
   → schema/状态机/双白名单（含 confirmer≠proposer 守卫、幂等共享存储）
   → 确认入口（面板；一次性 token + 会话绑定）
   → 签名派发 + reference verifier（同步——verifier 既是派发的验收目标也是红队靶子）
-  → 灰度：rollout restart 一族 + ⛳ 目标资源 label 白名单
+  → 灰度：rollout restart 一族 + ⛳ 目标资源配置白名单
 ~~~
 
-⛳ **灰度额外收敛**：目标资源必须带指定 label（如 `opshield-l1=true`）才允许 L1 契约——
-避免一个手滑重启整个 namespace。成本极低、收益极高。
+⛳ **灰度额外收敛**：目标资源必须在 OpsShield 配置白名单内（`opspilot.l1.allowed-targets`）才允许 L1 契约——
+避免一个手滑重启整个 namespace。成本极低、收益极高。**为何否决 K8s label**：任何有 RBAC 的人都能打 label，
+白名单形同虚设；配置变更走 OpsShield 审计才可追溯（裁决 4·A）。
 
 ## 10. 红队扩写清单（实现前必须先行合入并全过）
 

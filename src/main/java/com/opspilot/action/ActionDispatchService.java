@@ -41,6 +41,10 @@ public class ActionDispatchService {
     private static final Logger log = LoggerFactory.getLogger(ActionDispatchService.class);
     static final long CALLBACK_WINDOW_S = 300;        // 回调时间窗 ±5 分钟
 
+    /** nonce 保留期 = 2 × 回调时间窗（N-9）：窗口外的 ts 已先被 ts_out_of_window 拒绝，
+     *  行可安全删除。**由 CALLBACK_WINDOW_S 派生，不得另写字面量**。 */
+    static final long NONCE_RETENTION_S = 2 * CALLBACK_WINDOW_S;
+
     private final JdbcTemplate jdbc;
     private final byte[] dispatchKey;                 // 当前签名 key；未配置=null（派发挂起）
     private final byte[] previousKey;                 // 轮换窗口内仍接受的旧 key（只验不签）
@@ -297,6 +301,29 @@ public class ActionDispatchService {
             return null;                                      // 首见即占坑
         } catch (org.springframework.dao.DuplicateKeyException e) {
             return "nonce_reused";                            // nonce 重放
+        }
+    }
+
+    /**
+     * N-9：nonce 表有界。删除 seen_at 早于 now - 2×CALLBACK_WINDOW_S 的行。
+     *
+     * <p><b>为什么可以删</b>：回调时间窗是 ±300s，窗口外的 ts 在
+     * {@link #callbackFreshnessReason} 里已被 {@code ts_out_of_window} 拒绝，那些行不再承担
+     * 防重放职责；保留 2 倍窗口只是给时钟偏差留余量。不清理则表随回调次数单调增长。
+     *
+     * <p><b>为什么包级可见而非 private</b>：测试要直接调用它并断言"过期删/窗口内留"，
+     * 不能靠等调度器。时间源只用既有的 {@link #clock}（测试时间机器），测试无需睡眠。
+     * 调度间隔与初始延迟走配置，默认 1 小时/1 分钟（与 L2 缓存清理同风格）。
+     */
+    @org.springframework.scheduling.annotation.Scheduled(
+            fixedDelayString = "${opspilot.l1.nonce-cleanup-interval-ms:3600000}",
+            initialDelayString = "${opspilot.l1.nonce-cleanup-initial-delay-ms:60000}")
+    void purgeExpiredNonces() {
+        java.sql.Timestamp cutoff = java.sql.Timestamp.from(
+                Instant.now(clock).minusSeconds(NONCE_RETENTION_S));
+        int deleted = jdbc.update("DELETE FROM dispatch_nonces WHERE seen_at < ?", cutoff);
+        if (deleted > 0) {
+            log.debug("dispatch_nonces 清理：删除 {} 条超出保留期（{}s）的行", deleted, NONCE_RETENTION_S);
         }
     }
 

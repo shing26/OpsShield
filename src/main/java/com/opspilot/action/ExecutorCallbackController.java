@@ -18,6 +18,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 public class ExecutorCallbackController {
 
+    /** N-10：回调 status 合法值闭集。执行侧只能报这两种终态；任何其它值（含 success / OK /
+     *  Executed 大小写变体）都是调用方输入错误，不是状态机可解释的事件。 */
+    static final java.util.Set<String> VALID_STATUSES = java.util.Set.of("executed", "failed");
+
     private final ActionDispatchService dispatch;
     private final com.opspilot.metrics.AuditService audit;
     private final com.opspilot.metrics.L1Metrics l1Metrics;
@@ -48,6 +52,15 @@ public class ExecutorCallbackController {
         if (sig == null || !dispatch.signatureMatches(sig, material)) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(Map.of("code", "UNAUTHORIZED", "reject_reason", "bad_signature"));
+        }
+        // 1.5) status 白名单（N-10）：位置是刻意的，两条约束同时成立——
+        //   (a) 必须在**签名校验之后**：否则未认证调用方能拿 400/401 的差异当状态合法性探针，
+        //       并破坏「未认证一律 401」的不变式；
+        //   (b) 必须在**nonce 消耗（callbackFreshnessReason）之前**：未知状态若先占坑 nonce，
+        //       调用方改正后同 nonce 重试会被误判 nonce_reused，把可纠正的输入错误变成不可恢复的终态风险。
+        //   status 参与签名材料，验签通过即证明该值由持钥方发出；此处只做闭集判定。
+        if (!VALID_STATUSES.contains(req.status())) {
+            return ResponseEntity.badRequest().body(Map.of("code", "INVALID_STATUS"));
         }
         // 2) 时间窗 + nonce 一生一次（分层 reject_reason：两个 401 打不同层）
         String reason = dispatch.callbackFreshnessReason(req.ts(), req.nonce());

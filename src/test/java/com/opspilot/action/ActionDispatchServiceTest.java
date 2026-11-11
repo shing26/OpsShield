@@ -282,6 +282,103 @@ class ActionDispatchServiceTest {
                 "confirm 返回必须是三态之一（派发成功/派发失败/派发未启用），无中间态；实际=" + st.state());
     }
 
+    // ── N-9：nonce 表有界（AC-2）─────────────────────────────────────────────
+    /** 保留期必须由回调时间窗派生（不是另写的 600 字面量）。 */
+    @Test
+    void nonceRetentionIsDerivedFromCallbackWindow() {
+        assertEquals(2 * ActionDispatchService.CALLBACK_WINDOW_S,
+                ActionDispatchService.NONCE_RETENTION_S,
+                "保留期须 = 2 × CALLBACK_WINDOW_S（契约 AC-2：不得写字面量 600）");
+    }
+
+    /**
+     * 双向：过期行删除、窗口内行保留；清理后同 nonce 仍判 nonce_reused（防重放不被清理破坏）。
+     * 时间源用既有 {@code clock} 时间机器，无需睡眠。
+     */
+    @Test
+    void purgeExpiredNoncesKeepsWindowRowsAndReplayProtection() {
+        var jdbc = ctx.getBean(org.springframework.jdbc.core.JdbcTemplate.class);
+        java.time.Clock real = dispatch.clock;
+        // 基准取真实 now 而非写死时刻：本类共享同一个 H2 内存库（DB_CLOSE_DELAY=-1），
+        // 若把时钟固定在任意一个"未来"时刻，cutoff 会跨过其它用例刚插入的 nonce 并误删它们。
+        java.time.Instant now = java.time.Instant.now();
+        String expired = "purge-old-" + System.nanoTime();
+        String fresh = "purge-new-" + System.nanoTime();
+        try {
+            dispatch.clock = java.time.Clock.fixed(now, java.time.ZoneOffset.UTC);
+            jdbc.update("INSERT INTO dispatch_nonces (nonce, seen_at) VALUES (?, ?)", expired,
+                    java.sql.Timestamp.from(now.minusSeconds(
+                            ActionDispatchService.NONCE_RETENTION_S + 5)));
+            jdbc.update("INSERT INTO dispatch_nonces (nonce, seen_at) VALUES (?, ?)", fresh,
+                    java.sql.Timestamp.from(now.minusSeconds(10)));
+
+            dispatch.purgeExpiredNonces();
+
+            assertEquals(0, nonceCount(jdbc, expired), "超出保留期的行必须删除");
+            assertEquals(1, nonceCount(jdbc, fresh), "窗口内的行必须保留（不得删未过期行）");
+            assertEquals("nonce_reused",
+                    dispatch.callbackFreshnessReason(now.getEpochSecond(), fresh),
+                    "清理后同 nonce 仍须判 nonce_reused——防重放语义不因清理而回退");
+        } finally {
+            dispatch.clock = real;
+        }
+    }
+
+    private static int nonceCount(org.springframework.jdbc.core.JdbcTemplate jdbc, String nonce) {
+        Integer n = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM dispatch_nonces WHERE nonce = ?", Integer.class, nonce);
+        return n == null ? 0 : n;
+    }
+
+    // ── N-10：回调 status 白名单（AC-3）──────────────────────────────────────
+    /**
+     * 双向：未知 status → 400 INVALID_STATUS，且不改 state、不写 action_result、不消耗 nonce；
+     * 随后同 nonce 的合法回调 → 200 且终态 executed。
+     */
+    @Test
+    void unknownCallbackStatusRejectedWithoutSideEffects() {
+        var jdbc = ctx.getBean(org.springframework.jdbc.core.JdbcTemplate.class);
+        var audit = ctx.getBean(com.opspilot.metrics.AuditService.class);
+        var metrics = ctx.getBean(com.opspilot.metrics.L1Metrics.class);
+        var ctl = new ExecutorCallbackController(dispatch, audit, metrics);
+        loadL1Chunk();
+        var p = ops.propose(PROPOSER, "rb-l1d::恢复动作", CMD);
+        jdbc.update("UPDATE action_ops SET state='dispatched' WHERE op_id=?", p.opId());
+
+        long now = java.time.Instant.now().getEpochSecond();
+        String nonce = "status-" + System.nanoTime();
+        byte[] key = dispatch.dispatchKeyForVerify();
+
+        for (String bad : List.of("success", "OK", "Executed", "executed ")) {
+            String material = ActionDispatchService.callbackSignatureMaterial(p.opId(), bad, now, nonce);
+            String sig = ActionDispatchService.hmac(key, material);
+            var resp = ctl.callback(
+                    new ExecutorCallbackController.CallbackReq(p.opId(), bad, "d", now, nonce), sig);
+            assertEquals(400, resp.getStatusCode().value(),
+                    "未知 status 必须 400：" + bad);
+            assertEquals("INVALID_STATUS", resp.getBody().get("code"),
+                    "错误码须为 INVALID_STATUS：" + bad);
+        }
+        assertEquals("dispatched", ops.status(PROPOSER, p.opId()).state(),
+                "未知 status 不得改动 action_ops.state");
+        long resultEvents = audit.recentSince(0, 500).events().stream()
+                .filter(ev -> "action_result".equals(String.valueOf(ev.get("ev"))))
+                .filter(ev -> String.valueOf(ev.get("q")).contains(p.opId()))
+                .count();
+        assertEquals(0, resultEvents, "未知 status 不得写 action_result 审计");
+
+        // 未消耗 nonce：同 nonce 的合法回调必须通过（若被消耗，会先撞 nonce_reused 401）
+        String goodMaterial = ActionDispatchService.callbackSignatureMaterial(
+                p.opId(), "executed", now, nonce);
+        var ok = ctl.callback(new ExecutorCallbackController.CallbackReq(
+                p.opId(), "executed", "exit 0", now, nonce),
+                ActionDispatchService.hmac(key, goodMaterial));
+        assertEquals(200, ok.getStatusCode().value(),
+                "同 nonce 的合法回调应 200——证明未知 status 未消耗 nonce");
+        assertEquals("executed", ops.status(PROPOSER, p.opId()).state(),
+                "合法 executed 回调应落终态");
+    }
+
     private void loadL1Chunk() {
         Chunk.Metadata m = new Chunk.Metadata("inventory-service", null, null,
                 List.of("50012_DB_TIMEOUT"), 3, "prod", "tenant-internal", "L1-write-low");
