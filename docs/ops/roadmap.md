@@ -82,6 +82,7 @@ Prompt 注入 / 越狱 / 跨租户探测 / 密级绕过攻击用例库；每次�
 ## 明确不做
 
 1. 不做异常检测/根因分析算法（消费 Metis/KeenTune/商业可观测的告警）；
+   > **2026-11-11 修订注**：前半句已部分兑现——**统计基线预警**（中位数/MAD + 双阈值，非黑盒 ML）作为**消费侧**能力落地，见 [ADR-0030](../adr/0030-telemetry-consumption-and-baseline-alerting.md) 与 `offline/predictive_alerts.py`。原文条目保留不删：**不做 ML 异常检测算法本身、不做根因分析**这一立场不变。
 2. 不做自动化执行引擎（对接现有自动化系统，不持有执行权限）；
 3. 不做自主决策 Agent（不引入 LLM 决策循环与 tool-calling）；
 4. 不做通用 LLM 网关（多模型路由/成本追踪是 LiteLLM/Portkey 的领域）；
