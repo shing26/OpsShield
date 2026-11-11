@@ -421,3 +421,137 @@ AC-6 的 CI 侧判据由 PR 的 `redteam` check 提供；Verifier 须记录 chec
 - 白名单位置：`src/main/java/com/opspilot/action/ExecutorCallbackController.java:62-66`
 - 极性锁：`src/test/java/com/opspilot/action/ActionL1BindingRegressionTest.java:38,83-88`
 - CI job：`.github/workflows/ci.yml:57-71`
+
+---
+
+## Verifier 补证：AC-6 CI 实证（2026-11-11）
+
+> 独立 Verifier 补证会话出具。本轮**只**复核 AC-6 的 CI 侧判据；AC-1..AC-5、AC-7 沿用上一轮证据包，
+> 不重开、不重跑。全部结论来自 `gh` 查询与本轮亲自拉取的 job 日志原文，未采信任何转述或自评。
+
+### 1. 证据绑定
+
+| 项 | 值 |
+|---|---|
+| 分支 | `feat/l1-exec-closure-hardening` |
+| 核验 HEAD | `b55eb0c12450427dccf6c3e68d346b9b37b99c7b` |
+| 核验时 `git status --short` | （空，工作树干净） |
+| `git log --oneline origin/main..HEAD` | 4 条：`b55eb0c` / `8dad2ea` / `fe71989` / `435330b` |
+| PR head / CI `head_sha` / 本地 HEAD | 三者同为 `b55eb0c12450427dccf6c3e68d346b9b37b99c7b` |
+| CI 实际检出 | `refs/remotes/pull/79/merge` = `6a215e34658972da6067a79bb5f169562021a4fd`（`Merge b55eb0c… into f00187c…`，`run_attempt: 1`）；该 merge 提交的 tree `0b5fa799144ff22986a7929780328824b1031c3b` 与 `b55eb0c` 的 tree 完全相同 → CI 跑的就是 PR 头那一份文件树 |
+
+### 2. PR 与 run 标识
+
+- PR：**#79** — https://github.com/shing26/OpsShield/pull/79
+- `gh pr view 79` → `state: OPEN`，`baseRefName: main`，`headRefName: feat/l1-exec-closure-hardening`，
+  `mergeable: MERGEABLE`，`mergeStateStatus: CLEAN`
+- Workflow run：**42933492763**（workflow `CI`，`event: pull_request`，`run_attempt: 1`，`conclusion: success`，
+  `path: .github/workflows/ci.yml`，created 2026-11-11T00:42:45Z，updated 00:43:45Z）
+- `redteam` job：**130237730396**（started 00:42:48Z，completed 00:43:21Z，`conclusion: success`，墙钟 33s）
+- 该分支只有这一次 workflow run（`gh run list --branch feat/l1-exec-closure-hardening` 仅返回 42933492763），
+  不存在"前一次跑失败、后一次跑绿"的掩盖
+
+### 3. 全部 check 结论（`gh pr checks 79` 与 `statusCheckRollup` 交叉核对）
+
+| # | check | 结论 | job id |
+|---|---|---|---|
+| 1 | `benchmark` | pass | 130237730207 |
+| 2 | `java` | pass | 130237730343 |
+| 3 | `panel-contract` | pass | 130237730308 |
+| 4 | `provenance` | pass | 130237730273 |
+| 5 | `python` | pass | 130237730251 |
+| 6 | **`redteam`** | **pass** | **130237730396** |
+| 7 | `sbom` | pass | 130237730292 |
+| 8 | `security` | pass | 130237729869 |
+| 9 | `shell` | pass | 130237730348 |
+| 10 | `smoke` | pass | 130237730327 |
+| 11 | `static-gate` | pass | 130237730382 |
+
+共 11 项，`statusCheckRollup` 里 `conclusion` 分组结果：`[{"c":"SUCCESS","n":11}]`。
+**无任何失败、无 neutral/skipped、无 pending。** 名为 `redteam` 的 check 存在且为 success。
+
+### 4. `redteam` job 日志原文（`gh run view 42933492763 --job 130237730396 --log`）
+
+步骤确实执行（job 内 step 顺序）：`Build fat jar` → `Generate throwaway demo password` →
+`Red team suite (32 cases, fail-closed)`，无跳步。关键行原文：
+
+```
+redteam  Build fat jar                       ... [INFO] BUILD SUCCESS
+redteam  Generate throwaway demo password    ##[group]Run echo "DEMO_PASSWORD=$(openssl rand -hex 16)" >> "$GITHUB_ENV"
+redteam  Red team suite (32 cases, fail-closed)  ##[group]Run bash scripts/redteam.sh
+redteam  Red team suite (32 cases, fail-closed)  DEMO_PASSWORD: ***
+redteam  Red team suite (32 cases, fail-closed)  == 红队全量：32 用例（fail-closed，泄漏/SKIP 即 FAIL） ==
+redteam  Red team suite (32 cases, fail-closed)  [pass] l1-self-confirm pass: 自确认 403 且不写状态；正向对照确认成功（executed）
+redteam  Red team suite (32 cases, fail-closed)  [pass] l1-nonce-replay pass: 同 nonce 重放被拒（分层 reason=nonce_reused）
+redteam  Red team suite (32 cases, fail-closed)  [pass] vfy-422 pass: 422 payload hash mismatch (content tampered)
+redteam  Red team suite (32 cases, fail-closed)  redteam: 32 用例 / 通过 32 / SKIP 0 / 泄漏 0 → PASS 零泄漏（/home/runner/work/OpsShield/OpsShield/offline/redteam/report/redteam_report.md）
+redteam  Red team suite (32 cases, fail-closed)  PASS redteam：零泄漏零跳过（报告见 offline/redteam/report/redteam_report.md）
+```
+
+**汇总行原文（逐字）**：
+
+```
+redteam: 32 用例 / 通过 32 / SKIP 0 / 泄漏 0 → PASS 零泄漏（/home/runner/work/OpsShield/OpsShield/offline/redteam/report/redteam_report.md）
+```
+
+Verifier 亲做的机械化核对（不是看汇总行就收工）：
+
+| 核对项 | 结果 |
+|---|---|
+| 日志中 `[pass] <id>` 行数 | **32**，去重后 **32**（无重复、无缺号） |
+| 与 `offline/redteam/manifest.json` 的 32 个 case 逐一比对 | manifest 有而日志无：**0**；日志有而 manifest 无：**0** |
+| 日志中 `[SKIP]` / `[skip]` 标记 | **0** |
+| 日志中 `[LEAK]` / `[leak]` 标记 | **0** |
+| 日志中 `FAIL:` 标记 | **0** |
+| 32 个用例覆盖面 | 分类 2 / 命令契约 3 / 跨租户 2 / 注入 4 / 越狱 5 / L1 全链 7 / MCP 5 / verifier 4 |
+
+用例不是空转的旁证：每条 `[pass]` 行带的是真实 API 返回值摘要（如 `首次回调 executed（正向）；修正回调 409 带现有终态`、
+`ts 超 ±300s 被拒（分层 reason=ts_out_of_window）`、`3 条结果全部密级 <= 1`），且脚本在跑用例前已通过
+`/actuator/health/readiness` 的 `UP` 检查、跑完写出了 `offline/redteam/report/redteam_report.md`。
+另需说明一处**看似可疑实为正常**的现象：32 条 `[pass]` 行的日志时间戳集中在 00:43:19.157–19.160（4 毫秒内），
+原因是 `offline/redteam/runner.py:754` 的 `print` 在非 TTY 的 CI 里被 stdout 缓冲、随进程退出一次性刷出，
+日志时间戳是"刷出时刻"而非"执行时刻"；用例本身在 `runner.py:741-752` 是逐条顺序执行的，行内 detail 各不相同。
+
+### 5. `ci.yml` 无消红手段核对（`git show HEAD:.github/workflows/ci.yml`，逐项 + 行号）
+
+`redteam` job 完整定义位于 **57–71 行**：
+
+| 行号 | 内容 | 核对结论 |
+|---|---|---|
+| 57 | `redteam:` | job 存在 |
+| 58 | `runs-on: ubuntu-latest` | 符合契约 |
+| 60 | `- uses: actions/checkout@v7` | — |
+| 61–65 | `actions/setup-java@v6` / `distribution: temurin` / `java-version: 21` / `cache: maven` | JDK 21 符合契约 |
+| 67 | `run: mvn -B -DskipTests package` | 与契约一致 |
+| 69 | `run: echo "DEMO_PASSWORD=$(openssl rand -hex 16)" >> "$GITHUB_ENV"` | **运行时随机生成**，非字面值 |
+| 71 | `run: bash scripts/redteam.sh` | 直接调用，无包装 |
+
+消红手段逐项排查：
+
+| 检查 | 命令 | 结果 |
+|---|---|---|
+| `continue-on-error` | `git show HEAD:.github/workflows/ci.yml \| grep -n "continue-on-error"` | **零命中**（退出码 1） |
+| `\|\| true` | `grep -nF "\|\| true"` | **零命中**（退出码 1） |
+| `if:` 旁路 | `grep -n "if:"` | 仅 **115**、**150** 两处，均为 `benchmark` / `security` job 里 `upload-artifact` 步骤的 `if: always()`（"总是上传报告"），**不在 `redteam` job（57–71 行）内**；`redteam` job 与 `bash scripts/redteam.sh` 步骤均无 `if:` |
+| job 级 `if:` / `continue-on-error` | 57–71 行整段复查 | 无 |
+| `DEMO_PASSWORD` 字面值 | `grep -n "DEMO_PASSWORD"` | 仅 **69**（运行时 `openssl rand -hex 16`）与 **112**（`benchmark` job 的既有 secret 引用，`origin/main:89` 已存在，**不在本 PR diff 内**、不在 `redteam` job 内）；`redteam` job 内无字面口令 |
+
+日志侧交叉印证：`Red team suite` 步骤的 env 里 `DEMO_PASSWORD: ***`（被 GitHub 掩码），说明它来自上一步
+写入 `$GITHUB_ENV` 的运行时值，而非仓库内常量。
+
+`git diff origin/main...HEAD -- .github/workflows/ci.yml` 为**纯新增 23 行、零删除**；
+`git diff --stat origin/main...HEAD -- scripts/redteam.sh offline/redteam/` 为**空**——说明脚本与用例在
+Linux 上一次通过，未发生"改脚本/放宽容例换绿"的情况。
+
+### 6. AC-6 判定
+
+**通过。** 本 PR（#79）自身的 CI run 42933492763 中，名为 `redteam` 的 job（130237730396）结论 success，
+日志显示 32 条用例逐条 `[pass]`、与 manifest 32 个 case 一一对应、SKIP 0 / 泄漏 0，且 `ci.yml` 的
+`redteam` job 无 `continue-on-error` / `|| true` / `if:` 消红手段、`DEMO_PASSWORD` 为运行时随机生成。
+不存在"因真实代码缺陷而失败"的情形，也不存在 SKIP 或平台性跳过。
+
+### 7. 整体验收结论
+
+**AC-1..AC-7 全部通过。** 本轮补齐 AC-6 后无新增阻塞项；AC-1..AC-5、AC-7 的判定沿用上一轮证据包
+（HEAD `b55eb0c` 与本轮一致，工作树在本轮核验前后均为空，故上一轮结论仍绑定同一份代码）。
+Forbidden 第 6 条（CI 消红）经本轮复核**未发生**。合并仍须 Lead 在「人审签收」节书面签收。
