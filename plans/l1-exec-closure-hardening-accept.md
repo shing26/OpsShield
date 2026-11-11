@@ -283,9 +283,30 @@ AC-6 的 CI 侧判据由 PR 的 `redteam` check 提供；Verifier 须记录 chec
 4. 遗留边界（AC-6 只在 ubuntu-latest 成立、本机为 Git Bash；`scripts/redteam.sh` 的 Linux
    行为以 PR CI 为准）是否接受为已知项？
 
-## 人审签收
+## 人审签收（2026-11-11）
 
-（待 Verifier 证据包出具后由 Lead 填写；未签收不得合并。）
+- 问题 1：**是**——17 条 Verification command 全部亲跑、退出码 0（Verifier 证据包 §2）。两处已披露例外不影响结论：
+  `source scripts/java_home.sh` 因 worktree 守卫改用等价显式 `JAVA_HOME=/e/java/jdk21`；
+  一次 `-Dtest='A+B+C'` 的 surefire 调用语法错误导致 BUILD FAILURE（未运行任何用例），改逗号分隔后 21/21 全绿，
+  该次失败不构成对实现的证据。`grep "label 白名单"` 在 `docs/adr` 与 `l1-action-contract.md` 退出码 1 是「零命中」的期望结果。
+- 问题 2：**逐条可判，见 Verifier 证据包 §3**。重点两项——
+  AC-1 正极性回归锁：把 `ActionL1BindingRegressionTest.java:38` 的 `DOC_SPELLING` 改为 `_BOGUS` 后**正极性用例转红**
+  （`expected: <deployment/inventory-api> but was: <null>`）而同轮负向对照与等价性用例仍绿，证明非恒绿空断言；
+  复原后 sha256 回到 `297d439b…6055`、`git status` 回空、3/3 转绿。
+  AC-3「nonce 未被消耗」：生产侧白名单位于签名校验之后、`callbackFreshnessReason` 之前
+  （`ExecutorCallbackController.java:62-64` vs `:49-55` / `:66`）；测试侧同一 nonce 的合法 `executed` 回调仍 200，
+  且未知 status 未改 state、未写 `action_result` 审计（`ActionDispatchServiceTest.java:339-379`）。
+- 问题 3：**无 Forbidden 事件**（十条逐条核对见证据包 §4）。`src/test/` diff 删除行为 0、无 `@Disabled`/`@Ignore`/`Assumptions`；
+  `ActionOpsService.java`、`src/main/resources/`、`docs/ops/roadmap.md`、`scripts/redteam.sh`、`offline/redteam/`、
+  `ChatOrchestrator` 的 diff 均为 0 行；`ci.yml` 无 `continue-on-error` / `|| true` / job 级 `if:`，口令为运行时随机生成。
+- 问题 4：**接受遗留边界为已知项**。原判据「AC-6 只在 ubuntu-latest 成立、`scripts/redteam.sh` 的 Linux 行为以 PR CI 为准」
+  在补齐 CI 实证后已部分失效：`redteam` 在 `ubuntu-latest` 上两次运行（run 42933492763 / 42934434737，两个不同 SHA）均
+  32/32、SKIP 0、泄漏 0，且 `scripts/redteam.sh` diff 为 0 行（未改脚本换绿）。因此本条实际收窄为：
+  **接受本机 Git Bash 与 CI ubuntu-latest 的环境差异为已知项**——两侧一致性由「同一脚本零改动 + 两次 CI 全绿」间接证明，
+  本机不复现 ubuntu 特有的路径与 shell 细节。
+- 证据绑定：Verifier 两轮均绑定 HEAD `b55eb0c`；PR 当前头 `233e8a2` 与之相比**仅契约文件 +134 行补证**，
+  排除 `plans/` 后代码 diff 为空——裁决所绑定的代码与待合并代码逐字相同。
+- 签收人：Lead（shing26）。签收即合并授权：PR #79 squash 合并。
 
 ---
 
