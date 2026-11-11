@@ -47,6 +47,29 @@ jobs:
       - name: Runtime smoke (memory/mock)
         run: bash scripts/smoke.sh
 
+  # AC-6（2026-11-11）：红队套件入 CI。此前 32 用例只在开发机跑——「报告引用的 32/32
+  # 实际生成于白名单合入之前的提交」这类事故正是"门禁不在 CI 里"的必然结果。
+  # 本 job 与 smoke 同形（先打 fat jar，再跑活体脚本）；不复用 smoke 的产物是因为
+  # job 间不共享工作区，另起 job 重跑一次构建换来的隔离值得这个代价。
+  # 口令在 job 内运行时生成并写入 $GITHUB_ENV（后续 step 可见），**不写死、不进仓库**：
+  # 它只喂脚本自建的临时 memory/mock 栈，用完即弃。
+  # 失败即 CI 红：不设容错开关，不吞退出码——红队是门禁，不是报告。
+  redteam:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
+      - name: Build fat jar
+        run: mvn -B -DskipTests package
+      - name: Generate throwaway demo password
+        run: echo "DEMO_PASSWORD=$(openssl rand -hex 16)" >> "$GITHUB_ENV"
+      - name: Red team suite (32 cases, fail-closed)
+        run: bash scripts/redteam.sh
+
   # G1：依赖物料清单。不是漏洞扫描，但发布时"带了什么"必须可复核；
   # CycloneDX JSON 由 release 归档/下游 SCA 消费。
   # 真正的 SCA 在 security job（Trivy FS）；两者分工：SBOM 回答"有什么"，SCA 回答"有没有已知洞"。
