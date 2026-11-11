@@ -286,3 +286,112 @@ AC-1 的 ADR 计数以 `doc_numbers --check` 的现算为准；AC-3 的统计量
 ## 人审签收
 
 （待 Verifier 证据包出具后由 Lead 填写；未签收不得合并。）
+
+---
+
+## Verifier 证据包（2026-11-11，独立会话）
+
+> 本段由 Implementer 原样转录自独立 Verifier 会话的最终交付（Verifier 受只读约束无法写文件）。
+> 判定结论：**不通过（FAIL）**，唯一阻断项为 AC-6 的一处残留，成因是契约内部矛盾。
+
+### 0. 绑定与环境
+
+- 工作区：`D:\OpsPilot — AIOps\.claude\worktrees\prom-baseline-alert`
+- 分支：`feat/prom-baseline-alert`；HEAD SHA：`56adbba92fb974a9461af0aba6b30748cf87694c`
+- `git status --short`：**空**（验证开始与 redteam 产物还原后均为 clean）
+- `git diff origin/main...HEAD -- src/main/java src/main/resources`：**空**
+- 环境：`JAVA_HOME=/e/java/jdk21`；Python 3.11；demo 口令变量名取自
+  `scripts/seed_demo_users.sh:13`，运行时 `openssl rand -hex 16` 生成（与 CI 同法）
+
+### 1. Verification commands 逐条（Verifier 亲自重跑）
+
+| # | 命令 | 退出码 | 关键输出 |
+|---|---|---|---|
+| 1 | `git rev-parse HEAD && git status --short` | 0 | `56adbba…`；status 空 |
+| 2 | `git diff origin/main...HEAD --stat` | 0 | 13 files changed, 2053(+)/11(-) |
+| 3 | `git diff origin/main...HEAD -- src/main/java src/main/resources` | 0 | **空**（`-- src/` 亦空） |
+| 4 | `python -m pytest offline/tests/ -q` | 0 | **598 passed**, 1 warning（注 1） |
+| 5 | `python -m pytest offline/tests/test_predictive_alerts.py -q` | 0 | **71 passed** |
+| 6 | `python offline/doc_numbers.py --check` | 0 | `33 条…48 处引用全部命中且相符` |
+| 7 | `python offline/provenance.py --check` | 0 | `mode=live，chunks=448，golden=68，语料 69 篇` |
+| 8 | `python scripts/check_public_copy.py --check` | 0 | `7 个 canonical 词零出现` |
+| 9 | `mvn -o test` | 0 | surefire 汇总 **438 / 0 / 0 / 0**（72 个报告文件） |
+| 10 | `bash scripts/check_panel_contract.sh` | 0 | `面板契约十层一致` |
+| 11 | `bash scripts/redteam.sh` | 0 | **32 用例 / 通过 32 / SKIP 0 / 泄漏 0**；随后 `git checkout -- offline/redteam/report/` 已还原 |
+| 12 | `python offline/predictive_alerts.py --help` | 0 | usage 含 `--once/--dry-run/--prometheus/--user/--rules` |
+| 13 | `python offline/predictive_alerts.py --once --dry-run --prometheus http://127.0.0.1:9090` | 0 | `cycles=1 fired=0 emitted=0 skipped=5 errors=0`；台账每规则 `skip_reason="no_data"` |
+| 14 | `grep -rn "永久非目标" docs/ OPS.md` | 0 | 命中见 AC-6 分析 |
+| 15 | `grep -n "import requests\|import numpy\|import scipy\|import pandas" offline/predictive_alerts.py` | **1** | 零命中（符合） |
+
+注 1：第 4 条唯一 warning 是既存 `test_l1_worm_gate.py` 在 Windows GBK 解码子进程输出，
+与本次改动无关，未导致失败。
+
+补充独立验证（用于 AC-4）：
+- `--once --dry-run --prometheus http://127.0.0.1:9` → **退出码 2**，台账 5 行
+  `skip_reason="prometheus_unreachable"`。
+- 端口 9090 实测在线（`/-/ready` Ready，`query_range` 返回 `status=success,result=[]`），
+  故第 13 条 `no_data` 是正确语义，非失败关闭缺陷。
+
+### 2. AC 覆盖（Verifier 判定）
+
+- **AC-1 满足**：ADR-0030 五条决策 (a):36 (b):45 (c):65 (d):78 (e):88；否决项
+  采集平台:105 / 黑盒 ML:106 / 新后端端点:107 / 自动处置:108；明示未做 :116/:118/:119；
+  重开条件按行标题引用 :121-124（无裸行号）；谱系联动 :88-99、预支条款引用 :17-21；
+  `adr_count=30` 两处相符。
+- **AC-2 满足**：stdlib-only（:39-50 + 零第三方命中）；`/api/v1/query_range` :249-255 且有
+  path 断言测试；`guard=localapi.assert_local` 默认 :229-230、实际调用 :238-239，非环回与
+  userinfo 均被拒（:357-363 / :366-370，后者断言 `opener.urls == []`）；opener 可注入；
+  错误分类 :153-162 / :245-246 / :256-265；空结果返回 `[]` :260-261。
+- **AC-3 满足**：`compute_baseline` :269-275；常数 :77、公式 :315；双阈值 `and` :316；
+  MAD=0 仅绝对差 :308-312 且 `baseline=method` :333；样本不足 :299-300；方向 :318-321；
+  模板 :146-150 与 `render_query` :339-354；手算常数用例 :151-160 与硬编码 `"4.05σ"` :271；
+  常数独立断言 ==0.6745 :163-164；反向用例 :198-215、MAD=0 :218-238、方向 :183-195、
+  不足样本 :241-245。
+- **AC-4 满足**：不可达 → 退出 2 + `prometheus_unreachable`（:447-454 / :563-567，独立实跑
+  已确认，单测 :531-540）；单条无数据只跳过该条 :515-516（单测 :542-554）；跳过均进台账
+  :522/:533/:549（单测 :556/:629）；dry-run 不发送且不读配额（单测 :470-480）。
+- **AC-5 满足**：发送体四字段 :477-478；`PREDICTIVE_GATES` :80-85；冷却键 :469；
+  per-hour/quota-reserve/dry-run :459-468；单实例锁 :572-601、主流程 :661-664；
+  登录归因 :415 与退避/上限 :673-690；默认主体 :614、换主体文档
+  `docs/ops/predictive-alerts.md:168-176`；发送路径唯一（本文件仅 docstring :16 提及
+  `/api/v1/copilot/chat/stream`，实际经 `localapi.stream_chat`）；单测覆盖冷却 :483、
+  小时上限 :496、dry-run :470。
+- **AC-6 未完全满足（唯一阻断项）**：六处修订均已落地（positioning :12-13、:36、:76、:18、
+  :105；roadmap :84-85；OPS :126；ADR-0013 :59-65；QA :299-301）。残留逐条分类：
+  0013:28/32/48 + :59 注 ✅；QA:299 + :301 注 ✅；positioning:8/22/26/29（分类/章节名/纪律，
+  非对 ①② 的断言）+ :105 ✅；ADR-0030 自身引用旧措辞 ✅；
+  **`docs/adr/0029-…:78` ❌ —— 不在 AC-6 枚举的允许清单内，且近旁无指向 ADR-0030 的修订注**。
+  Verifier 独立判断：按冻结判据字面 AC-6 不通过；但这是**契约自身矛盾**（AC-6 要求消解 /
+  Allowed paths 排除 0029 / Forbidden 10 禁止越界），实现方「不改 + 在 ADR-0030:136-139
+  如实登记」是冻结约束下唯一合法动作，**无实现缺陷**。
+- **AC-7 满足**：八条全部退出码 0；`adr_count=30`、`python_test_declarations=538` 与实测相符；
+  doc_gate 33/48 未变（未改 doc_numbers 源/数据）。
+- **AC-8 满足**：`docs/ops/predictive-alerts.md` 章节齐全（读什么 :18-20 / 判定式 :22-45 /
+  规则集 :47-57 / 怎么跑 :73-87 / 闸门 :114-125 / 台账 :127-141 / 边界 :143-154 / 分工
+  :156-166）；退出码 :103-109；README:376 与 repo-map:29 计数 30、repo-map:55 登记新模块。
+
+### 3. Forbidden 十条（Verifier 逐条审计，全部未发生）
+
+1 无新端点/指标/权限/DB（`src` diff 为空）；2 未自建采集（`prometheus.yml` 不在变更集）；
+3 无第三方依赖（第 15 条零命中，`pom.xml` 未改）；4 无黑盒模型/外部 LLM；
+5 未把预测/根因/自动处置写成已实现（ADR-0030:112-124、positioning:13、predictive-alerts.md
+:15-16/:152）；6 未改删弱化断言或门闩（既有测试零修改，新文件 709 增 0 删，无删除文件）；
+7 未越界（13 个变更文件逐一比对均落在 Allowed paths）；8 无静默放过（skip_reason/显式标记 +
+台账三重印证）；9 历史文档只加注（0013 6 增 0 删、QA 2 增 0 删）；10 未自宣通过（本结论由
+独立会话出具）。
+
+### 4. 遗留边界
+
+接受为已知项：预警仅在 Prometheus 可达且有足够历史样本时成立；基线是「自身历史」非跨实例；
+不做趋势外推与根因；MAD=0 仅绝对差分支（ADR-0030:131-133、
+`docs/ops/predictive-alerts.md:143-154`）。**唯一不接受项**：AC-6 的 ADR-0029:78 残留。
+
+### 5. 结论与转 PASS 条件
+
+**不通过（FAIL）——唯一阻断项：AC-6 的 1 处残留。**
+转 PASS 需 Lead 书面裁决其一：
+1. 将 0029 纳入 Allowed paths（限「仅追加一行指向 ADR-0030 的修订注」），补注后复验通过；或
+2. 正式修订 AC-6，把 ADR-0029:78 列入「已登记已知残留」白名单（并在契约留痕）。
+
+除此之外，实现与文档质量满足契约，未发现其它实现缺陷或契约矛盾。
+
