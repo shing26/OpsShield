@@ -4,6 +4,7 @@ import com.opspilot.auth.JwtAuthFilter;
 import com.opspilot.auth.UserContext;
 import com.opspilot.gateway.dto.FeedbackRequest;
 import com.opspilot.metrics.AuditService;
+import com.opspilot.metrics.OpsMetrics;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.util.Map;
@@ -35,9 +36,11 @@ import org.springframework.web.server.ResponseStatusException;
 public class FeedbackController {
 
     private final AuditService audit;
+    private final OpsMetrics metrics;
 
-    public FeedbackController(AuditService audit) {
+    public FeedbackController(AuditService audit, OpsMetrics metrics) {
         this.audit = audit;
+        this.metrics = metrics;
     }
 
     @PostMapping("/feedback")
@@ -49,6 +52,10 @@ public class FeedbackController {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "auth_level 非法（须 >=1）");
         }
         audit.logFeedback(user, req.fingerprint(), req.verdict(), req.note());
+        // 反馈不只是"记一行日志"：Prometheus 侧给一条 0 基线的 up/down 计数，
+        // 复核队列（offline/feedback_review.py）与抓取侧 PromQL 都以它为入口。
+        // 先审计后计数：审计行是事实，指标是派生——反过来的话计数失败就没痕可查。
+        metrics.feedback(req.verdict());
         return Map.of("ok", true);
     }
 }

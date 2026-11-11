@@ -57,6 +57,11 @@ public class OpsMetrics {
     private final Counter cacheWriteFailures;
     private final Counter rerankFailures;
     private final Counter sopMisses;
+    // 反馈闭环（2026-11-05）：Prometheus-only。面板契约的键集已锁死（见类注释与
+    // check_panel_contract.sh），而反馈量的消费者是复核队列（offline/feedback_review.py）
+    // 与抓取侧 PromQL，不是磁贴——故刻意不进 snapshot。
+    private final Counter feedbackUp;
+    private final Counter feedbackDown;
 
     /** 失败请求按异常类分桶（Prometheus-only）：失败路径不走任何 snapshot 键，故不进面板契约。 */
     private final MeterRegistry registry;
@@ -89,6 +94,10 @@ public class OpsMetrics {
                 "精排失败、退回 RRF 原始序的次数");
         sopMisses = counter(registry, "aiops.sop.miss",
                 "SOP 兜底未命中（无可用 SOP 可直出）的次数");
+        // 两个 tag 值都预注册：与 reason=none 同理——"还没人反馈"时抓取侧应看到 0 基线，
+        // 而不是空向量（空向量与 0 在 PromQL 里是两种事实）。
+        feedbackUp = registry.counter("aiops.feedback", "verdict", "up");
+        feedbackDown = registry.counter("aiops.feedback", "verdict", "down");
         totalRequests = counter(registry, "aiops.requests.total", "处理完成的请求总数");
         llmCalls = counter(registry, "aiops.llm.calls", "实际发起的 LLM 调用次数");
         llmRateLimited = counter(registry, "aiops.llm.rate_limited", "LLM 侧限流（429）命中次数");
@@ -132,6 +141,20 @@ public class OpsMetrics {
     public void request() { totalRequests.increment(); }
     public void verbatimMasked(int n) { verbatimMasked.increment(n); }
     public void actionCommandRejected() { actionCommandsRejected.increment(); }
+
+    /**
+     * 人工反馈计数（verdict 已在 DTO 侧收口为 up|down）。
+     *
+     * 未知值静默忽略而不是新建 tag：tag 基数由调用方决定等于把指标面交给外部输入，
+     * 而反馈是外部输入里最容易被刷的一类。
+     */
+    public void feedback(String verdict) {
+        if ("up".equals(verdict)) {
+            feedbackUp.increment();
+        } else if ("down".equals(verdict)) {
+            feedbackDown.increment();
+        }
+    }
 
     /**
      * 失败请求计数（2026-10-22，G0）：与 {@code aiops.requests.total} 分开，才能算出
