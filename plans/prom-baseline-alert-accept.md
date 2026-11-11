@@ -60,11 +60,25 @@
 - `docs/ops/roadmap.md`（**仅** `## 明确不做` 第 1 条 + 一行修订注记）
 - `OPS.md`（**仅** §5 债务闹钟表里含「AIOps 谱系 ①遥测采集/②异常检测=永久非目标」的那一句注）
 - `docs/adr/0013-trust-base-for-agents-not-an-agent.md`（**仅**追加修订注记，不改决策正文）
+- `docs/adr/0029-reuse-boundary-trust-base-vs-domain-plugins.md`（**仅**追加一行指向 ADR-0030
+  的修订注，不改决策正文；2026-11-11 Lead 授权补入，见下方修订注）
 - `docs/qa/2026-10-22-ops-readiness-review.md`（**仅**追加一行修订注记，不改原文断言）
 - `docs/CONTEXT.md`（**仅**新增本任务词条）
 - `README.md`（**仅** ADR 计数与 Python test 计数两处数字，见事实前提 7）
 - `docs/repo-map.md`（**仅** ADR 计数与新增模块的目录行）
 - `plans/prom-baseline-alert-accept.md`（本契约；Verifier 可追加证据段，Lead 可追加修订注记）
+
+> **契约修订（2026-11-11，Lead 书面裁决）**：Verifier 首轮判定为 **FAIL**，唯一阻断项是
+> AC-6 的 `docs/adr/0029-…:78` 残留——该文件原不在 Allowed paths 内，而 AC-6 的允许残留
+> 清单也未列入它，构成**契约内部矛盾**（要求消解 / 排除文件 / 禁止越界三者不可同时满足）。
+> Lead 裁决采用「补注」路径：
+>
+> 1. 将 `docs/adr/0029-…md` 纳入 Allowed paths，**仅限追加一行指向 ADR-0030 的修订注**，
+>    不改决策正文；
+> 2. AC-6 判据随之增补：ADR-0029:78 的残留**在近旁存在指向 ADR-0030 的修订注时视为可解释**，
+>    与 ADR-0013 / QA-2026-10-22 / roadmap 注记同档。
+>
+> 本次修订不改变任何其它 AC、Allowed paths 条目或 Forbidden 条目。
 
 ## Acceptance criteria（逐条可判，判据即证据）
 
