@@ -63,11 +63,45 @@
 - `scripts/redteam.sh`（**仅**AC-6 所述平台兼容性修复；用例判定逻辑一律不许动）
 - `docs/adr/0028-l1-controlled-action-contract.md`（**仅**第 73 行措辞修订 + 一行修订注记）
 - `docs/ops/l1-action-contract.md`（§8.5 绑定说明、第 216 行与第 219 行措辞）
-- `plans/l1-exec-closure-hardening-accept.md`（本契约，仅 Verifier 可追加证据段）
+- `README.md`（**仅**第 342 行 `Java 429 单测` → `438`，见下方修订注记 R1）
+- `docs/repo-map.md`（**仅**第 28 行 `429 用例` → `438`，见下方修订注记 R1）
+- `plans/l1-exec-closure-hardening-accept.md`（本契约，Verifier 可追加证据段；Lead 可追加修订注记）
 
 **不在上述清单的文件一律不许改。** 新增文件仅限两处：`src/test/java/com/opspilot/action/` 下的
 测试类（AC-1/2/3 的回归锁）与 `src/test/java/com/opspilot/resilience/SopFallbackServiceTest.java`
 （AC-4）。不得新增任何 main 代码文件、脚本或文档。
+
+### 修订注记 R1（2026-11-11，契约作者追加；实现开始后、Verifier 介入前）
+
+**起因**：本契约初稿存在自身矛盾。AC-7 要求 `doc_numbers --check` 全绿，而该门闩的
+`java_test_declarations` 项以 `grep_count` 从 `src/test/**/*.java` 的 `^\s*@Test\b` **机械派生**
+期望值，`cited_in` 指向 `README.md:342` 与 `docs/repo-map.md:28`。本任务按 AC-1…AC-4 新增用例后，
+派生值 429 → **438**，两处引用当场转红：
+
+```
+java_test_declarations: `README.md:342` 期望值 438，文档写的是 429
+java_test_declarations: `docs/repo-map.md:28` 期望值 438，文档写的是 429
+```
+
+**这是契约起草缺陷，不是实现缺陷**：能令门闩转绿的只有那两个数字，而初稿把它们列在 Allowed paths
+之外，与 Forbidden #3 形成死锁。同源后果是 `offline` 的 6 条 pytest 一并失败
+（`test_real_repo_is_green` 等经 `_mirror()` 复制真实仓库，在变异前就先撞上陈旧数字），
+修好两处数字即全部转绿。
+
+**处置**：把 `README.md:342`、`docs/repo-map.md:28` 纳入 Allowed paths，**仅允许**把 `429` 改成
+`438`，其余一字不动。这**不是**放宽门闩——门闩的派生逻辑、`cited_in` 清单、容差一概不动，
+改的是被门闩点名的文档。仓库内已有同形先例：
+`docs/ops/production-readiness-2026-09-12.md:218` 记录过 131 → 139 的同类事件，结论明写
+「门闩没有被改宽，改的是文档」。
+
+**为什么不选另外两条路**：
+- 把 `doc_numbers` 从 AC-7 摘掉 / 加豁免 → 直接触犯 Forbidden #1 与全局规范「关 lint/typecheck 消警」；
+- 少写用例以维持 429 → 触犯 AC-7 的 ≥435 下限，且是用削减证据换取门禁变绿。
+
+**连带核对**：`offline/doc_numbers.json` 的 `java_test_declarations.unit` 文案为
+「`@Test` 声明数（src/test；无参数化展开，故与 surefire 执行数一致）」，**不含数字**，无需同步。
+`README.md` 的 :72/:103/:128/:396 与 `docs/repo-map.md:92` 的 429 均为 HTTP 429 语义，与本门闩无关，
+**不在改动范围**。
 
 ## Acceptance criteria（逐条可判，判据即证据）
 
@@ -196,6 +230,8 @@
   AC-3 2、AC-4 3），0 failed / 0 errors / 0 skipped。
 - `offline` pytest 全量通过；`doc_numbers --check`、`provenance --check`、
   `check_public_copy --check`、`check_panel_contract.sh` 全绿。
+  （`doc_numbers` 的 `java_test_declarations` 项须先把 `README.md:342` 与 `docs/repo-map.md:28`
+  的 429 同步为 438——见修订注记 R1；**门闩本身不得改**。）
 - `scripts/redteam.sh` 本机 32/32。
 - **diff 核对**：`git diff origin/main...HEAD -- src/test/` 中既有断言只允许"新增用例"或
   "极性修正并逐一说明"，不得出现删除/放宽。Verifier 逐条核对并在证据包列出。
@@ -218,6 +254,8 @@ DEMO_PASSWORD="$(head -c 24 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9')" bash sc
 grep -rn "label 白名单" docs/                     # 期望：仅 docs/ops/roadmap.md:99 一处历史命中
 git diff origin/main...HEAD -- docs/ops/roadmap.md | head   # 须为空（历史台账不改写）
 grep -n "redteam" .github/workflows/ci.yml        # AC-6：job 存在且无 continue-on-error
+# R1：两处文档数字只许改数字，diff 必须恰为一行、且只含 429→438
+git diff origin/main...HEAD -- README.md docs/repo-map.md
 ~~~
 
 AC-6 的 CI 侧判据由 PR 的 `redteam` check 提供；Verifier 须记录 check 名与结论，不得以本机
@@ -228,6 +266,7 @@ AC-6 的 CI 侧判据由 PR 的 `redteam` check 提供；Verifier 须记录 chec
 1. 改/删/弱化任何既有断言或门闩以换通过（AC-7 的 diff 核对项）；
 2. 跳过任一 Verification command，或以"应该没问题"替代实跑；
 3. 触碰 Allowed paths 之外的文件（含新增文件）；
+   （R1 后 `README.md`/`docs/repo-map.md` 已入清单，但**仅限**把 429 改成 438 这两个数字）
 4. 为 N-11 新增降级文案或改动 `ChatOrchestrator`（其 null 分支已存在）；
 5. 把 AC-3 的状态校验放在 nonce 消耗之后；
 6. 在 CI 里用 `continue-on-error` / `|| true` / 删除 job 消红；
