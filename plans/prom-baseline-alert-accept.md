@@ -297,9 +297,40 @@ AC-1 的 ADR 计数以 `doc_numbers --check` 的现算为准；AC-3 的统计量
 4. 遗留边界是否接受为已知项？至少含：预警只在 Prometheus 可达且有足够历史样本时成立；
    基线是"自身历史"而非跨实例基线；不做趋势外推与根因。
 
-## 人审签收
+## 人审签收（2026-11-11）
 
-（待 Verifier 证据包出具后由 Lead 填写；未签收不得合并。）
+- 问题 1：**是**——15 条 Verification command 由独立 Verifier 会话亲自重跑，14 条退出码 0，
+  第 15 条 `grep "import requests\|import numpy\|import scipy\|import pandas"` 退出码 1 为
+  「零命中」的期望结果。关键读数：`pytest offline/tests/ -q` **598 passed**（新增 71）、
+  `mvn -o test` **438 / 0 / 0 / 0**（surefire 汇总）、`check_panel_contract.sh` 十层一致、
+  `redteam.sh` **32/32、SKIP 0、泄漏 0**、`src` diff 0 行。补充实跑
+  `--once --dry-run --prometheus http://127.0.0.1:9` 退出码 2、台账 5 行 `prometheus_unreachable`。
+  两处已披露噪声不影响结论：mvn 控制台的 gRPC `Connection refused /127.0.0.1:1` 是测试自连关闭端口；
+  pytest 唯一 warning 来自既存 `test_l1_worm_gate.py` 的 GBK 解码，与本次改动无关。
+- 问题 2：**逐条可判，见 Verifier 证据包 §2**。重点两项——
+  **AC-3 MAD=0 退化分支**：`compute_baseline` 得 `MAD=0` 时走「仅绝对差」分支
+  （`offline/predictive_alerts.py:308-312`），`evaluate` 返回 `method="degenerate_mad_zero"`
+  且 `baseline` 同值（:333），台账与告警正文均带该标记；单测
+  `test_degenerate_mad_zero_fires_on_absolute_delta` / `_below_delta_does_not_fire` /
+  `test_degenerate_never_divides_by_zero` 三例分别覆盖「报 / 不报 / 不除零」；
+  `test_modified_z_matches_hand_computation` 把 z 写成手算常数 `0.6745·6/1`（非调用被测函数自证）。
+  **AC-6 残留核对**：`grep -rn "永久非目标" docs/ OPS.md` 命中逐条分类——ADR-0013、QA-2026-10-22
+  为历史原文 + 近旁修订注；`docs/positioning-aiops.md` 的 5 处是分类名/章节名/处置纪律，非对 ①②
+  的断言（第 105 行已明确「不再是永久非目标」）；ADR-0030 自身引用旧措辞以说明修订；
+  `docs/adr/0029-…md:78` 经 Lead 裁决后于 :80-84 补齐近旁修订注，复核 PASS。
+- 问题 3：**无 Forbidden 事件**（十条逐条核对见证据包 §3）。`src` diff 为空、`prometheus.yml`
+  未在变更集、无第三方依赖与黑盒模型、未把预测/根因/自动处置写成已实现；既有测试与门闩零修改
+  （新增测试文件 709 增 0 删、无删除文件）；14 个变更文件逐一比对均在**修订后**的 Allowed paths 内；
+  历史文档只加注不改写（ADR-0013 6 增 0 删、QA 2 增 0 删）。
+- 问题 4：**接受遗留边界为已知项**——① 预警仅在 Prometheus 可达且有足够历史样本时成立；
+  ② 基线是「自身历史」而非跨实例；③ 不做趋势外推与根因；④ MAD=0 时只有绝对差在起作用
+  （ADR-0030:131-133、`docs/ops/predictive-alerts.md:143-154`）。另记一条**流程遗留**：
+  契约最初在 AC-6 与 Allowed paths 之间自相矛盾，本次按 Lead 裁决补注消解（见上方「契约修订」段），
+  复盘时应把「改边界必须同步 AC 的允许残留清单」写入验收链路规范。
+- 证据绑定：Verifier 两轮分别绑定代码提交 `56adbba` 与文档提交 `f7147c4`；此后至本签收提交的
+  增量仅 `docs/adr/0029-…md`（+5/−0）、`plans/prom-baseline-alert-accept.md`（纯追加）与本条签收，
+  `src` diff 仍为 0 行——裁决所绑定的代码与待合并代码逐字相同。
+- 签收人：Lead（shing26，2026-11-11）。**签收即合并授权：PR #80 squash 合并。**
 
 ---
 
