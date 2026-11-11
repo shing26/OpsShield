@@ -68,6 +68,9 @@ Bridge 与 Producer 追加写出的 JSONL 证据流，记录闸门判定、登�
 **来源（Source）**:
 排障请求的发起方标记：`alert`（告警系统转发）或 `manual`（SRE 手动粘贴），影响去重窗口配置。_对外_: 无对外别名。
 
+**统计基线预警（Statistical Baseline Alert）**:
+把"这一阵子的读数相对它自己的历史是否异常"变成一条告警的**消费侧**能力：只读 Prometheus 里**既有**的时序（`/api/v1/query_range`），不自建采集、不建指标库、不做拓扑；基线取历史窗口内样本的**中位数** `med` 与**绝对中位差** `MAD = median(|x−med|)`，偏离度用 modified z-score `z = 0.6745·(x−med)/MAD`；判定要**同时**满足 `|z| ≥ z_threshold` 与 `|x−med| ≥ min_abs_delta`（双阈值：只有"统计上显著且业务上够大"才算异常）。例外必须显式：`MAD = 0`（序列恒定/近恒定，z 无定义）走"仅绝对差"分支并在台账标 `degenerate_mad_zero`；样本不足记 `insufficient_samples`；Prometheus 不可达记 `prometheus_unreachable` 且**不伪造读数**。命中后以 `source=alert` 打进既有的 `/api/v1/copilot/chat/stream`，复用投递策略的冷却/每小时上限/配额保留线/dry-run 四道闸门。**它不预测、不做根因、不做自动处置**——"异常"是统计偏离，"原因"仍由检索与人生成。_对外_: 无对外别名（该能力不在对外文案中单列）。_Avoid_: 预测（那是趋势外推，本能力刻意不做）、异常检测算法（易被读成 ML 黑盒）、智能告警（含义漂移）
+
 ### 缓存域
 
 **L1 精确缓存**:
