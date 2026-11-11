@@ -9,13 +9,13 @@
 
 | AIOps 能力域 | 状态 | 事实与边界 | 证据指针 |
 | --- | --- | --- | --- |
-| ① 遥测采集（metrics/traces/topology） | **永久非目标** | 输入恒为一段文本 query（人贴堆栈或告警系统 POST），无指标流/事件总线/拓扑图；做成采集平台是另一个产品，不是本系统的缺口 | 架构图入口面（三入口皆文本协议）；`gateway/CopilotController`、`gateway/OpenAiController`（全部入参=文本+元数据） |
-| ② 异常检测（统计/ML） | **永久非目标** | 全仓无检测算法路径——"何时算异常"的判定权恒归上游告警系统，本系统消费其结果 | `grep -riE "anomal|forecast" src/main` 为空；[CONTEXT.md](CONTEXT.md) 术语表无此词条（有词条必先入术语表，反向可验） |
+| ① 遥测采集（metrics/traces/topology） | **已覆盖（消费侧）**，采集仍非目标 | 不新增 scrape 配置、不建指标库、不做拓扑——只经 Prometheus HTTP API 读**既有**时序；"采集平台"仍是另一个产品，不是本系统的缺口 | [ADR-0030](adr/0030-telemetry-consumption-and-baseline-alerting.md)、`offline/predictive_alerts.py`（`PromRangeClient` 只调 `/api/v1/query_range`）、`offline/tests/test_predictive_alerts.py` |
+| ② 异常检测（统计/ML） | **已覆盖（统计基线预警）**，ML/根因仍非目标 | 中位数 + MAD 的 modified z-score（`z = 0.6745·(x−med)/MAD`）+ 双阈值（z 且绝对差）；MAD=0 走绝对差分支并显式标 `degenerate_mad_zero`。**无黑盒模型、不外推趋势、不做根因** | [ADR-0030](adr/0030-telemetry-consumption-and-baseline-alerting.md)、`offline/predictive_alerts.py`（`compute_baseline`/`evaluate`）、[ops/predictive-alerts.md](ops/predictive-alerts.md)、[CONTEXT.md](CONTEXT.md) 词条「统计基线预警」 |
 | ③ 告警降噪 / 事件收敛 | **已覆盖（同指纹域 + 跨指纹关联）**，边界明示 | `来源×指纹` 滑窗计数 + 进程内 Single-Flight：500 并发同指纹 → LLM 仅 1 次。**跨指纹"关联"已落（2026-10-17）**——一次事故的边界由**上游**（Alertmanager 的 `group_by`）定义，N 条不同告警共享一个 `am-…` 分组身份、落在审计行 `trace_id`，可整段取出。**跨指纹"归并"（N 条 → 1 次生成、1 个答案）明确未做且未立项**——"关联"与"归并"是两件事，本表按证据分开写 | `storm/FingerprintService`（含告警身份）、`storm/SingleFlightRegistry`；[ADR-0003](adr/0003-single-instance-inprocess-single-flight.md)/[ADR-0018](adr/0018-alert-identity-split-from-query-fingerprint.md)/[ADR-0019](adr/0019-incident-boundary-owned-by-upstream.md)；A2-5（`offline/acceptance_a2.py`）；台账 [qa/2026-10-17-alertmanager-intake.md](qa/2026-10-17-alertmanager-intake.md) §7（两条不同告警 → 同一 `incident_id`、各自 `alert_id`）、§6（同身份重发 → `cache_hit=L1`） |
 | ④ 知识化根因辅助 | **已覆盖（检索域）**，边界明示 | 双路召回 + RRF + 精排 over 68 篇复盘/Runbook + OpenAPI（**2026-10-06 起含 5 篇本机真实事故复盘**——「复盘→知识回灌」边界的第一次真实兑现）；置信度不足显式拒答而非硬编。**边界：知识库是只读的**——运行期没有任何「结论→语料」回灌路径，语料由人工撰写、重建靠 `POST /admin/reingest` 从既有 `chunks.jsonl` 重灌；"真实排障结论沉淀回知识库"这一环**未覆盖**，已按触发线登记（OPS §5.1） | `retrieval/HybridSearchService`；[ADR-0001](adr/0001-java-online-python-offline-split-at-jsonl.md)/[ADR-0002](adr/0002-dashscope-one-stop-1024-dim.md)；`offline/eval/reports/eval_report.md`（es_only 70.6%→hybrid 88.2%，现报告版）；`ingest/IngestionRunner`（只读 chunks → 写派生索引） |
 | ⑤ 处置闭环（动作执行/自愈） | **待还债（触发线在案）** | 当前形态=输出可溯源排障步骤供**人**执行；对目标系统零写操作是产品承诺非缺陷。触发线（合取）：接入可审计执行通道（runbook 执行引擎 + 审批链/HITL 门）后立项。**告警接入侧已解除挂起**——自举告警源已上线（ADR-0011，换源而非 adapter）；面向外部监控系统的 adapter 仍按硬约束挂起 | OPS §5 债务闹钟表"处置闭环"行（含 2026-09-16 状态注）；`docs/ops/production-readiness-2026-09-12.md` M3 |
 
-**一句话口径**：OpsPilot 做的是 AIOps 的 **③④ 两个子域的网关入口层**——"让告警风暴里的一条 query 得到可信、可溯源、越不了权的排障建议"。标题词 AIOps 指的是这个可验证子集；①②⑤ 上表三分类各归其位，欢迎按证据列逐行核验。
+**一句话口径**：OpsPilot 做的是 AIOps 的 **③④ 两个子域的网关入口层**，并在 **①② 的消费侧**补了一层统计基线预警（读既有时序、不自建采集、不走黑盒模型）——"让告警风暴里的一条 query 得到可信、可溯源、越不了权的排障建议"，并让"这阵子不太对"在静态阈值被击穿之前就能被看见。标题词 AIOps 指的是这个可验证子集；⑤ 仍按待还债记录，欢迎按证据列逐行核验。
 
 > **原版面板上的「能力边界」与「AIOps 谱系定位」两块静态声明已撤除**（2026-10-06，用户判断"没什么作用"）：一字不变地挂在监控屏上不产生任何信息，还抢注意力。内容即本文这张表与 OPS §5 债务闹钟表——**该自证的地方是文档，不是值班屏幕**。
 
@@ -30,10 +30,10 @@
 
 | 项 | 为什么不做 | 单一事实源 |
 | --- | --- | --- |
-| ① 遥测采集（metrics/traces/topology） | 输入恒为一段文本 query，做成采集平台是另一个产品 | 本文谱系表 ① 行 |
-| ② 异常检测（统计/ML） | "何时算异常"的判定权恒归上游告警系统 | 本文谱系表 ② 行 |
 | LLM 决策循环 / tool-calling（第 4 个 agent） | 线性链路的可预算是"可信"的前提 | 本文「与 agent 的关系」、[ADR-0013](adr/0013-trust-base-for-agents-not-an-agent.md) |
 | 跨指纹**归并**（N 条 → 1 次生成、1 个答案） | "关联"已做；归并要先回答"拿哪条文案当 query"，本仓已否决 | 本文谱系表 ③ 行、[ADR-0019](adr/0019-incident-boundary-owned-by-upstream.md) |
+
+> **2026-11-11 修订**：谱系 ①② 已从本节移出。消费侧能力落地——读 Prometheus **既有**时序 + 中位数/MAD 统计基线预警（[ADR-0030](adr/0030-telemetry-consumption-and-baseline-alerting.md)、`offline/predictive_alerts.py`）。仍在"不做"一侧的是**采集平台本身**（新增 scrape/指标入库/拓扑采集）与 **ML 黑盒检测 / 趋势外推 / 根因分析**——这条线没有移动，移动的只是"消费既有遥测"这一半。
 
 ### B. 触发线挂起（到点才做，未触发不做）
 
@@ -73,6 +73,7 @@
 
 | 项 | 兑现 | 单一事实源 |
 | --- | --- | --- |
+| 统计基线预警（谱系 ①② 消费侧） | 2026-11-11 | [ADR-0030](adr/0030-telemetry-consumption-and-baseline-alerting.md)、`offline/predictive_alerts.py`、[ops/predictive-alerts.md](ops/predictive-alerts.md) |
 | 跨指纹 incident 关联 | 2026-10-17 | [ADR-0019](adr/0019-incident-boundary-owned-by-upstream.md) |
 | 外部监控 adapter 第一版 | 2026-10-17 | [ADR-0011](adr/0011-self-bootstrapped-alert-source.md)、OPS §13、[qa/2026-10-17](qa/2026-10-17-alertmanager-intake.md) |
 | Prometheus 指标导出 | 2026-10-10 | [ADR-0016](adr/0016-prometheus-metrics-exposure.md) |
@@ -101,4 +102,4 @@
 
 **给多步调用者的接口**：请求头 `X-Trace-Id`（8–64 位 `[A-Za-z0-9_-]`，非法即 400 并留痕）把 agent 的多次调用串成一次 incident。它只做**关联**——不改检索、不注入上下文、不存会话（本系统无状态单轮，多轮上下文由客户端负责，见 [ADR-0007](adr/0007-openai-compatible-surface-jwt-as-key.md) 修订注）。两个 id 分工明确：`request_id` 查单次请求（服务端权威），`trace_id` 查跨步链路。
 
-**重开条件**：不新开触发线，直接指向 `OPS.md` §5 债务闹钟表的「处置闭环（对目标系统的自动执行/自愈）」行——能到达的循环必然带写动作，而只读式多步循环的上游（拓扑/指标类遥测）在谱系表里是**永久非目标**。
+**重开条件**：不新开触发线，直接指向 `OPS.md` §5 债务闹钟表的「处置闭环（对目标系统的自动执行/自愈）」行——能到达的循环必然带写动作。**2026-11-11 修订**：只读多步循环的上游（拓扑/指标类遥测）不再是"永久非目标"——谱系 ① 已改为**消费侧已覆盖**（只读 Prometheus 既有时序，不自建采集，[ADR-0030](adr/0030-telemetry-consumption-and-baseline-alerting.md)），② 的统计基线预警亦已落地；**仍未覆盖**的是采集平台、ML 黑盒检测、趋势外推/预测模型与根因分析，其重开条件收在同一条债务行的注记里（按行标题引用：`OPS.md` §5「处置闭环（对目标系统的自动执行/自愈）」）。
