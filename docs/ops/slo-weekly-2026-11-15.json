@@ -1,0 +1,56 @@
+{
+  "schema": 1,
+  "kind": "weekly",
+  "window": {
+    "start": "2026-11-09",
+    "end": "2026-11-15",
+    "days": 7
+  },
+  "prometheus": {
+    "url": "http://127.0.0.1:9090",
+    "job": "opspilot"
+  },
+  "coverage": {
+    "covered": [
+      "2026-11-09",
+      "2026-11-10",
+      "2026-11-11",
+      "2026-11-12",
+      "2026-11-13",
+      "2026-11-14",
+      "2026-11-15"
+    ],
+    "missing": [],
+    "notes": [],
+    "retention_days": 30.0,
+    "min_scrapes_per_day": 240
+  },
+  "sli": {
+    "requests_total": 0.0,
+    "requests_failed": 0.0,
+    "admission_rejected": 0.0,
+    "ttft_p50": NaN,
+    "ttft_p95": NaN,
+    "ttft_p99": NaN,
+    "req_p95": null,
+    "req_p99": null,
+    "degradation_max": 0.0,
+    "inflight_max": 0.0
+  },
+  "samples": [],
+  "gate6": {
+    "samples": 0,
+    "passing_samples": 0,
+    "records": 0,
+    "passing_records": 0,
+    "required_records": 24,
+    "verdict": "INCOMPLETE"
+  },
+  "gate7": {
+    "days_covered": 7,
+    "days_missing": 0,
+    "required_days": 30,
+    "retention_days": 30.0,
+    "verdict": "INCOMPLETE"
+  }
+}
