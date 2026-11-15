@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "families": {
+    "kubectl-rollout": {
+      "prefixes": ["kubectl rollout restart", "kubectl rollout undo", "kubectl rollout status"],
+      "flags": ["-n", "--namespace"]
+    },
+    "systemctl-unit": {
+      "prefixes": ["systemctl restart"],
+      "units": ["nginx", "redis", "mysql", "order-api", "inventory-api"]
+    }
+  }
+}
