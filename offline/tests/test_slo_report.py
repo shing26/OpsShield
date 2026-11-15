@@ -11,7 +11,7 @@ import contextlib
 import io
 import json
 import sys
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 OFFLINE = Path(__file__).resolve().parent.parent
@@ -282,6 +282,36 @@ def test_render_monthly_uses_month_title():
     payload = _payload(covered=30)
     payload["window"] = {"start": "2026-11-01", "end": "2026-11-30", "days": 30}
     assert sr.render(payload, "monthly").startswith("# SLO 月报 · 2026-11")
+
+
+# ---- 末日防呆 -------------------------------------------------------------------
+
+def _payload_of(args, now, monkeypatch, client, tmp_path):
+    monkeypatch.setattr(sr, "_now_utc", lambda: now)
+    code, text = _run(args + ["--stdout", "--json", "--samples-dir", str(tmp_path)],
+                      monkeypatch, client)
+    assert code == 0, text
+    return json.loads(text)
+
+
+def test_incomplete_end_day_is_clamped_to_last_complete_day(tmp_path, monkeypatch):
+    # 请求末日 11-16 而此刻 UTC 才 11-16T02:00Z：11-16 未满 24h，Prometheus 会把它钳到"现在"，
+    # 写进周报的数字几小时内就翻——只能判到 11-15。
+    payload = _payload_of(["--end", "2026-11-16"], datetime(2026, 11, 16, 2, 0, tzinfo=timezone.utc),
+                          monkeypatch, FakeProm(values={"sum_over_time": 5760.0}), tmp_path)
+    assert payload["window"]["end"] == "2026-11-15"
+    assert payload["window"]["requested_end"] == "2026-11-16"
+    assert payload["window"]["start"] == "2026-11-09" and payload["window"]["days"] == 7, \
+        "裁到已完结日之后仍须是完整 7 天窗，不能变成 6 天"
+    assert any("末日未完结" in n for n in payload["coverage"]["notes"])
+
+
+def test_complete_end_day_is_judged_as_requested(tmp_path, monkeypatch):
+    payload = _payload_of(["--end", "2026-11-15"], datetime(2026, 11, 16, 0, 5, tzinfo=timezone.utc),
+                          monkeypatch, FakeProm(values={"sum_over_time": 5760.0}), tmp_path)
+    assert payload["window"]["end"] == payload["window"]["requested_end"] == "2026-11-15"
+    assert not any("末日未完结" in n for n in payload["coverage"]["notes"]), \
+        "已完结的末日不得被裁剪或标注"
 
 
 # ---- main ----------------------------------------------------------------------

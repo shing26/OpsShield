@@ -14,6 +14,9 @@ Prometheus 读数、并发样本与抓取连续性固化成可提交的文件。
    30 天的覆盖由这些周报求并集证明（`scripts/check_observation.py`）。
 3. **证明不了的判据写"未证明"，不写通过**。schema 1 的旧样本没有 `Retry-After` 与降级档，
    本工具把它们标成 `UNPROVEN`；这与仓库"不假装知道"的纪律一致。
+4. **未完结的 UTC 日不判**。Prometheus 会把未来的求值时间钳到"现在"，对一个还在进行的
+   日子求覆盖，得到的是仍在增长的值——写进周报后几小时内就会翻转。窗口末日一律裁到
+   最后一个已满 24h 的 UTC 日，原始请求末日记进 `window.requested_end`。
 
 用法：
     python offline/slo_report.py --kind weekly
@@ -73,6 +76,20 @@ def _iso_day(d: date) -> str:
 def _window_end(day: date) -> datetime:
     """窗口末端的求值时刻：当天 23:59:59 UTC。"""
     return datetime(day.year, day.month, day.day, 23, 59, 59, tzinfo=timezone.utc)
+
+
+def _now_utc() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def last_complete_day(now: datetime | None = None) -> date:
+    """最后一个已满 24 小时的 UTC 日——只有它的覆盖数才是定值。
+
+    未完结的日子判不得：Prometheus 对未来的求值时间会钳到"现在"，对一个还在进行的
+    UTC 日求 `sum_over_time(up[1d])`，拿到的是仍在增长的瞬时值，写进周报后几小时内
+    就会翻转（2026-11-16 实测：同一命令 20 分钟后 covered 从 [] 变 ['2026-11-15']）。
+    """
+    return ((now or _now_utc()) - timedelta(days=1)).date()
 
 
 class PrometheusError(Exception):
@@ -385,11 +402,20 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
 
     try:
-        end = date.fromisoformat(args.end) if args.end else datetime.now(timezone.utc).date()
+        requested_end = date.fromisoformat(args.end) if args.end else _now_utc().date()
     except ValueError:
         print(f"--end 不是合法日期：{args.end}", file=sys.stderr)
         return 2
-    start, end, days = window_for(args.kind, end, args.month)
+    # 只判已完结的 UTC 日：weekly 以它重新取整窗，monthly 的月末也裁到它（见 AC-9）。
+    last_day = last_complete_day()
+    start, end, _ = window_for(args.kind, min(requested_end, last_day), args.month)
+    if end > last_day:
+        end = last_day
+    if end < start:
+        print(f"窗口 {start} ~ {requested_end} 尚未开始或未满一天，拒绝生成报表。", file=sys.stderr)
+        return 3
+    days = (end - start).days + 1
+    clamped = end != requested_end
 
     client = PromClient(args.prometheus)
     try:
@@ -401,11 +427,15 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     for w in warnings:
         print(f"warn: {w}", file=sys.stderr)
+    if clamped:
+        notes.append(f"末日未完结：请求末日 {requested_end}，本次只判到 {end}（UTC 日须满 24h 才可判定）")
+        print(f"warn: 末日未完结，窗口裁到 {end}（请求末日 {requested_end}）", file=sys.stderr)
 
     samples = load_samples(Path(args.samples_dir), start, end)
     payload = {
         "schema": 1, "kind": args.kind,
-        "window": {"start": start.isoformat(), "end": end.isoformat(), "days": days},
+        "window": {"start": start.isoformat(), "end": end.isoformat(), "days": days,
+                   "requested_end": requested_end.isoformat()},
         "prometheus": {"url": args.prometheus, "job": "opspilot"},
         "coverage": {"covered": covered, "missing": missing, "notes": notes,
                      "retention_days": retention, "min_scrapes_per_day": MIN_SCRAPES_PER_DAY,
