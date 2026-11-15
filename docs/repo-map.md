@@ -39,7 +39,7 @@
 | `offline/eval/observed_probe.py` | **真实输入探测（G4）**：在系统自己跑出的 query 上测三件**无需真值**的事（零召回率 / 快路径命中率 / 门控拒答率）。query 集不入库，报告只含聚合 | ✅ |
 | `offline/provenance.py` | **报告↔语料同代判据**（面一）：CI 门闩 `--check` + 出处登记 `--stamp`（内容摘要，非 mtime） | ✅ |
 | `offline/doc_numbers.py` | **文档数字↔产物同代判据**（面二）：按 `doc_numbers.json` 每次**现算**产物真值比对文档字面量（不存快照、无 `--stamp`） | ✅ |
-| `offline/slo_report.py` | **门禁 6/7 周报/月报生成器**：读 Prometheus + `live-concurrency-*.json`，把抓取连续性与逐样本判定固化成可提交的 `.md/.json`。读不到写"无数据"、证明不了写 `UNPROVEN`——连续性靠周报固化，不赌 30 天后 Prometheus 还记得 | ✅ |
+| `offline/slo_report.py` | **门禁 6/7 周报/月报生成器**：读 Prometheus + `live-concurrency-*.json`，把抓取连续性与逐样本判定固化成可提交的 `.md/.json`。读不到写"无数据"、证明不了写 `UNPROVEN`——连续性靠周报固化，不赌 30 天后 Prometheus 还记得。**覆盖口径（2026-11-16 修订）**：单日 ≥240 个 **up=1** 抓取点才算覆盖——旧口径把 `up=0` 也计入，实测让停摆 6 天的一周拿到 7/7 | ✅ |
 | `offline/load/` | Locust 压测脚本与报告 | ✅ |
 | `offline/load/sweep.py` | **并发-延迟曲线**：扫 25/50/100/200/300/500 六档出 P50/P95/P99 + 失败率 + RPS，标出**首次 L1 触发档**与各档**实到并发/在途峰值**。原始 locust 产物留本地（`.gitignore`），只入汇总报告 | ✅ |
 | `offline/load/cache_savings.py` | **缓存节省账**：受控混合负载 → 命中/未命中延迟差 × 命中率 = 单请求平均节省。归因靠本脚本自己的负载（`hits/total_requests` 的分母含 Single-Flight follower，是浑的） | ✅ |

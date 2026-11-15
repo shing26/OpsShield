@@ -25,6 +25,7 @@ class FakeProm:
         self.retention = retention
         self.values = values or {}
         self.fail = fail
+        self.exprs = []
 
     def retention_days(self):
         if self.fail:
@@ -32,6 +33,7 @@ class FakeProm:
         return self.retention
 
     def query(self, expr, at):
+        self.exprs.append(expr)
         if self.fail:
             raise sr.PrometheusError("boom")
         for key, value in self.values.items():
@@ -119,10 +121,34 @@ def test_collect_sli_keeps_none_and_warns():
 
 
 def test_coverage_below_threshold_counts_as_missing():
-    client = FakeProm(values={"count_over_time": 10.0})
+    client = FakeProm(values={"sum_over_time": 10.0})
     covered, missing, notes = sr.scrape_coverage(client, date(2026, 11, 1), date(2026, 11, 2))
     assert covered == [] and len(missing) == 2
-    assert any("10 个抓取点" in n for n in notes), "要说明为什么判缺失，而不是静默"
+    assert any("10 个 up=1 抓取点" in n for n in notes), "要说明为什么判缺失，而不是静默"
+
+
+def test_coverage_ignores_scrape_points_where_target_is_down():
+    # 2026-11-16 实测形态：Prometheus 每 15s 都在抓（一天 5760 个点），但应用已死（up=0）。
+    # 旧口径 count_over_time 会把这种日子判成"覆盖"——这正是本次口径修订要消除的假绿。
+    client = FakeProm(values={"sum_over_time": 100.0, "count_over_time": 5760.0})
+    covered, missing, notes = sr.scrape_coverage(client, date(2026, 11, 10), date(2026, 11, 10))
+    assert covered == [] and missing == ["2026-11-10"]
+    assert any("100 个 up=1 抓取点" in n for n in notes)
+
+
+def test_coverage_threshold_boundary_is_inclusive():
+    ok = FakeProm(values={"sum_over_time": float(sr.MIN_SCRAPES_PER_DAY)})
+    assert sr.scrape_coverage(ok, date(2026, 11, 1), date(2026, 11, 1))[0] == ["2026-11-01"]
+    low = FakeProm(values={"sum_over_time": float(sr.MIN_SCRAPES_PER_DAY - 1)})
+    assert sr.scrape_coverage(low, date(2026, 11, 1), date(2026, 11, 1))[1] == ["2026-11-01"]
+
+
+def test_coverage_query_counts_only_up_samples():
+    client = FakeProm(values={"sum_over_time": 0.0})
+    sr.scrape_coverage(client, date(2026, 11, 1), date(2026, 11, 1))
+    assert client.exprs and all("sum_over_time(up" in e for e in client.exprs)
+    assert not any("count_over_time(up" in e for e in client.exprs), \
+        "up=0 的抓取点不得计入覆盖：那会把停机日算成覆盖日"
 
 
 # ---- 单样本判定 -----------------------------------------------------------------
@@ -272,7 +298,7 @@ def test_main_stdout_writes_no_files(tmp_path, monkeypatch):
     out = tmp_path / "out"
     code, text = _run(["--end", "2026-11-09", "--out", str(out), "--stdout",
                        "--samples-dir", str(tmp_path)], monkeypatch,
-                      FakeProm(values={"aiops_requests_total": 10.0, "count_over_time": 5760.0}))
+                      FakeProm(values={"aiops_requests_total": 10.0, "sum_over_time": 5760.0}))
     assert code == 0 and "门禁 6/7 观察周报" in text
     assert not out.exists(), "--stdout 只打印，不在磁盘留报表"
 
@@ -280,7 +306,7 @@ def test_main_stdout_writes_no_files(tmp_path, monkeypatch):
 def test_main_writes_deterministic_names(tmp_path, monkeypatch):
     code, _ = _run(["--end", "2026-11-09", "--out", str(tmp_path), "--samples-dir", str(tmp_path)],
                    monkeypatch,
-                   FakeProm(values={"aiops_requests_total": 10.0, "count_over_time": 5760.0}))
+                   FakeProm(values={"aiops_requests_total": 10.0, "sum_over_time": 5760.0}))
     assert code == 0
     assert (tmp_path / "slo-weekly-2026-11-09.md").exists()
     assert (tmp_path / "slo-weekly-2026-11-09.json").exists()

@@ -160,10 +160,15 @@ def collect_sli(client: PromClient, start: date, end: date, days: int) -> tuple[
 
 
 def scrape_coverage(client: PromClient, start: date, end: date) -> tuple[list[str], list[str], list[str]]:
-    """逐日证明"当天在抓"。返回 (covered, missing, notes)。
+    """逐日证明"当天应用真的被采到"。返回 (covered, missing, notes)。
 
-    每天单独求值一次 `count_over_time(up[1d])`：用 range query 拉 30 天会因保留期边界而截断，
-    而且渲染时需要的是"哪几天"，不是一条连续曲线。
+    每天单独求值一次 `sum_over_time(up{job="opspilot"}[1d])`：`up` 只有 0/1，求和即
+    "当天 up=1 的抓取点数"，≥ MIN_SCRAPES_PER_DAY 才算覆盖。用 range query 拉 30 天会因
+    保留期边界而截断，而且渲染时需要的是"哪几天"，不是一条连续曲线。
+
+    2026-11-16 口径修订：旧查询 `count_over_time(up[1d])` 把 `up=0` 的抓取点也计入——
+    采集器活着而应用已死时仍判"覆盖"（实测：网关停摆 6 天的一周被记成 7/7 覆盖）。
+    门禁 7 要的是应用指标被采到，不是 Prometheus 自己在跑。
     """
     covered: list[str] = []
     missing: list[str] = []
@@ -172,7 +177,7 @@ def scrape_coverage(client: PromClient, start: date, end: date) -> tuple[list[st
     while day <= end:
         at = _window_end(day)
         try:
-            n = client.query('count_over_time(up{job="opspilot"}[1d])', at)
+            n = client.query('sum_over_time(up{job="opspilot"}[1d])', at)
         except PrometheusError as exc:
             notes.append(f"{day}: {exc}")
             n = None
@@ -181,7 +186,7 @@ def scrape_coverage(client: PromClient, start: date, end: date) -> tuple[list[st
         else:
             missing.append(_iso_day(day))
             if n is not None:
-                notes.append(f"{day}: 仅 {int(n)} 个抓取点（门槛 {MIN_SCRAPES_PER_DAY}）")
+                notes.append(f"{day}: 仅 {int(n)} 个 up=1 抓取点（门槛 {MIN_SCRAPES_PER_DAY}）")
         day += timedelta(days=1)
     return covered, missing, notes
 
@@ -327,7 +332,7 @@ def render(payload: dict, kind: str) -> str:
 
     add("## 2. 抓取连续性")
     add("")
-    add(f"- 覆盖 {len(cov['covered'])}/{w['days']} 天（门槛：单日 ≥ {MIN_SCRAPES_PER_DAY} 个抓取点）")
+    add(f"- 覆盖 {len(cov['covered'])}/{w['days']} 天（门槛：单日 ≥ {MIN_SCRAPES_PER_DAY} 个 up=1 抓取点）")
     if cov["missing"]:
         add(f"- 缺失：{'、'.join(cov['missing'])}")
     for note in cov["notes"]:
@@ -403,7 +408,8 @@ def main(argv: list[str] | None = None) -> int:
         "window": {"start": start.isoformat(), "end": end.isoformat(), "days": days},
         "prometheus": {"url": args.prometheus, "job": "opspilot"},
         "coverage": {"covered": covered, "missing": missing, "notes": notes,
-                     "retention_days": retention, "min_scrapes_per_day": MIN_SCRAPES_PER_DAY},
+                     "retention_days": retention, "min_scrapes_per_day": MIN_SCRAPES_PER_DAY,
+                     "scrape_metric": 'up{job="opspilot"}==1'},
         "sli": sli,
         "samples": samples,
         "gate6": gate6(samples),
