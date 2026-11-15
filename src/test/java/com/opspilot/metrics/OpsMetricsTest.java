@@ -145,6 +145,49 @@ class OpsMetricsTest {
     }
 
     /**
+     * 反馈闭环（2026-11-05）：人工反馈按 verdict 计两个 Prometheus 序列，且 <b>两个 tag 值都预注册</b>。
+     *
+     * 锁三件事：
+     * ① 还没人反馈时也要有 0 基线——抓取侧得能区分"0"与"指标没接上"（空向量在 PromQL 里是另一种事实，
+     *    与 G0 的 reason=none、G1 的 outcome 预注册同一判断）；
+     * ② 未知 verdict 静默忽略，绝不新建 tag：让外部输入决定 tag 基数等于把指标面交给它，
+     *    而反馈是外部输入里最容易被刷的一类；
+     * ③ 不进 snapshot：面板契约键集已锁死，反馈量的消费者是复核队列与抓取侧规则，不是磁贴。
+     */
+    @Test
+    void feedbackCountersArePreregisteredAndTagBounded() {
+        assertEquals(0.0, registry.get("aiops.feedback").tag("verdict", "up").counter().count(),
+                "up 必须在还没有任何反馈时就存在 0 基线");
+        assertEquals(0.0, registry.get("aiops.feedback").tag("verdict", "down").counter().count());
+
+        metrics.feedback("down");
+        metrics.feedback("down");
+        metrics.feedback("up");
+        metrics.feedback("maybe");
+        metrics.feedback(null);
+
+        assertEquals(2.0, registry.get("aiops.feedback").tag("verdict", "down").counter().count());
+        assertEquals(1.0, registry.get("aiops.feedback").tag("verdict", "up").counter().count());
+        assertEquals(2, registry.find("aiops.feedback").counters().size(),
+                "只允许 up/down 两个 tag 值：未知 verdict 不得创造新序列");
+        assertFalse(metrics.snapshot().containsKey("feedback"),
+                "反馈计数只进 Prometheus；进 snapshot 会打破面板契约");
+    }
+
+    /** 0 基线必须真的出现在抓取体里——SimpleMeterRegistry 的断言看不到抓取命名，那才是消费者看到的东西。 */
+    @Test
+    void prometheusScrapeShowsBothFeedbackBaselines() {
+        var prom = new io.micrometer.prometheusmetrics.PrometheusMeterRegistry(
+                io.micrometer.prometheusmetrics.PrometheusConfig.DEFAULT);
+        new OpsMetrics(prom);
+
+        String text = prom.scrape();
+        assertTrue(text.contains("aiops_feedback_total"), "反馈计数必须暴露在抓取体里");
+        assertTrue(text.contains("verdict=\"up\"") && text.contains("verdict=\"down\""),
+                "两个 verdict 都要有 0 基线：只注册'被用过'的那个，抓取侧会把未出现的值误读成没接上");
+    }
+
+    /**
      * G1-W1.4：SLO 信号（TTFT/请求耗时 Timer + 五个失败/拒绝计数）只进 Prometheus，不进 snapshot。
      * 锁四件事：新 meter 真的注册；TTFT 带 P50/P95/P99 与直方图；成败分桶；负耗时被夹到 0。
      */

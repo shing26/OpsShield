@@ -28,6 +28,7 @@ logs/
 offline/load/_sweep_raw/
 # 复盘草稿（offline/postmortem_draft.py 的输出）：**未人审**的草稿不是语料。
 # 人审通过后按 docs/ops/postmortem-draft.md 的清单改名移入 offline/corpus/，那时才入库。
+# 反馈复核队列（offline/feedback_review.py 的输出）同为派生报表，且含审计里的原始提问：不入库。
 offline/staging/
 
 # OS
