@@ -62,6 +62,22 @@
 
 > 每日只做"看 + 记"，不在这一步做优化或改配置。任何动作都要留痕（周报"事件与处置"）。
 
+### 2.1 时钟自动化（2026-11-16 起）
+
+"把栈拉起来、验证抓取、周更周报"这一段是确定性的，交给系统计划任务：
+
+- **脚本**：`scripts/daily_stack.sh`——Docker Desktop 未起则拉起并等待 → `docker compose up -d`
+  redis/qdrant/elasticsearch/prometheus → 网关未就绪则 `start_gateway.sh` → 校验 readiness、
+  `up{job="opspilot"}=1`、保留期 30d → 最近周报距今 ≥7 天则生成并把两份产物提交推送 main。
+  幂等：已在跑的不重启。退出码 0/10/20/30/40/50 分段定位失败环节，日志在 `logs/daily-stack.log`。
+- **注册**：`powershell -NoProfile -ExecutionPolicy Bypass -File scripts/register_daily_task.ps1`
+  注册 Windows 计划任务 `OpsPilot Daily Stack`（每天 09:07，`StartWhenAvailable`；
+  卸载：`Unregister-ScheduledTask -TaskName "OpsPilot Daily Stack" -Confirm:$false`）。
+- **为什么不用应用内定时任务**：2026-11-07 起它连续 9 次失败——任务绑定的模型 id 被下线后，
+  在"选模型"一步静默死掉（每天只留一条 failed run），门禁 7 时钟停摆到 11-16 才被发现。
+  换成本地脚本后不依赖任何模型，成与不成只看退出码与日志。
+- 表 1–8 项的人工"看 + 记"仍按 §2 执行；本自动化只保证"机器在跑、证据在固化"。
+
 ---
 
 ## 3. 每周一 15 分钟（周报模板，复制到观察 issue）

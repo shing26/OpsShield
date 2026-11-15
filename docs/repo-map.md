@@ -93,6 +93,8 @@
 | `live_concurrency.py` | **门禁 6 活体采样（schema 2）**：单租户 N 并发 + 另一租户对照，记录 429 的 `Retry-After`、`aiops_degradation_state` 与计数器增量（旧 schema 1 缺后两项，样本不可自证）；产物按日期命名，同名默认拒绝覆盖，避免重跑改写历史证据 |
 | `check_observation.py` | **门禁 6/7 收口判定**（只读、不触网，可进 CI）：对已提交的 `docs/ops/slo-*.json` 求覆盖天数与样本并集——0 两条绿 / 1 有硬失败 / 2 观察期未满 |
 | `py.sh` | Python 解释器三档探测（跨平台单点，被多个脚本复用） |
+| `daily_stack.sh` | **门禁 6/7 时钟自动化**（2026-11-16 起）：Docker/ compose/ 网关幂等拉起 → readiness、`up=1`、保留期校验 → 周报到期则生成并提交推送；退出码分段定位失败环节，日志 `logs/daily-stack.log` |
+| `register_daily_task.ps1` | 把 `daily_stack.sh` 注册为 Windows 计划任务 `OpsPilot Daily Stack`（每天 09:07）。应用内定时任务因模型下线静默失败 9 天，故改为确定性系统任务 |
 | `pack_evidence.py` | 证据链一键打包：产出自述快照（`MANIFEST.md` 逐项注明出处与"当前模式能否复核"）；出包前自检"报告↔语料同代"，分叉即拒绝（`--allow-stale` 可显式放行并留痕） |
 
 ## 收纳规矩（防止再乱）
