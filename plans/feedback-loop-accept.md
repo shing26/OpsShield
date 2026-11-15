@@ -177,3 +177,21 @@ gh pr checks 75
   改为文案实际用词"不自动改排序"。
 - **性质**：只改判据措辞，不改实现、不放宽安全语义（403 仍双向零落痕；400 仍不得写反馈行与指标）。
 - **批准**：Lead（shing26），2026-11-15。修订后须从同一契约在新 head 上重新全量验证。
+
+## 人审签收（2026-11-15）
+
+- **问题 1（证据充分性）**：Verifier 证据包判定满足 ACCEPT——HEAD `c6e898e`、独立干净 worktree、
+  `git status` 为空；命令全亲跑退 0（Java `Tests run: 440, Failures: 0, Errors: 0, Skipped: 0`；
+  Python 621 例 / 561 个 `def test_`；三道文档门闩；空审计 exit=2；CI run 43722369512 head 同 SHA、
+  11 job 全 pass）。签发人确认无异议。
+- **问题 2（判据纪律）**：未发现改 / 删 / 弱化断言、跳测试不记录、关检查消警、实现方自宣。
+  首轮唯一 FAIL（AC-3(b)）经查为契约自相矛盾而非实现回归；R1 修订经 Lead 批准、只改判据措辞、
+  未放宽安全语义。签发人确认无异议。
+- **问题 3（变更面封闭）**：`origin/main...HEAD` 恰 12 文件（11 实现 + 本契约），未触
+  `offline/corpus/` 与 `src/main/resources`，`.gitignore` 覆盖 `offline/staging/`，Forbidden 零触发。
+  签发人确认无异议。
+- **问题 4（遗留边界）**：接受以下为已知项——① redteam 以同 SHA 的 CI job 覆盖（契约 AC-7 允许，
+  本地未重跑理由已记录）；② 400 路径 `ev=invalid` 留痕为 main 既有 F-5 口径（R1 登记）；
+  ③ 契约修订 R1 记录在案。
+- **签收人**：Lead（shing26）。签收即授权：squash 合并 PR #75（**保留分支**）。
+  合并提交：`32e68213b05e2987bae2109dc31970f6de4e3f5a`（main）。
