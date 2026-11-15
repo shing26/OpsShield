@@ -60,11 +60,15 @@ src/test/java/com/opspilot/metrics/OpsMetricsTest.java
 （`feedbackCountersArePreregisteredAndTagBounded`、`prometheusScrapeShowsBothFeedbackBaselines`）
 与代码审查点。
 
-**AC-3 审计与指标同生同死。** `FeedbackController`：
+**AC-3 反馈的两个出口同生同死。** `FeedbackController`（修订见文末 §契约修订记录 R1）：
 (a) 正常路径先 `audit.logFeedback` 后 `metrics.feedback`（审计是事实、指标是派生，顺序不得反）；
-(b) 无身份 / `auth_level<1` 的 403 路径、`fingerprint` 非法的 400 路径，
-**审计与指标两个出口都不得落痕**（`verifyNoInteractions` 双向）。证据：`FeedbackControllerTest`
-5 条测试。
+(b) 两个出口指 **`logFeedback` 反馈审计行**与 **`aiops.feedback` 指标**：
+- 403 路径（无身份 / `auth_level<1`）：两者均不得落痕（`verifyNoInteractions` 双向）；
+- 400 路径（`fingerprint` 非法）：不得写 `ev=feedback`、不得写指标；`ev=invalid` 审计行属
+  main 上既有 F-5 口径（`GlobalExceptionHandler` 统一记录），**登记为已知且接受的行为**，
+  不视为反馈出口落痕。
+证据：`FeedbackControllerTest` 5 条测试（`malformedFingerprintIsRejectedWith400AndAudited`
+断言 `logInvalid` + `verifyNoInteractions(metrics2)`）。
 
 **AC-4 指标只进 Prometheus，不进面板契约。** `bash scripts/check_panel_contract.sh` 十层一致；
 `/state` 的 snapshot 键集未因本 PR 变化（AC-2(c) 的另一面）。
@@ -75,7 +79,7 @@ src/test/java/com/opspilot/metrics/OpsMetricsTest.java
 (c) 无 `fp` 的反馈行不被塞进 unknown 桶；(d) P1（同指纹 down≥2）/ P2（作答被否）/
 P3（仅拒答被否）分档正确；(e) `ev=chat` 上下文缺失时**显式写缺失**而不是留白；
 (f) 告警台账富化（`alert_id` / `ref_docs`）；(g) 可疑文档按判负票数聚合且报表明说
-"相关性排序，非根因判定"；(h) 坏行容忍与轮转片拼合；(i) "空队列"（退 0）与
+"相关性排序，不是根因判定"（代码实际文案，按语义核对）；(h) 坏行容忍与轮转片拼合；(i) "空队列"（退 0）与
 "审计无任何反馈"（退 2）区分；(j) `--json --stdout` 形态；(k) `--stdout` 不落盘；
 (l) 表格转义；(m) 确定性（同输入重跑内容一致）。
 
@@ -135,7 +139,7 @@ grep -n "feedback" src/main/java/com/opspilot/metrics/OpsMetrics.java | grep -i 
 grep -n "logFeedback\|metrics.feedback" src/main/java/com/opspilot/gateway/FeedbackController.java
 
 # AC-6 红线
-grep -n "不写语料\|不改排序\|request_id" docs/ops/feedback-loop.md
+grep -n "不写语料\|不自动改排序\|request_id" docs/ops/feedback-loop.md
 grep -n "staging" .gitignore
 
 # AC-5(i) 空审计退 2（用显式空目录，避免读到本机 logs）
@@ -160,3 +164,16 @@ gh pr checks 75
 判据全过 → 人审四问无异议 → 书面签收 → squash 合并 PR #75（保留分支）
 → 另起一次 `chore(accept)` 提交，把签收记录追加到本契约末尾（不改判据）。
 任一条 FAIL → 退回实现方，契约不变，修复后从同一契约重验。
+
+## 契约修订记录
+
+### R1（2026-11-15，人审批准后修订）
+
+- **触发**：独立 Verifier 在 `da176d7` 上判 REJECT——唯一 FAIL 为 AC-3(b) 字面要求"400 路径审计零落痕"，
+  而 400 的 `ev=invalid` 由 `GlobalExceptionHandler` 统一记录，是 main 上 2026-09-28 F-5 既有验收口径
+  （该文件不在 AC-1 变更面内，Forbidden 又禁止改实现）⇒ 原 AC-3(b) 与 AC-1/Forbidden 自相矛盾。
+- **修订**：AC-3(b) 的"审计出口"收窄为 `logFeedback` 反馈审计行；`ev=invalid` 显式登记为已知且接受。
+  同步把 AC-5(g) 的精确串改为代码实际文案"相关性排序，不是根因判定"；AC-6 验证命令的 grep 词
+  改为文案实际用词"不自动改排序"。
+- **性质**：只改判据措辞，不改实现、不放宽安全语义（403 仍双向零落痕；400 仍不得写反馈行与指标）。
+- **批准**：Lead（shing26），2026-11-15。修订后须从同一契约在新 head 上重新全量验证。
