@@ -1,6 +1,6 @@
 # 验收契约：L1 命令策略白名单内容外置（ADR-0029 首个切面）
 
-> **状态：草案（待评审冻结；未实现）。** 本契约只冻结"做什么、怎么验"，不包含任何实现。
+> **状态：冻结（2026-11-16 人审签收；未实现；是否派实现另行决定）。** 本契约只冻结"做什么、怎么验"，不包含任何实现。
 > 判定：**必须走完整验收链路**——本改动触碰 L1 白名单闭集与只读命令契约两条安全构造保证，
 > 属"业务逻辑 / 认证授权"档。生成与裁决分离：契约由设计会话撰写；实现须由**另一会话在独立
 > worktree** 完成；裁决由**全新会话**的 `verifier` subagent（Read/Grep/Glob/Bash）亲自复跑，
@@ -226,7 +226,31 @@ git diff --name-only origin/main...HEAD | grep 'application.yml' && echo "FAIL�
 5. 另起 `chore(accept)` 提交追加签收记录，不改判据。
 任一条 FAIL → 退回实现方，契约不变，修复后从同一契约重验。
 
+## 人审签收与冻结（2026-11-16）
+
+- **签收人**：Lead（shing26）；**载体**：PR #84。
+- **决定**：本契约**冻结**。Allowed paths / Acceptance criteria / Verification commands /
+  Forbidden 自此不得改动；如需改，走「契约修订记录」并由 Lead 重新批准。
+- **未派实现**：实现须另起会话、在独立 worktree 完成；本次签收不构成实现授权。
+- **人审四问**（签收即表示无异议）：
+  1. **证据充分性**：起草依据的代码事实可复核（`grep -rli plugin src/main/java` 零命中；
+     L1 白名单为 `ControlledCommandPolicy` 字面量；`doc_numbers --check` 退 0、
+     `check_public_copy` OK）。
+  2. **判据纪律**：未改代码 / 测试 / 断言，未以自评替代证据；契约中的验证命令留待实现后由
+     独立 Verifier 亲跑。
+  3. **变更面封闭**：本 PR 仅 5 个文档文件，未触代码、语料、配置与 `feat/slo-coverage-up1`。
+  4. **遗留边界**：实现未开始；`action/` 词法门闩延后至家族策略接口提取；CI 状态不计入
+     本次签收。
+
 ## 契约修订记录
+
+### R1（2026-11-16，人审签收后冻结）
+
+- **决定**：Lead 签收，契约由草案转为冻结；判据未改。
+- **实现授权**：**未授予**；派实现须另起会话与独立 worktree，或由 Lead 在后续指示中明确授权。
+- **ADR 联动**：ADR-0029 状态行改为 accepted（Lead 已签收），见
+  [docs/adr/0029-reuse-boundary-trust-base-vs-domain-plugins.md](../docs/adr/0029-reuse-boundary-trust-base-vs-domain-plugins.md)
+  的「签收记录（2026-11-16）」。
 
 ### R0（2026-11-16，草案）
 

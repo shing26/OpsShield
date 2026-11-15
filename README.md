@@ -395,7 +395,7 @@ $PY load/l1_latency.py       # L1 回放延迟（热点命中口径）→ load/r
 | [0025](docs/adr/0025-deployment-profiles-and-strict-mode.md) | 部署 profile 与 strict 模式：绑定地址、凭据校验、演示/生产分离 | 出厂占位凭据 + 全网卡监听是"装好即被接管"的默认值，让它在启动期失败而不是事后 |
 | [0026](docs/adr/0026-admission-control-and-degradation-scope.md) | 准入控制：全局 + 租户信号量、429 退避、降级作用域保持全局 | 单人并发不该演成全员降级；先挡在入口，再谈降级维度 |
 | [0028](docs/adr/0028-l1-controlled-action-contract.md) | L1 受控恢复动作：文档声明 + 双白名单判定 + 人确认 + 签名派发，OpsShield 仍不执行 | 价值链延伸到恢复动作；红队门禁闭环是开闸前提 |
-| [0029](docs/adr/0029-reuse-boundary-trust-base-vs-domain-plugins.md) | 可复用边界：可信底座与领域插件显式分层，rule of three 提接口（2026-11-16 设计评审 accepted、待签收；首个切面=L1 命令策略内容外置） | 底座判据不含领域词汇；换插件只换内容不换防线 |
+| [0029](docs/adr/0029-reuse-boundary-trust-base-vs-domain-plugins.md) | 可复用边界：可信底座与领域插件显式分层，rule of three 提接口（2026-11-16 设计评审 accepted、Lead 已签收；首个切面=L1 命令策略内容外置） | 底座判据不含领域词汇；换插件只换内容不换防线 |
 
 ---
 

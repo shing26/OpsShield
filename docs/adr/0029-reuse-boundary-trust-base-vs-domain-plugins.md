@@ -1,7 +1,7 @@
 # ADR-0029：可复用边界——信任底座与领域插件的显式分层
 
-日期：2026-11-10 ｜ 状态：accepted（2026-11-16 设计评审；待 Lead 签收。分层零代码落地，
-首个切面契约草案见 [plans/command-policy-data-accept.md](../../plans/command-policy-data-accept.md)）｜
+日期：2026-11-10 ｜ 状态：accepted（2026-11-16 评审；Lead 已签收。分层零代码落地，
+首个切面契约**已冻结**，见 [plans/command-policy-data-accept.md](../../plans/command-policy-data-accept.md)）｜
 关联：[ADR-0013](0013-trust-base-for-agents-not-an-agent.md)（可信底座定位）、
 [ADR-0015](0015-distributed-primitives-interface-abstraction.md)（接口抽象纪律）、
 [ADR-0028](0028-l1-controlled-action-contract.md)（执行闭环——第一个被插件化的需求）、
@@ -87,8 +87,8 @@ runbook 执行引擎与动作白名单天然要回答"谁是底座、谁是插�
 
 评审执行：设计会话（Claude Code）；评审依据：本 ADR 五条判据 + 仓内代码事实逐条核对。
 结论：**accepted，无否决项**；四项修订注（R1–R4）随本篇生效。**签收：Lead（shing26），
-以本 PR 审阅为准**——签收前状态为"设计评审通过、待签收"。评审只裁决边界与第一个切面，
-**不批准任何实现代码**——分层代码仍未落地，首个切面的验收契约草案见
+2026-11-16 于 PR #84 书面签收**，状态自此生效。评审只裁决边界与第一个切面，
+**不批准任何实现代码**——分层代码仍未落地，首个切面的验收契约**已冻结**，见
 [plans/command-policy-data-accept.md](../../plans/command-policy-data-accept.md)。
 
 | 决策 | 结论 | 依据与修订 |
@@ -151,3 +151,18 @@ L1 白名单内容这一接口点在仓内已有三个真实消费者，故"内�
 
 首个切面额外要求：`ActionOpsService.containsVerbatim` 的 `not_verbatim` 拒因不变、
 `action_proposed` 审计行仍含逐字命令、`opspilot.l1.allowed-targets` 空值仍全拒。
+
+### 签收记录（2026-11-16）
+
+- **签收人**：Lead（shing26）；**载体**：PR #84。
+- **决定**：ADR-0029 定为 accepted；首个切面契约（`command-policy-data-accept`）冻结；
+  **是否派实现另行决定**——本次签收不构成实现授权。
+- **人审四问**（签收即表示无异议）：
+  1. **证据充分性**：评审引用的代码事实（`grep -rli plugin src/main/java` 零命中、L1 白名单
+     为 Java 字面量、测试条数）可复核；文档门闩 `doc_numbers --check` 退 0、
+     `check_public_copy` OK。
+  2. **判据纪律**：未改代码 / 测试 / 断言，未以自评替代裁决；契约内验证命令留待实现后由
+     独立 Verifier 亲跑。
+  3. **变更面封闭**：本 PR 仅 5 个文档文件，未触代码、语料、配置与 `feat/slo-coverage-up1`。
+  4. **遗留边界**：实现未开始；`action/` 词法门闩延后至家族策略接口提取；CI 结论不计入本次
+     签收。
