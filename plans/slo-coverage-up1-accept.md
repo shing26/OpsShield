@@ -27,9 +27,9 @@
 ## 证据绑定（契约冻结时）
 
 - main tip：`c0b971a`（门禁 6/7 时钟改为系统任务之后）
-- 实现分支：`feat/slo-coverage-up1`（本契约所在 worktree 的首个提交）
-- 验证目标 SHA：本契约落地提交之后的 `feat/slo-coverage-up1` head
-  （`git log -1 --format=%H -- plans/slo-coverage-up1-accept.md`），Verifier 须绑定并给出
+- 实现分支：`feat/slo-coverage-up1`
+- 验证目标 SHA：`feat/slo-coverage-up1` 的 **head**（含实现提交）；契约提交须是它的祖先
+  （`git merge-base --is-ancestor <契约提交> HEAD`），两条都给。Verifier 须绑定并给出
   `git status --short`（worktree 干净）。
 - 冻结时主工作区 `git status --short`：仅既有 4 项未跟踪，与本任务无关。
 
@@ -90,7 +90,8 @@ git fetch origin
 git worktree add --detach /tmp/opspilot-verify-slo origin/feat/slo-coverage-up1
 cd /tmp/opspilot-verify-slo
 git rev-parse HEAD
-git log -1 --format=%H -- plans/slo-coverage-up1-accept.md   # 须等于 HEAD
+contract=$(git log -1 --format=%H -- plans/slo-coverage-up1-accept.md)
+git merge-base --is-ancestor "$contract" HEAD && echo "contract-ancestor-ok"
 git status --short                                            # 须为空
 
 # AC-7 变更面
@@ -143,3 +144,12 @@ git status --short                                            # 仍须为空
 
 判据全过 → 人审四问 → 书面签收 → squash 合并 PR（保留分支）→ `chore(accept)` 提交追加签收。
 任一 FAIL → 退回实现方，从同一契约重验。
+
+## 契约修订记录
+
+### R1（2026-11-16，措辞澄清，判据不变）
+
+- **触发**：原"验证目标 SHA = 契约落地提交"与"契约先冻结、实现后提交"顺序冲突——
+  契约提交是分支 HEAD 的父提交，二者不可能相等。实现方在派 Verifier 前发现并修正。
+- **修订**：验证目标改为分支 **HEAD**（含实现提交）；契约提交须为其祖先
+  （`git merge-base --is-ancestor`）。AC-1…AC-8 全部判据、阈值、期望集合均未改动。
