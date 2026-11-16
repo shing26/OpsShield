@@ -188,3 +188,31 @@ git status --short                                            # 仍须为空
   契约提交是分支 HEAD 的父提交，二者不可能相等。实现方在派 Verifier 前发现并修正。
 - **修订**：验证目标改为分支 **HEAD**（含实现提交）；契约提交须为其祖先
   （`git merge-base --is-ancestor`）。AC-1…AC-8 全部判据、阈值、期望集合均未改动。
+
+## 人审签收（2026-11-17）
+
+- **签收人**：Lead（shing26）；**载体**：PR #83；**合并**：squash → `7b26ac3`（分支
+  `feat/slo-coverage-up1` 保留，head `211fe98`）。
+- **验证历程**：三轮独立 verifier。首轮 **AC-4 FAIL**（契约把"生成瞬间值"当成"末日值"，
+  事实被实时数据证伪）→ 契约 R2 + 末日防呆 → 第二轮 **ACCEPT**（绑定 `bbad480`）→
+  合入 main 后契约 R3（计数澄清）→ 第三轮 **ACCEPT**（绑定 `211fe98`）。
+- **关键证据**（第三轮亲跑）：`covered == ["2026-11-15"]`、`missing` 6 天、
+  `window.end == window.requested_end == "2026-11-15"`；`check_observation.py` 门禁 7 =
+  **1/30**、断档 0、门禁 6 = 4/24（exit 2 属设计内 INCOMPLETE）；`pytest offline/tests`
+  **651 passed**、`grep -c "^def test_"` = 587；`doc_numbers --check` 0、
+  `check_public_copy` 0、`check_domain_words` 0；变更面恰 8 个 Allowed paths 文件，
+  历史周报 `slo-weekly-2026-11-05.*` 零改动。
+- **人审四问**（签收即表示无异议）：
+  1. **证据充分性**：无异议——Verifier 亲跑、证据绑定 HEAD SHA、可重跑命令齐备；
+     远端 ref 经 SSH fetch 独立复核为 `211fe98`。
+  2. **判据纪律**：无异议——无删/弱化断言（改坏 → 4 failed、复原 → 33 passed）、
+     无跳测试、无自评代证据；R1/R2/R3 均为 Lead 批准的澄清，仅 R2 因事实被证伪修正过
+     AC-4 的期望值。
+  3. **变更面封闭**：无异议——仅 8 个 Allowed paths；阈值 240、`check_observation.py`
+     聚合/断档判据、门禁 6 口径均未改动。
+  4. **遗留边界**：**接受为已知项**——AC-4 的活体重跑与 AC-9 的活体裁剪在第三轮因本机
+     Prometheus/Docker 未运行而未能执行；这两项目标文件相对已 ACCEPT 的 `bbad480`
+     逐字未变，第二轮已实跑通过。待栈恢复（每日 09:07 计划任务拉起）后补跑契约
+     Verification 段的两条命令，不改判据。
+- **禁令复核**：未以改/删/弱化断言换通过、未跳测试不记录、未关检查消警、
+  实现方未自宣通过、未绕过人审、本次合并有书面签收。
