@@ -17,14 +17,20 @@ ADR-0029 决策 1 的可静态判定版：底座模块的**判据与逻辑**不�
    `CommandsRejected` 里的 `sRe`。前后允许 `/`、`.`、`-`、空格等非标识符字符，故
    `/usr/bin/kubectl`、`nginx.conf`、`systemctl restart` 都能命中。
 
-2. **注释命中只告警，代码/字符串字面量命中才退 1**。ADR-0029 的判据词是"判据与逻辑"，
-   注释是文档不是逻辑；ADR-0023 已经否决过"全仓禁用词表"，理由正是精确术语需要合法栖息地
-   （ADR/OPS/代码注释）。把注释也做成硬闸会逼出为过闸而改写说明文字的失效方式。因此：
-     - 代码面（含字符串、文本块）命中 → stdout `file:line: word`，exit 1；
-     - 注释面命中 → stderr `WARN file:line: word`，只报不闸；
-     - `--strict-comments` 可把注释命中同样当违规（留给更严的将来）。
+2. **注释不是自动豁免，但可以逐条书面例外**。ADR-0029 的判据词是"判据与逻辑"，注释是
+   文档不是逻辑；ADR-0023 已经否决过"全仓禁用词表"，理由正是精确术语需要合法栖息地
+   （ADR/OPS/代码注释）。但"注释一律放行"又会把真正的领域文案漏进底座——故注释命中默认
+   也是违规，只有登记在 `EXEMPTIONS` 里的**具体行**才降为 `EXEMPT` 告警：
+     - 代码面（含字符串、文本块）命中 → stdout `file:line: word`，exit 1，**永不豁免**；
+     - 注释面命中 → 默认 exit 1；命中 `EXEMPTIONS` 的 (file, word, line_contains) 时
+       stderr `EXEMPT file:line: word`，不计违规；
+     - `line_contains` 是失效条件：注释一改，旧例外自动失效、门闩重新变红，逼人复核。
+       `--strict` 可忽略全部书面例外，用于定期审计"例外还剩几条、还成不成立"。
    注释与代码的切分由 `_mask_comments` 做最小 Java 词法扫描：`//`、`/* */`、字符串、
    字符字面量、文本块；行号在两侧都保留。
+
+   当前登记的两条例外都是**既有注释里的举例**，不含判据/逻辑；最小修复写在 `reason` 里
+   （把注释里的领域词换成中性表述后删除例外）。
 
 3. **词表校准，不按路径静默豁免**。以下两类别刻意不入词表，理由写在词表旁边：
      - 裸 `redis`：它是 ADR-0022 的**存储后端**，`store/` 整包以它命名；底座对后端的
@@ -106,6 +112,44 @@ SRE_SUBJECTS = (
 DOMAIN_COPY = ("runbook", "postmortem")
 
 
+@dataclass(frozen=True)
+class Exemption:
+    """一条书面例外：只对**注释面**、且原始行仍包含 `line_contains` 时生效。
+
+    `file` 用相对仓库根的 POSIX 路径；`word` 大小写不敏感比较；`line_contains` 是
+    失效条件——注释一改，例外自动失效。代码/字符串字面量命中永不适用。
+    """
+
+    file: str
+    word: str
+    line_contains: str
+    reason: str
+
+
+# 既有注释里的领域词举例。两条都不含判据/逻辑；最小修复见 reason。
+# 新增例外必须带 reason 与可失效的 line_contains，并优先考虑直接改注释。
+EXEMPTIONS = (
+    Exemption(
+        file="src/main/java/com/opspilot/metrics/AuditService.java",
+        word="kubectl",
+        line_contains="200 会截断长 kubectl",
+        reason=(
+            "注释在解释审计 q 字段的截断阈值，kubectl 只是'长命令'的例子；"
+            "最小修复：改为'长命令'后删除本条。"
+        ),
+    ),
+    Exemption(
+        file="src/main/java/com/opspilot/auth/UserAdminCli.java",
+        word="sre-full",
+        line_contains="如 sre-full → platform",
+        reason=(
+            "注释在给角色变更 CLI 举例，sre-full 是演示账号名；"
+            "最小修复：改为角色占位符后删除本条。"
+        ),
+    ),
+)
+
+
 class GateError(Exception):
     """门闩自身的问题（路径缺失 / IO 失败 / 扫描面为空），区别于"发现领域词"。"""
 
@@ -138,7 +182,7 @@ class Finding:
     file: str
     line: int
     word: str
-    severity: str  # "error"（代码/字符串字面量）| "warning"（注释）
+    severity: str  # "error" | "exempt"（仅注释面且命中书面例外）
 
 
 @dataclass(frozen=True)
@@ -151,8 +195,8 @@ class ScanResult:
         return tuple(f for f in self.findings if f.severity == "error")
 
     @property
-    def warnings(self) -> tuple[Finding, ...]:
-        return tuple(f for f in self.findings if f.severity == "warning")
+    def exemptions(self) -> tuple[Finding, ...]:
+        return tuple(f for f in self.findings if f.severity == "exempt")
 
 
 def _rel(path: Path, root: Path) -> str:
@@ -330,10 +374,44 @@ def _iter_files(root: Path) -> list[Path]:
     return sorted(set(files), key=lambda p: _rel(p, root))
 
 
-def scan(root: Path = ROOT, *, strict_comments: bool = False) -> ScanResult:
-    """扫描并返回结果；路径/IO 问题抛 GateError（调用方负责 exit 2）。"""
+def _exemption_reason(rel: str, word: str) -> str:
+    """已判定为 exempt 的命中，回查它的书面理由（输出/JSON 都要能自证）。"""
+    for ex in EXEMPTIONS:
+        if ex.file == rel and ex.word.casefold() == word.casefold():
+            return ex.reason
+    return ""
+
+
+def _is_exempted(rel: str, lineno: int, word: str, original_lines: list[str]) -> bool:
+    """仅注释面使用：命中登记过的 (file, word, line_contains) 才返回 True。
+
+    `line_contains` 必须仍在原始行里——注释一改，例外自动失效。
+    """
+    line = original_lines[lineno - 1] if 0 <= lineno - 1 < len(original_lines) else ""
+    return any(
+        ex.file == rel
+        and ex.word.casefold() == word.casefold()
+        and ex.line_contains in line
+        for ex in EXEMPTIONS
+    )
+
+
+def scan(root: Path = ROOT, *, strict: bool = False) -> ScanResult:
+    """扫描并返回结果；路径/IO 问题抛 GateError（调用方负责 exit 2）。
+
+    `strict=True` 忽略全部书面例外，把所有注释命中同样按违规计——用于定期审计
+    "例外还剩几条、还成不成立"。
+    """
     files = _iter_files(root)
     findings: dict[tuple[str, int, str], Finding] = {}
+
+    def add(finding: Finding) -> None:
+        key = (finding.file, finding.line, finding.word)
+        previous = findings.get(key)
+        # 同一行同一词若代码面命中，error 优先于注释面的 exempt。
+        if previous is None or finding.severity == "error":
+            findings[key] = finding
+
     for path in files:
         rel = _rel(path, root)
         try:
@@ -341,17 +419,15 @@ def scan(root: Path = ROOT, *, strict_comments: bool = False) -> ScanResult:
         except (OSError, UnicodeError) as exc:
             raise GateError(f"{rel} 读取失败：{exc}") from exc
 
+        original_lines = text.splitlines()
         code, comment = _mask_comments(text)
-        for buffer, severity in (
-            (code, "error"),
-            (comment, "error" if strict_comments else "warning"),
-        ):
-            for lineno, word in _matches(buffer):
-                key = (rel, lineno, word)
-                previous = findings.get(key)
-                # 同一行同一词若代码面命中，error 优先于 comment 的 warning。
-                if previous is None or severity == "error":
-                    findings[key] = Finding(rel, lineno, word, severity)
+        # 代码面（含字符串/文本块）永不豁免。
+        for lineno, word in _matches(code):
+            add(Finding(rel, lineno, word, "error"))
+        # 注释面：默认也是违规；只有登记过的具体行降为 EXEMPT。
+        for lineno, word in _matches(comment):
+            exempt = not strict and _is_exempted(rel, lineno, word, original_lines)
+            add(Finding(rel, lineno, word, "exempt" if exempt else "error"))
 
     ordered = tuple(
         sorted(findings.values(), key=lambda f: (f.file, f.line, f.word, f.severity))
@@ -362,23 +438,28 @@ def scan(root: Path = ROOT, *, strict_comments: bool = False) -> ScanResult:
 def check(
     root: Path = ROOT,
     *,
-    strict_comments: bool = False,
+    strict: bool = False,
     out=None,
     err=None,
 ) -> int:
-    """人读输出 + 退出码；stdout 只放 `file:line: word` 违规行，告警走 stderr。"""
+    """人读输出 + 退出码；stdout 只放 `file:line: word` 违规行，例外走 stderr。"""
     out = out or sys.stdout
     err = err or sys.stderr
     try:
-        result = scan(root, strict_comments=strict_comments)
+        result = scan(root, strict=strict)
     except GateError as exc:
         print(f"ERROR: {exc}", file=err)
         return 2
 
     for finding in result.violations:
         print(f"{finding.file}:{finding.line}: {finding.word}", file=out)
-    for finding in result.warnings:
-        print(f"WARN {finding.file}:{finding.line}: {finding.word}", file=err)
+    for finding in result.exemptions:
+        reason = _exemption_reason(finding.file, finding.word)
+        suffix = f" — {reason}" if reason else ""
+        print(
+            f"EXEMPT {finding.file}:{finding.line}: {finding.word}{suffix}",
+            file=err,
+        )
 
     if result.violations:
         print(
@@ -388,7 +469,9 @@ def check(
         )
         return 1
 
-    extra = f"；{len(result.warnings)} 处注释命中仅告警" if result.warnings else ""
+    extra = (
+        f"；{len(result.exemptions)} 处注释命中为书面例外" if result.exemptions else ""
+    )
     print(f"OK: 领域词门闩通过（{len(result.files)} 个文件{extra}）", file=out)
     return 0
 
@@ -402,9 +485,15 @@ def _json_payload(result: ScanResult) -> dict:
             {"file": f.file, "line": f.line, "word": f.word, "severity": f.severity}
             for f in result.violations
         ],
-        "warnings": [
-            {"file": f.file, "line": f.line, "word": f.word, "severity": f.severity}
-            for f in result.warnings
+        "exemptions": [
+            {
+                "file": f.file,
+                "line": f.line,
+                "word": f.word,
+                "severity": f.severity,
+                "reason": _exemption_reason(f.file, f.word),
+            }
+            for f in result.exemptions
         ],
     }
 
@@ -422,18 +511,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--json",
         action="store_true",
-        help="输出 JSON（violations + warnings），便于 CI/工具消费",
+        help="输出 JSON（violations + exemptions），便于 CI/工具消费",
     )
     parser.add_argument(
-        "--strict-comments",
+        "--strict",
         action="store_true",
-        help="注释面命中同样按违规计（默认只告警，见模块 docstring）",
+        help="忽略书面例外，注释面命中同样按违规计（定期审计例外时用）",
     )
     args = parser.parse_args(argv)
 
     if args.json:
         try:
-            result = scan(args.root, strict_comments=args.strict_comments)
+            result = scan(args.root, strict=args.strict)
         except GateError as exc:
             print(
                 json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False),
@@ -443,7 +532,7 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(_json_payload(result), ensure_ascii=False, indent=2))
         return 0 if not result.violations else 1
 
-    return check(args.root, strict_comments=args.strict_comments)
+    return check(args.root, strict=args.strict)
 
 
 if __name__ == "__main__":
