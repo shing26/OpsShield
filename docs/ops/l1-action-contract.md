@@ -81,13 +81,20 @@ def classify(command_text, chunk_meta):
         return "L0-read"
     # 第三关：L1 双确认——文档声明 + 窄闭集前缀
     if chunk_meta.action_class == "L1-write-low" \
-       and l1_prefix_match(command_text):          # kubectl rollout restart|undo / systemctl restart <白名单>
+       and l1_prefix_match(command_text):          # 前缀/旗标/宾语闭集来自 policy/command-policy.json
         return "L1-write-low"
     return "REJECT"
 ~~~
 
 要点：**L1 不是 L0 的放宽，是另一条更窄的通道**——注入判定两层全过是共同前提；
 文档声明解决"这条写命令是有意的恢复动作"的语义确认；前缀闭集解决"写到什么程度"的边界。
+
+**白名单内容的唯一事实源**是 `src/main/resources/policy/command-policy.json`（ADR-0029 首个切面）：
+`action/CommandPolicyData` 在启动期严格加载它——未知 `schema_version`/顶层键/家族键/家族 id、
+通配/正则、首尾空白或非单空格分隔、`--flag=value`、重复项、空前缀/旗标/宾语集、文件缺失或不
+可读，一律启动失败，不静默忽略、不回落默认值；只从 classpath 固定路径读取，没有环境变量/HTTP/
+按租户覆盖/热加载面。`ControlledCommandPolicy` 只保留上面三关的顺序、注入门与"前缀之后怎么判"
+（旗标型 vs 单宾语型）的机制。**改白名单 = 改数据文件 + 语料评审 + 红队复跑，不改机制。**
 
 ## 3.5 三条契约裁决（2026-10-25 签名派发评审）
 
