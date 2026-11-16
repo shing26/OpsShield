@@ -6,7 +6,9 @@
 
   1. **clean 通过**：七个 R1 扫描根齐全且无领域词时退 0。
   2. **代码面命中失败**：字符串字面量/文本块里的 kubectl 退 1，并给出 `file:line: word`。
-  3. **注释命中只告警**：默认不改退出码；`--strict-comments` 才升级为违规。
+  3. **注释不是自动豁免**：未登记的注释命中退 1；只有 `EXEMPTIONS` 里 (file, word,
+     line_contains) 三项都命中的既有举例才降为 `EXEMPT`，且注释一改例外即失效；
+     `--strict` 可忽略例外做审计。
   4. **fail-closed**：根缺失、扫描子树缺失、文件不可读（非 UTF-8）一律退 2——空转/带病
      扫描不得静默通过。
   5. **排除文件生效**：`resilience/SopFallbackService.java` 里的领域词不参与扫描。
@@ -168,10 +170,22 @@ def test_wordlist_entries_are_live(tmp_path: Path, word: str) -> None:
     assert f"{rel}:1: {word}" in out
 
 
-# ---------------------------------------------------------------- 3. 注释只告警
+# ---------------------------------------------------------------- 3. 注释与书面例外
 
-def test_comment_only_hit_warns_but_does_not_fail(tmp_path: Path) -> None:
-    """行注释里的 kubectl 进 stderr 告警，不改退出码，也不进 stdout 违规面。"""
+def test_comment_hit_without_exemption_fails(tmp_path: Path) -> None:
+    """注释不是自动豁免：没有登记例外的 kubectl 同样退 1。"""
+    root = _mirror(tmp_path)
+    rel = "src/main/java/com/opspilot/storm/SingleFlight.java"
+    _write(root, rel, 'class SingleFlight {\n  // kubectl get pods\n}\n')
+
+    rc, out, err = _run(root)
+    assert rc == 1
+    assert f"{rel}:2: kubectl" in out
+    assert "FAIL:" in err
+
+
+def test_written_exemption_applies_to_known_comment(tmp_path: Path) -> None:
+    """登记过的既有注释举例降为 EXEMPT：退 0，但 stderr 仍报 file:line。"""
     root = _mirror(tmp_path)
     rel = "src/main/java/com/opspilot/metrics/AuditService.java"
     _write(root, rel, 'class AuditService {\n  // 200 会截断长 kubectl\n}\n')
@@ -179,11 +193,11 @@ def test_comment_only_hit_warns_but_does_not_fail(tmp_path: Path) -> None:
     rc, out, err = _run(root)
     assert rc == 0, err
     assert "kubectl" not in out
-    assert f"WARN {rel}:2: kubectl" in err
+    assert f"EXEMPT {rel}:2: kubectl" in err
 
 
-def test_block_comment_hit_warns_but_does_not_fail(tmp_path: Path) -> None:
-    """Javadoc/块注释同理：报告 file:line，但不当作代码面违规。"""
+def test_block_comment_exemption_applies(tmp_path: Path) -> None:
+    """Javadoc 里的 sre-full 举例同样按登记例外处理。"""
     root = _mirror(tmp_path)
     rel = "src/main/java/com/opspilot/auth/UserAdminCli.java"
     _write(root, rel, 'class UserAdminCli {\n  /** 如 sre-full → platform。 */\n}\n')
@@ -191,15 +205,39 @@ def test_block_comment_hit_warns_but_does_not_fail(tmp_path: Path) -> None:
     rc, out, err = _run(root)
     assert rc == 0, err
     assert "sre-full" not in out
-    assert f"WARN {rel}:2: sre-full" in err
+    assert f"EXEMPT {rel}:2: sre-full" in err
 
 
-def test_strict_comments_upgrades_warning_to_violation(tmp_path: Path) -> None:
-    """更严口径可显式开启：注释命中同样退 1（默认关闭的理由见模块 docstring）。"""
+def test_exemption_expires_when_comment_changes(tmp_path: Path) -> None:
+    """line_contains 是失效条件：注释改写后旧例外不再适用，门闩重新变红。"""
     root = _mirror(tmp_path)
     rel = "src/main/java/com/opspilot/metrics/AuditService.java"
-    _write(root, rel, 'class AuditService {\n  // kubectl\n}\n')
-    rc, out, _ = _run(root, strict_comments=True)
+    _write(root, rel, 'class AuditService {\n  // 200 会截断长命令；kubectl\n}\n')
+
+    rc, out, err = _run(root)
+    assert rc == 1
+    assert f"{rel}:2: kubectl" in out
+    assert "EXEMPT" not in err
+
+
+def test_exemption_does_not_apply_to_code(tmp_path: Path) -> None:
+    """代码/字符串字面量永不豁免：即使同一文件同一行文本命中了 line_contains。"""
+    root = _mirror(tmp_path)
+    rel = "src/main/java/com/opspilot/metrics/AuditService.java"
+    _write(root, rel, 'class AuditService {\n  String s = "200 会截断长 kubectl";\n}\n')
+
+    rc, out, err = _run(root)
+    assert rc == 1
+    assert f"{rel}:2: kubectl" in out
+    assert "EXEMPT" not in err
+
+
+def test_strict_ignores_written_exemptions(tmp_path: Path) -> None:
+    """--strict 用于审计例外：登记过的注释命中同样退 1。"""
+    root = _mirror(tmp_path)
+    rel = "src/main/java/com/opspilot/metrics/AuditService.java"
+    _write(root, rel, 'class AuditService {\n  // 200 会截断长 kubectl\n}\n')
+    rc, out, _ = _run(root, strict=True)
     assert rc == 1
     assert f"{rel}:2: kubectl" in out
 
@@ -279,24 +317,24 @@ def test_longer_identifiers_do_not_match(tmp_path: Path) -> None:
 
 # ---------------------------------------------------------------- JSON 面
 
-def test_json_output_lists_violations_and_warnings(tmp_path: Path) -> None:
-    """--json 同时给违规与告警，字段可被 CI/工具直接消费。"""
+def test_json_output_lists_violations_and_exemptions(tmp_path: Path) -> None:
+    """--json 同时给违规与书面例外，字段可被 CI/工具直接消费。"""
     root = _mirror(tmp_path)
     rel = "src/main/java/com/opspilot/store/KvStore.java"
-    _write(
-        root,
-        rel,
-        'class KvStore {\n  // kubectl\n  String s = "mysql";\n}\n',
-    )
+    _write(root, rel, 'class KvStore {\n  String s = "mysql";\n}\n')
+    exempt_rel = "src/main/java/com/opspilot/metrics/AuditService.java"
+    _write(root, exempt_rel, 'class AuditService {\n  // 200 会截断长 kubectl\n}\n')
+
     rc, payload = _run_json(root)
     assert rc == 1
     assert payload["ok"] is False
     assert payload["count"] == 1
     assert payload["violations"][0] == {
         "file": rel,
-        "line": 3,
+        "line": 2,
         "word": "mysql",
         "severity": "error",
     }
-    assert payload["warnings"][0]["word"] == "kubectl"
-    assert payload["warnings"][0]["severity"] == "warning"
+    assert payload["exemptions"][0]["file"] == exempt_rel
+    assert payload["exemptions"][0]["word"] == "kubectl"
+    assert payload["exemptions"][0]["severity"] == "exempt"
