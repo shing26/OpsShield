@@ -13,7 +13,7 @@
 | 门禁 | 现状 | 转绿需要 | 证据落点 |
 |---|---|---|---|
 | 6 准入控制 | 黄（部分）：单次 live 20 并发样本通过 | **≥ 20–30 条对照样本**（多并发档 × 加载/对照租户 × 跨周），且 5xx=0、对照租户降级档不亮、429 带 Retry-After | 周报 `docs/ops/slo-weekly-*.md` + `docs/ops/live-concurrency-*.json` |
-| 7 延迟分位与 SLO | 黄（部分）：分位与抓取已接线，样本仅 ~24s | **连续 30 天抓取留存** + 一份固定格式**月报**（含 SLI 表与 SLO 判定） | 月报 `docs/ops/slo-monthly-YYYY-MM.md` + Prometheus 数据 |
+| 7 延迟分位与 SLO | 黄（部分）：分位与抓取已接线，样本仅 ~24s | **连续 30 天覆盖留存**（覆盖口径：单日 ≥240 个 **up=1** 抓取点——`up=0` 只证明采集器活着，不证明应用指标被采到，2026-11-16 修订）+ 一份固定格式**月报**（含 SLI 表与 SLO 判定） | 月报 `docs/ops/slo-monthly-YYYY-MM.md` + Prometheus 数据 |
 
 **两条门禁都要求**：证据必须能指到「路径 + 时间点 + 可重跑命令」，不接受口头结论（production-gate §1.2）。
 
@@ -56,7 +56,7 @@
 | 3 | 错误面（24h） | `sum(increase(aiops_requests_failed_total[24h]))`；`sum(increase(aiops_admission_rejected_total[24h]))` | 5xx>0 需在周报登记事件；429 属受控背压 |
 | 4 | 延迟分位（近 1h） | `histogram_quantile(0.95, sum(rate(aiops_ttft_seconds_bucket[1h])) by (le))`；请求耗时 `aiops_request_seconds` 同法 | TTFT P95 > 3s（SLO 线）记事件 |
 | 5 | 备份龄 | `python scripts/check_backup_age.py`（或看 `OpsPilot-Backup` Last Result） | age > 26h 视为备份停摆（门禁 1 复核条件） |
-| 6 | 告警送达 | 查收飞书/通知渠道最近 24h 是否有真实告警；无告警属正常，但要确认 `up{job="opspilot"}==1` | 抓取目标 DOWN 但面板绿 = 监控失效，按 runbook 人工验证业务面 |
+| 6 | 告警送达 | 查收飞书/通知渠道最近 24h 是否有真实告警；无告警属正常，但要确认 `up{job="opspilot"}==1`（周报的覆盖天数也只认 `up=1` 的抓取点） | 抓取目标 DOWN 但面板绿 = 监控失效，按 runbook 人工验证业务面 |
 | 7 | 审计链 | `python scripts/verify_audit_chain.py` | 验链失败：立即升级，禁止继续写审计 |
 | 8 | 用量行 | `python scripts/daily_usage.py --date yesterday` 追加 `logs/usage.log` | 拒答率超阈值会以非 0 退出并告警 |
 
@@ -104,6 +104,9 @@ python offline/slo_report.py --kind weekly
 - **单样本判定**：加载租户出现 429、5xx=0、对照租户全 200 且降级档 L0、429 全部带 Retry-After → `PASS`；
   任一硬判据不满足 → `FAIL`；缺字段 → `UNPROVEN`。
 - **读不到就写"无数据"**：Prometheus 没有序列时报表写"无数据"，不补 0——没接线不能被渲染成零故障。
+- **末日未完结不判**：报表只判已满 24h 的 UTC 日。生成时若窗口末日还没过完，窗口自动裁到上一日，
+  `window.requested_end` 记原始请求末日，notes 里留一条"末日未完结"。理由：Prometheus 把未来的
+  求值时间钳到"现在"，对未完结的日子求覆盖会写出一个几小时内就翻转的数字（2026-11-16 实测）。
 
 PromQL 底稿（报表 §1/§2 即由这些查询算出；需手工核对时用）：
 
@@ -209,7 +212,7 @@ python offline/slo_report.py --kind monthly --month YYYY-MM
 
 ## 3. 门禁 7 判定（SLO）
 
-- 连续抓取天数：__/30；Prometheus 保留期：__d
+- 连续覆盖天数（单日 ≥240 个 up=1 抓取点）：__/30；Prometheus 保留期：__d
 - SLO 表逐条 → 测量装置 → 30 天实测（贴 §1 表）
 - 月报是否按固定格式产出：是/否
 - 结论：**绿/黄/红**

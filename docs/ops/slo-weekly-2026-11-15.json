@@ -4,7 +4,8 @@
   "window": {
     "start": "2026-11-09",
     "end": "2026-11-15",
-    "days": 7
+    "days": 7,
+    "requested_end": "2026-11-15"
   },
   "prometheus": {
     "url": "http://127.0.0.1:9090",
@@ -12,18 +13,27 @@
   },
   "coverage": {
     "covered": [
+      "2026-11-15"
+    ],
+    "missing": [
       "2026-11-09",
       "2026-11-10",
       "2026-11-11",
       "2026-11-12",
       "2026-11-13",
-      "2026-11-14",
-      "2026-11-15"
+      "2026-11-14"
     ],
-    "missing": [],
-    "notes": [],
+    "notes": [
+      "2026-11-09: 仅 0 个 up=1 抓取点（门槛 240）",
+      "2026-11-10: 仅 0 个 up=1 抓取点（门槛 240）",
+      "2026-11-11: 仅 0 个 up=1 抓取点（门槛 240）",
+      "2026-11-12: 仅 0 个 up=1 抓取点（门槛 240）",
+      "2026-11-13: 仅 0 个 up=1 抓取点（门槛 240）",
+      "2026-11-14: 仅 0 个 up=1 抓取点（门槛 240）"
+    ],
     "retention_days": 30.0,
-    "min_scrapes_per_day": 240
+    "min_scrapes_per_day": 240,
+    "scrape_metric": "up{job=\"opspilot\"}==1"
   },
   "sli": {
     "requests_total": 0.0,
@@ -47,8 +57,8 @@
     "verdict": "INCOMPLETE"
   },
   "gate7": {
-    "days_covered": 7,
-    "days_missing": 0,
+    "days_covered": 1,
+    "days_missing": 6,
     "required_days": 30,
     "retention_days": 30.0,
     "verdict": "INCOMPLETE"
