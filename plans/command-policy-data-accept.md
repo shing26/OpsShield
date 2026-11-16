@@ -1,6 +1,6 @@
 # 验收契约：L1 命令策略白名单内容外置（ADR-0029 首个切面）
 
-> **状态：冻结（2026-11-16 人审签收；未实现；是否派实现另行决定）。** 本契约只冻结"做什么、怎么验"，不包含任何实现。
+> **状态：冻结（2026-11-16 人审签收；首个切面实现已通过独立验证并合并，PR #85 / `7760c40`；契约判据未改）。** 本契约只冻结"做什么、怎么验"，不包含任何实现。
 > 判定：**必须走完整验收链路**——本改动触碰 L1 白名单闭集与只读命令契约两条安全构造保证，
 > 属"业务逻辑 / 认证授权"档。生成与裁决分离：契约由设计会话撰写；实现须由**另一会话在独立
 > worktree** 完成；裁决由**全新会话**的 `verifier` subagent（Read/Grep/Glob/Bash）亲自复跑，
@@ -242,7 +242,37 @@ git diff --name-only origin/main...HEAD | grep 'application.yml' && echo "FAIL�
   4. **遗留边界**：实现未开始；`action/` 词法门闩延后至家族策略接口提取；CI 状态不计入
      本次签收。
 
+## 实现验收签收（2026-11-16）
+
+- **签收人**：Lead（shing26）；**载体**：PR #85；**合并提交**：
+  `7760c408dd4e37c8c411886611d74d7f044f9095`（squash）。
+- **实现 HEAD**：`a5cc37633e5a6941f6bb4e89e02157f1b06c1da1`（实现提交 `a42bb28`；
+  merge commit 仅同步 `origin/main`）。
+- **独立 Verifier**：另一模型、独立 detached worktree；收尾 `git status --short` 为空；
+  Verification commands 全部亲跑退 0：`mvn -o test` 453 passed / 0 failed / 0 error / 0 skipped；
+  `python -m pytest offline/tests -q` 621 passed；`bash scripts/redteam.sh` 32/32、SKIP 0、泄漏 0；
+  `doc_numbers --check` / `check_public_copy` / `check_panel_contract` 均退 0。裁决 **ACCEPT**。
+- **人审四问**（签收即表示无异议）：
+  1. **证据充分性**：Verifier 证据包绑定实现 HEAD 与干净 worktree，命令输出可复核；surefire
+     汇总另行抽检为 `tests=453 failures=0 errors=0 skipped=0`。
+  2. **判据纪律**：既有 `ControlledCommandPolicyTest` 5 条断言未删未弱，新增 3 条；未改 / 删 /
+     弱化断言，未关闭检查消警；Verifier 未静默改写 AC-1，而是把字面偏差显式登记；实现方未自宣通过。
+  3. **变更面封闭**：实现 diff 恰为 Allowed paths 除契约自身外的 9 项；禁用路径零改动
+     （`ReadOnlyCommandPolicy`、`ActionOpsService`、语料、`llm/`、`resilience/`、`application.yml`）。
+  4. **遗留边界**：AC-1 字面 10 / 实际 9 按 Lead 裁决登记（见 R2）；AC-8 契约提交 `bd1c195` ≠
+     实现 HEAD（squash/切点，契约 blob 一致）；`targetOf` 对非 L1 命令收紧为 `null`（正常流程
+     不可达，Lead 确认接受）；红队仅在本地 memory+mock 形态验证；CI 11 job 全绿为辅助证据。
+- **决定**：验收签收，squash 合并；签收后由 `chore(accept)` 提交本记录，不改判据。
+
 ## 契约修订记录
+
+### R2（2026-11-16，实现验收签收时登记）
+
+- **AC-1 口径**：契约字面「恰为 10 个文件」包含契约自身；契约已随 PR #84 合入 `origin/main`
+  （`29de812`），实现 diff 为 9 个文件。Lead 裁决：按 9 个实现文件判定满足；AC-1 原文不改。
+- **AC-8 绑定**：契约提交 `bd1c195` 与实现 HEAD `a5cc376` 不同，系 squash 与分支切点造成；
+  契约文件 blob 在 `bd1c195` 与 `29de812` 中一致（`798d800`）。验证绑定实现 HEAD。
+- **性质**：只登记既有裁决与结构事实，不改判据、不放宽任何安全语义。
 
 ### R1（2026-11-16，人审签收后冻结）
 

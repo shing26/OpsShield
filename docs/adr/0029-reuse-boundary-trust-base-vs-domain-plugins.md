@@ -1,7 +1,7 @@
 # ADR-0029：可复用边界——信任底座与领域插件的显式分层
 
-日期：2026-11-10 ｜ 状态：accepted（2026-11-16 评审；Lead 已签收。分层零代码落地，
-首个切面契约**已冻结**，见 [plans/command-policy-data-accept.md](../../plans/command-policy-data-accept.md)）｜
+日期：2026-11-10 ｜ 状态：accepted（2026-11-16 评审；Lead 已签收。首个切面已落地——L1 命令策略
+内容外置，PR #85；其余分层仍未落地，契约见 [plans/command-policy-data-accept.md](../../plans/command-policy-data-accept.md)）｜
 关联：[ADR-0013](0013-trust-base-for-agents-not-an-agent.md)（可信底座定位）、
 [ADR-0015](0015-distributed-primitives-interface-abstraction.md)（接口抽象纪律）、
 [ADR-0028](0028-l1-controlled-action-contract.md)（执行闭环——第一个被插件化的需求）、
@@ -88,7 +88,7 @@ runbook 执行引擎与动作白名单天然要回答"谁是底座、谁是插�
 评审执行：设计会话（Claude Code）；评审依据：本 ADR 五条判据 + 仓内代码事实逐条核对。
 结论：**accepted，无否决项**；四项修订注（R1–R4）随本篇生效。**签收：Lead（shing26），
 2026-11-16 于 PR #84 书面签收**，状态自此生效。评审只裁决边界与第一个切面，
-**不批准任何实现代码**——分层代码仍未落地，首个切面的验收契约**已冻结**，见
+**评审本身不批准实现代码**；首个切面后经独立验证落地（PR #85），其余分层仍未落地。契约见
 [plans/command-policy-data-accept.md](../../plans/command-policy-data-accept.md)。
 
 | 决策 | 结论 | 依据与修订 |
@@ -166,3 +166,5 @@ L1 白名单内容这一接口点在仓内已有三个真实消费者，故"内�
   3. **变更面封闭**：本 PR 仅 5 个文档文件，未触代码、语料、配置与 `feat/slo-coverage-up1`。
   4. **遗留边界**：实现未开始；`action/` 词法门闩延后至家族策略接口提取；CI 结论不计入本次
      签收。
+- **后续（2026-11-16）**：首个切面实现经独立 Verifier ACCEPT，已随 PR #85 合并（squash
+  `7760c40`）；实现验收记录见契约「实现验收签收（2026-11-16）」。其余分层仍未落地。
