@@ -91,7 +91,7 @@
 | `daily_usage.py` | 从审计日志聚合当日用量（cron 友好） |
 | `check_panel_contract.sh` | 面板↔后端字面量契约（CI 零依赖，后端改名即红） |
 | `check_public_copy.py` | **对外面用词门闩**（[ADR-0023](adr/0023-public-surface-terminology.md)）：canonical 词不得漏到 README + 页面文案；词表**从 `CONTEXT.md` 的 `_对外_` 行现取**（不手写，登记表空了即红）；反向启发式只报不闸。判据极性由 `tests/test_public_copy.py` 逐词变异钉住 |
-| `check_domain_words.py` | **领域词词法门闩**（[ADR-0029](adr/0029-reuse-boundary-trust-base-vs-domain-plugins.md) R1）：扫干净底座包（`storm`/`auth`/`cache`/`store`/`metrics`/`llm/VerbatimGuard`/`resilience` 除 `SopFallbackService`）里的 SRE 命令/服务/主体/错误码词；标识符边界匹配（`redistribute` 不命中 `redis`），代码/字符串字面量命中 `file:line: word` 退 1，路径/IO 错或扫描面为空退 2。`action/` 按 R1 暂不纳入；注释命中只告警（`--strict-comments` 可升级）。判据极性由 `tests/test_check_domain_words.py` 用 tmp_path 镜像钉住 |
+| `check_domain_words.py` | **领域词词法门闩**（[ADR-0029](adr/0029-reuse-boundary-trust-base-vs-domain-plugins.md) R1）：扫干净底座包（`storm`/`auth`/`cache`/`store`/`metrics`/`llm/VerbatimGuard`/`resilience` 除 `SopFallbackService`）里的 SRE 命令/服务/主体/错误码词；标识符边界匹配（`redistribute` 不命中 `redis`），代码/字符串字面量命中 `file:line: word` 退 1，路径/IO 错或扫描面为空退 2。`action/` 按 R1 暂不纳入；注释命中默认同样退 1，只有 `EXEMPTIONS` 里具体行文本仍匹配的既有举例才降为 `EXEMPT`（`--strict` 可忽略例外做审计）。判据极性由 `tests/test_check_domain_words.py` 用 tmp_path 镜像钉住 |
 | `live_concurrency.py` | **门禁 6 活体采样（schema 2）**：单租户 N 并发 + 另一租户对照，记录 429 的 `Retry-After`、`aiops_degradation_state` 与计数器增量（旧 schema 1 缺后两项，样本不可自证）；产物按日期命名，同名默认拒绝覆盖，避免重跑改写历史证据 |
 | `check_observation.py` | **门禁 6/7 收口判定**（只读、不触网，可进 CI）：对已提交的 `docs/ops/slo-*.json` 求覆盖天数与样本并集——0 两条绿 / 1 有硬失败 / 2 观察期未满 |
 | `py.sh` | Python 解释器三档探测（跨平台单点，被多个脚本复用） |
