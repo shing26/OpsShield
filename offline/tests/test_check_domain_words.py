@@ -261,6 +261,15 @@ def test_missing_scan_subtree_fails_closed(tmp_path: Path) -> None:
     assert "store" in err
 
 
+def test_empty_scan_subtree_fails_closed(tmp_path: Path) -> None:
+    """扫描根还在但 .java 文件被搬空：退 2，不得把空包当"干净"。"""
+    root = _mirror(tmp_path)
+    (root / "src/main/java/com/opspilot/metrics/Clean.java").unlink()
+    rc, _, err = _run(root)
+    assert rc == 2
+    assert "没有 .java 文件" in err
+
+
 def test_non_utf8_source_fails_closed(tmp_path: Path) -> None:
     """不可读（非 UTF-8）文件是 IO 错误：退 2，不能当作"没命中"。"""
     root = _mirror(tmp_path)
