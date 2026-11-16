@@ -43,7 +43,7 @@
 | 门闩的两条既有注释例外 | `auth/UserAdminCli.java:205` 的 `sre-full`、`metrics/AuditService.java:129` 的 `kubectl`；默认模式 `EXEMPT` 退 0，`--strict` 因这两条退 1 |
 | `action/` 的 L0 工具词仍在底座 | `ReadOnlyCommandPolicy.java:63-110`（`TOOLS` / `VERBS`） |
 
-## 切面选型（五件契约：动两件、等三件）
+## 切面选型（五件契约：动两件、等两件、一件不动）
 
 | 契约 | 本切面 | 判据 |
 | --- | --- | --- |
