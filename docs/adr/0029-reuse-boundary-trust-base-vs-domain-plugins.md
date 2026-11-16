@@ -1,6 +1,7 @@
 # ADR-0029：可复用边界——信任底座与领域插件的显式分层
 
-日期：2026-11-10 ｜ 状态：proposed（草案，待评审）｜
+日期：2026-11-10 ｜ 状态：accepted（2026-11-16 评审；Lead 已签收。首个切面已落地——L1 命令策略
+内容外置，PR #85；其余分层仍未落地，契约见 [plans/command-policy-data-accept.md](../../plans/command-policy-data-accept.md)）｜
 关联：[ADR-0013](0013-trust-base-for-agents-not-an-agent.md)（可信底座定位）、
 [ADR-0015](0015-distributed-primitives-interface-abstraction.md)（接口抽象纪律）、
 [ADR-0028](0028-l1-controlled-action-contract.md)（执行闭环——第一个被插件化的需求）、
@@ -81,3 +82,89 @@ runbook 执行引擎与动作白名单天然要回答"谁是底座、谁是插�
   > 上述修订**已完成**——谱系表 ①② 已改为「已覆盖（消费侧）／已覆盖（统计基线预警）」，
   > 采集平台与 ML 黑盒检测/趋势外推/根因仍非目标。本行原文保留以记录预支关系，
   > 「本 ADR 不预支该修订」一句至此失效。
+
+## 评审结论（2026-11-16）
+
+评审执行：设计会话（Claude Code）；评审依据：本 ADR 五条判据 + 仓内代码事实逐条核对。
+结论：**accepted，无否决项**；四项修订注（R1–R4）随本篇生效。**签收：Lead（shing26），
+2026-11-16 于 PR #84 书面签收**，状态自此生效。评审只裁决边界与第一个切面，
+**评审本身不批准实现代码**；首个切面后经独立验证落地（PR #85），其余分层仍未落地。契约见
+[plans/command-policy-data-accept.md](../../plans/command-policy-data-accept.md)。
+
+| 决策 | 结论 | 依据与修订 |
+| --- | --- | --- |
+| 1 分层判据 | **接受，落点收窄（R1）** | 判据本身成立且可静态判定；但 `action/` 的"机制层"必须读作**注入/链式门 + 判定顺序 + 尾部校验形状**，不是整个包。命令家族特有的尾部校验（kubectl 旗标、systemctl 宾语）在家族策略接口提取前仍会含领域词，不能纳入词法门闩 |
+| 2 五件插件契约 | **接受（R2）** | 五项清单仍是正确的最小集。第 3 行"机制是底座、内容是插件数据"本轮落为**数据文件契约**：只外置 L1 前缀/旗标/宾语闭集，不提取插件 SPI，不新增命令家族 |
+| 3 框架形态 | **接受，不修订** | "自己跨场景部署 + fork 换插件"与 [ADR-0025](0025-deployment-profiles-and-strict-mode.md) 的部署者自担口径一致；SaaS 形态的否决理由（部署边界/版本兼容/数据隔离债务）未因时间推移改变 |
+| 4 rule of three | **接受，补判据（R3）** | **内容外置 ≠ 接口提取**。L1 白名单内容已有三个仓内真实用例（见 R3），外置内容不消耗 rule of three；真正的策略接口仍等第三个**领域**（第二参考实现）出现 |
+| 5 安全不变量 | **接受（R4）** | 五项构造保证逐项绑定到既有回归锁（见 R4）；首个切面明确"换内容、不换防线"，任何放宽闭集或跳过红队的实现直接判 FAIL |
+
+### R1（决策 1 落点收窄）
+
+- **当前分层失守点清点**（静态可查）：`action/ReadOnlyCommandPolicy` 的 `TOOLS`/`VERBS`
+  字面量；`action/ControlledCommandPolicy` 的 `L1_PREFIXES`/`KUBECTL_ROLLOUT_FLAGS`/
+  `SYSTEMCTL_UNITS` 字面量；`resilience/SopFallbackService` 的兜底 Runbook 内容。
+  `llm/` 是**混合包**而非底座包：底座部分是 `VerbatimGuard`；`PromptAssembler` 是领域内容，
+  `LlmClient` 的 mock 路径还复用了 `【参考上下文】`/`[参考N]` 格式标记——模板与协议格式已纠缠，
+  故 `llm/` 整包不进入先期门闩，只单列 `VerbatimGuard`。
+- **CI 词法门闩（领域词表 + 底座包 grep）先覆盖干净底座包**：`storm/`、`auth/`、`cache/`、
+  `store/`、`metrics/`、`llm/VerbatimGuard`，以及 `resilience/`（排除 `SopFallbackService`）。
+  `action/` 在命令家族策略接口提取前**不纳入**——此时立闸只会两个结果：对合法机制假红，
+  或逼出"假装无领域词"的空抽象。
+- **`action/` 纳入门闩的触发条件**：出现第一个非 SRE 命令家族（第三个真实用例），且家族尾部
+  校验已移到策略接口之后。该门闩与策略接口提取同一份契约内交付，不提前。
+
+### R2（决策 2 第 3 行落地口径）
+
+- **底座机制（不动）**：`ReadOnlyCommandPolicy` 的四层注入/只读判定；`ControlledCommandPolicy`
+  的三通道顺序（L0 → 单段注入门 → L1 双确认）与尾部校验形状。
+- **插件数据（本轮外置）**：L1 前缀闭集、kubectl rollout 旗标闭集、systemctl restart 宾语闭集。
+  载体是 classpath 内的一份版本化数据文件，schema 严格、未知键即启动失败、不接受通配/正则/
+  运行时上传/按租户覆盖。
+- **不提取**：插件 SPI、ServiceLoader、策略接口、新命令家族、L0 `TOOLS`/`VERBS`（L0 内容量大、
+  与只读契约的 18 条单测和活体探针绑定，等第一份数据文件把加载器形状证明后再另立契约）。
+- 契约冻结后独立走完整验收链路；本 ADR 不预批准实现。
+
+### R3（决策 4 的"第三个真实用例"判据）
+
+L1 白名单内容这一接口点在仓内已有三个真实消费者，故"内容外置"现在可以动：
+
+1. **语料侧声明**：chunk 的 `action_class: L1-write-low` 是文档作者提供的内容确认——白名单判定
+   本来就要求"数据 + 机制"两半合取（[ADR-0028](0028-l1-controlled-action-contract.md) 决策 2）；
+2. **L1 命令闭集**：`ControlledCommandPolicy` 的前缀/旗标/宾语三段闭集；
+3. **灰度目标白名单**：`opspilot.l1.allowed-targets` 已是运行时配置数据，且空值 fail-closed
+   （[ADR-0028](0028-l1-controlled-action-contract.md) 评审增补 6 / 裁决 4·A）。
+
+三条都是"策略内容由数据供给、判定机制留在代码"。**接口提取仍未发生**：前缀之后如何校验
+（kubectl 旗标 vs systemctl 宾语）仍是机制内的家族分支；把它做成可插拔策略要等第三个领域。
+因此本轮不消耗 rule of three 的接口额度。
+
+### R4（决策 5 的回归锁映射）
+
+| 构造保证 | 既有锁（首个切面必须保持） |
+| --- | --- |
+| 引擎层权限过滤 | `retrieval/IdentityFilter` 单一事实源 + 跨租户用例；红队跨租户类 |
+| 审计哈希链 | `AuditService` 链式写入 + `scripts/l1_worm_gate.py`（L1 事件缺 WORM 即 FAIL） |
+| 降级状态机 | 降级单测与切档审计 `ev=degrade_transition`（本切面不触碰） |
+| 逐字出口护栏 | `VerbatimGuardTest`（10 条）、`llm/PromptAssemblerTest`（4 条） |
+| 只读命令契约 | `ReadOnlyCommandPolicyTest`（18 条）；L1 白名单闭集 `ControlledCommandPolicyTest`（5 条）；`scripts/redteam.sh`（32 条 / 0 泄漏 / 0 SKIP） |
+
+首个切面额外要求：`ActionOpsService.containsVerbatim` 的 `not_verbatim` 拒因不变、
+`action_proposed` 审计行仍含逐字命令、`opspilot.l1.allowed-targets` 空值仍全拒。
+
+### 签收记录（2026-11-16）
+
+- **签收人**：Lead（shing26）；**载体**：PR #84。
+- **决定**：ADR-0029 定为 accepted；首个切面契约（`command-policy-data-accept`）冻结；
+  **是否派实现另行决定**——本次签收不构成实现授权。
+- **人审四问**（签收即表示无异议）：
+  1. **证据充分性**：评审引用的代码事实（`grep -rli plugin src/main/java` 零命中、L1 白名单
+     为 Java 字面量、测试条数）可复核；文档门闩 `doc_numbers --check` 退 0、
+     `check_public_copy` OK。
+  2. **判据纪律**：未改代码 / 测试 / 断言，未以自评替代裁决；契约内验证命令留待实现后由
+     独立 Verifier 亲跑。
+  3. **变更面封闭**：本 PR 仅 5 个文档文件，未触代码、语料、配置与 `feat/slo-coverage-up1`。
+  4. **遗留边界**：实现未开始；`action/` 词法门闩延后至家族策略接口提取；CI 结论不计入本次
+     签收。
+- **后续（2026-11-16）**：首个切面实现经独立 Verifier ACCEPT，已随 PR #85 合并（squash
+  `7760c40`）；实现验收记录见契约「实现验收签收（2026-11-16）」。其余分层仍未落地。

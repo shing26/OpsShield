@@ -25,8 +25,9 @@
 | `src/main/java/com/opspilot/` | 在线面：`gateway`(协议/编排) `retrieval` `llm` `resilience` `auth` `cache` `storm` `metrics` `health` `ingest` `chunk` `config` `common`(跨层控制信号) `store`(存储接缝) | ✅ |
 | `src/main/java/com/opspilot/store/` | **存储接缝**（[ADR-0022](adr/0022-standalone-storage-mode.md)）：`KvStore` 窄接口（15 操作）+ `RedisKvStore`/`MemoryKvStore` 两实现 + `StoreConfig` 按 `opspilot.storage.mode` 装配。内存实现**刻意复刻 Redis 语义**（TTL 仅建于创建、闭区间窗口裁剪、成员去重、`mapValues` 无顺序承诺）——不是"够用就行"，否则两套实现会在窗口计数/配额水位上悄悄分叉 | ✅ |
 | `src/main/java/com/opspilot/retrieval/` | 检索腿接缝（[ADR-0022](adr/0022-standalone-storage-mode.md)）：`RetrievalLeg` 接口（ES/Qdrant 与内存腿同形）+ `IdentityFilter`（`tenant × auth_level` 过滤**单一事实源**，检索与覆盖范围共用）+ `InMemoryIndex`/`InMemoryLegs`/`Vectors`（内存词法+向量腿，词法哈希非神经语义）+ `RetrievalWiring`（`lexicalLeg`/`vectorLeg` 命名 bean）。**权限过滤复用同一份判据是构造保证**，不是两套实现各自承诺 | ✅ |
-| `src/test/java/` | 单测与集成（440 用例，`@Test` 声明数） | ✅ |
-| `docs/adr/` | 30 项架构决策（每份含否决项与后果）——**改架构先写 ADR**；0027=MCP 入口、0028=L1 受控行动契约、0029=可复用边界（底座 vs 插件分层）、0030=遥测消费与统计基线预警（谱系 ①② 边界修订） | ✅ |
+| `src/test/java/` | 单测与集成（453 用例，`@Test` 声明数） | ✅ |
+| `src/main/resources/policy/command-policy.json` | **L1 命令策略白名单内容**（[ADR-0029](adr/0029-reuse-boundary-trust-base-vs-domain-plugins.md) 首个切面：内容走数据、机制留 `action/`）：前缀/旗标/宾语闭集的唯一事实源，由 `action/CommandPolicyData` 在启动期严格加载——未知 schema_version/顶层键/家族键/家族 id、通配/正则、首尾空白、`--flag=value`、重复项、空前缀/旗标/宾语集、文件缺失或不可读一律失败，不静默忽略、不回落默认值；只从 classpath 固定路径读取，没有环境变量/HTTP/按租户覆盖/热加载面 | ✅ |
+| `docs/adr/` | 30 项架构决策（每份含否决项与后果）——**改架构先写 ADR**；0027=MCP 入口、0028=L1 受控行动契约、0029=可复用边界（底座 vs 插件分层，2026-11-16 设计评审 accepted、Lead 已签收；首个切面=L1 命令策略内容外置为数据文件，实现已通过独立验证并合并（PR #85 / `7760c40`），契约 [plans/command-policy-data-accept.md](../plans/command-policy-data-accept.md)）、0030=遥测消费与统计基线预警（谱系 ①② 边界修订） | ✅ |
 | `docs/agents/` | **engineering skills 的 repo 配置**：issue tracker 约定 / triage label 映射 / 领域文档位置与消费规则（根级 `AGENTS.md` 的 `## Agent skills` 块指向这里）。由 `/setup-matt-pocock-skills` 写入，切换 tracker 或从头开始时才需重跑 | ✅ |
 | `docs/qa/` | 红队缺陷台账 / 模块复验台账（缺陷与验证的单一事实源） | ✅ |
 | `docs/ops/` | 生产化就绪度台账（现行状态置顶 + 历史归档） | ✅ |
@@ -90,6 +91,7 @@
 | `daily_usage.py` | 从审计日志聚合当日用量（cron 友好） |
 | `check_panel_contract.sh` | 面板↔后端字面量契约（CI 零依赖，后端改名即红） |
 | `check_public_copy.py` | **对外面用词门闩**（[ADR-0023](adr/0023-public-surface-terminology.md)）：canonical 词不得漏到 README + 页面文案；词表**从 `CONTEXT.md` 的 `_对外_` 行现取**（不手写，登记表空了即红）；反向启发式只报不闸。判据极性由 `tests/test_public_copy.py` 逐词变异钉住 |
+| `check_domain_words.py` | **领域词词法门闩**（[ADR-0029](adr/0029-reuse-boundary-trust-base-vs-domain-plugins.md) R1）：扫干净底座包（`storm`/`auth`/`cache`/`store`/`metrics`/`llm/VerbatimGuard`/`resilience` 除 `SopFallbackService`）里的 SRE 命令/服务/主体/错误码词；标识符边界匹配（`redistribute` 不命中 `redis`），代码/字符串字面量命中 `file:line: word` 退 1，路径/IO 错或扫描面为空退 2。`action/` 按 R1 暂不纳入；注释命中默认同样退 1，只有 `EXEMPTIONS` 里具体行文本仍匹配的既有举例才降为 `EXEMPT`（`--strict` 可忽略例外做审计）。判据极性由 `tests/test_check_domain_words.py` 用 tmp_path 镜像钉住 |
 | `live_concurrency.py` | **门禁 6 活体采样（schema 2）**：单租户 N 并发 + 另一租户对照，记录 429 的 `Retry-After`、`aiops_degradation_state` 与计数器增量（旧 schema 1 缺后两项，样本不可自证）；产物按日期命名，同名默认拒绝覆盖，避免重跑改写历史证据 |
 | `check_observation.py` | **门禁 6/7 收口判定**（只读、不触网，可进 CI）：对已提交的 `docs/ops/slo-*.json` 求覆盖天数与样本并集——0 两条绿 / 1 有硬失败 / 2 观察期未满 |
 | `py.sh` | Python 解释器三档探测（跨平台单点，被多个脚本复用） |

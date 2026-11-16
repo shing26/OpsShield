@@ -16,9 +16,9 @@
 [![Java](https://img.shields.io/badge/Java-21-ED8B00?style=flat&logo=openjdk&logoColor=white)](https://openjdk.org/)
 [![Spring Boot](https://img.shields.io/badge/Spring_Boot-4.1.1-6DB33F?style=flat&logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)
 [![Metrics](https://img.shields.io/badge/Metrics-Micrometer_%7C_Prometheus-498BA3?style=flat&logo=prometheus&logoColor=white)](https://prometheus.io/)
-[![Java Tests](https://img.shields.io/badge/Java_Tests-440_Passed-4CAF50?style=flat&logo=openjdk&logoColor=white)](#-测试体系与安全回归测试)
+[![Java Tests](https://img.shields.io/badge/Java_Tests-453_Passed-4CAF50?style=flat&logo=openjdk&logoColor=white)](#-测试体系与安全回归测试)
 [![Benchmark](https://img.shields.io/badge/Benchmark-Regression_Gated-4CAF50?style=flat&logo=githubactions&logoColor=white)](docs/benchmark.md)
-[![Python Probes](https://img.shields.io/badge/Probes-566_Passed-3776AB?style=flat&logo=python&logoColor=white)](#-测试体系与安全回归测试)
+[![Python Probes](https://img.shields.io/badge/Probes-587_Passed-3776AB?style=flat&logo=python&logoColor=white)](#-测试体系与安全回归测试)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 <p align="center">
@@ -339,8 +339,8 @@ OpsShield 把"系统活着"做成了结构化的入口矩阵（默认端口 `808
 
 防线不只靠单测——关键判据全部经"改坏必红、复原必绿"的安全回归测试，文档数字由门闩每次现算比对产物：
 
-* **Java 440 单测**（`mvn test` 实跑全绿）：并发合并、状态机无损跃迁、AST 词法解析、双出口指标一致性、覆盖范围聚合、内存存储后端与身份过滤的跨后端对照；
-* **Python 566 条 test 函数**（`pytest offline/tests/`；参数化展开后执行例数更多）：含 `action_contract_probe.py` 的 **AC-1..AC-9 九组形式化不变式**——帧形状 / 逐字性 / 契约⊆引用闭包 / 段名闸 / 红线绊线 / 回放一致性 / 租户围栏 / 指标单调 / 反假绿覆盖；以及 `preset_probe.py` 的 **P-1..P-3 三组**——左栏预设与页面同源、预设形状（不锁产额）、覆盖范围与语料逐项相等；
+* **Java 453 单测**（`mvn test` 实跑全绿）：并发合并、状态机无损跃迁、AST 词法解析、双出口指标一致性、覆盖范围聚合、内存存储后端与身份过滤的跨后端对照；
+* **Python 587 条 test 函数**（`pytest offline/tests/`；参数化展开后执行例数更多）：含 `action_contract_probe.py` 的 **AC-1..AC-9 九组形式化不变式**——帧形状 / 逐字性 / 契约⊆引用闭包 / 段名闸 / 红线绊线 / 回放一致性 / 租户围栏 / 指标单调 / 反假绿覆盖；以及 `preset_probe.py` 的 **P-1..P-3 三组**——左栏预设与页面同源、预设形状（不锁产额）、覆盖范围与语料逐项相等；
 * **安全回归测试**：契约探针 5 路（段名闸恒真、逐字恒真、红线恒空、闭包前置 None、AC-7 租户恒真——每条都有"改坏后 N failed / 复原后全绿"的实测记录）；文档门闩另有 A/B/C 三路（改文档数字、改产物、改写措辞，各须红）；
 * **CI 全部 job**（java / static-gate / panel-contract / provenance / python / shell / security / sbom / smoke / benchmark）零 key 零中间件可跑；`doc_numbers` 门闩现算比对 **33 条文档数字 / 48 处引用**，数字与产物分叉即 CI 红；评测报告与语料的同代性用内容摘要钉死（`provenance`，不用 checkout 会刷平的 mtime）；对外面用词由 `check_public_copy` 钉住（内部 canonical 词不得漏到本 README 与页面文案，词表从 `docs/CONTEXT.md` 现取）。
 
@@ -395,7 +395,7 @@ $PY load/l1_latency.py       # L1 回放延迟（热点命中口径）→ load/r
 | [0025](docs/adr/0025-deployment-profiles-and-strict-mode.md) | 部署 profile 与 strict 模式：绑定地址、凭据校验、演示/生产分离 | 出厂占位凭据 + 全网卡监听是"装好即被接管"的默认值，让它在启动期失败而不是事后 |
 | [0026](docs/adr/0026-admission-control-and-degradation-scope.md) | 准入控制：全局 + 租户信号量、429 退避、降级作用域保持全局 | 单人并发不该演成全员降级；先挡在入口，再谈降级维度 |
 | [0028](docs/adr/0028-l1-controlled-action-contract.md) | L1 受控恢复动作：文档声明 + 双白名单判定 + 人确认 + 签名派发，OpsShield 仍不执行 | 价值链延伸到恢复动作；红队门禁闭环是开闸前提 |
-| [0029](docs/adr/0029-reuse-boundary-trust-base-vs-domain-plugins.md) | 可复用边界：可信底座与领域插件显式分层，rule of three 提接口 | 底座判据不含领域词汇；换插件只换内容不换防线 |
+| [0029](docs/adr/0029-reuse-boundary-trust-base-vs-domain-plugins.md) | 可复用边界：可信底座与领域插件显式分层，rule of three 提接口（2026-11-16 设计评审 accepted、Lead 已签收；首个切面=L1 命令策略内容外置，已通过独立验证并合并，PR #85） | 底座判据不含领域词汇；换插件只换内容不换防线 |
 
 ---
 
@@ -409,7 +409,7 @@ $PY load/l1_latency.py       # L1 回放延迟（热点命中口径）→ load/r
 | 日常运维、脚本索引、**债务触发线** | [OPS.md](OPS.md)（脚本按"服务生命周期 / 门禁检查 / 故障注入与演示"分组索引） |
 | 领域词汇 | [docs/CONTEXT.md](docs/CONTEXT.md) |
 | 目录地图 / 逐包职责 / 维护者向内容 | [docs/repo-map.md](docs/repo-map.md) |
-| 架构决策与否决理由 | [docs/adr/](docs/adr/)（27 篇，每篇含否决项与后果） |
+| 架构决策与否决理由 | [docs/adr/](docs/adr/)（30 篇，每篇含否决项与后果） |
 
 ---
 

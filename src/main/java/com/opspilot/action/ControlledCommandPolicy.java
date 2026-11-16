@@ -2,7 +2,6 @@ package com.opspilot.action;
 
 import java.util.List;
 import java.util.Locale;
-import java.util.Set;
 
 /**
  * L1 受控行动契约的判定器（ADR-0028 规格 §3）：一条命令是 L0-read、L1-write-low 还是被拒。
@@ -17,27 +16,18 @@ import java.util.Set;
  *       ∧ 命令命中 L1 窄闭集前缀 ∧ 宾语/旗标白名单。</li>
  * </ol>
  *
- * <p><b>为什么 L1 白名单这么窄</b>：v1 灰度只放 {@code kubectl rollout restart|undo|status}
- * 与 {@code systemctl restart <白名单>}——每放开一族都需先过红队（ADR-0028 验收路径）。
- * 链式/替换在第一关整体拒（红队用例 l1-contract-hidden-cmd 的判据）。
+ * <p><b>白名单内容不在本类</b>：前缀、旗标、宾语闭集由 classpath 数据文件
+ * {@code policy/command-policy.json} 供给，经 {@link CommandPolicyData} 严格加载（未知键/
+ * 未知家族/通配/重复/空集即启动失败）；本类只保留"前缀之后怎么判"的机制与顺序。v1 灰度仍只放
+ * 两个命令家族——每放开一族都需先过红队（ADR-0028 验收路径）。链式/替换在第一关整体拒
+ * （红队用例 l1-contract-hidden-cmd 的判据）。
  */
 public final class ControlledCommandPolicy {
 
     private ControlledCommandPolicy() {}
 
-    /** L1 动词前缀窄闭集（顺序敏感：前缀匹配后剩余 token 还要过宾语/旗标判定）。 */
-    private static final List<String> L1_PREFIXES = List.of(
-            "kubectl rollout restart",
-            "kubectl rollout undo",
-            "kubectl rollout status",
-            "systemctl restart");
-
-    /** kubectl rollout 的旗标白名单：只许指定 namespace——其余旗标闭集外判拒。 */
-    private static final Set<String> KUBECTL_ROLLOUT_FLAGS = Set.of("-n", "--namespace");
-
-    /** systemctl restart 宾语白名单（服务名闭集；扩集走语料评审 + 红队）。 */
-    private static final Set<String> SYSTEMCTL_UNITS = Set.of(
-            "nginx", "redis", "mysql", "order-api", "inventory-api");
+    /** 白名单内容唯一事实源：classpath 固定路径的数据文件（ADR-0029 首个切面）。 */
+    private static final CommandPolicyData DATA = CommandPolicyData.load();
 
     public enum Verdict { L0_READ, L1_WRITE_LOW, REJECT }
 
@@ -75,67 +65,77 @@ public final class ControlledCommandPolicy {
 
     private static boolean l1PrefixMatch(String command) {
         String lower = command.toLowerCase(Locale.ROOT);
-        for (String prefix : L1_PREFIXES) {
-            if (lower.startsWith(prefix + " ") || lower.equals(prefix)) {
-                return tailValid(prefix, command.substring(prefix.length()).strip());
+        for (CommandPolicyData.Family family : DATA.families()) {
+            for (String prefix : family.prefixes()) {
+                if (lower.startsWith(prefix + " ") || lower.equals(prefix)) {
+                    return tailValid(family, command.substring(prefix.length()).strip());
+                }
             }
         }
         return false;
     }
 
-    /** 前缀之后的剩余 token：kubectl rollout 走资源+旗标白名单，systemctl 走宾语闭集。 */
-    private static boolean tailValid(String prefix, String tail) {
+    /** 前缀之后的剩余 token：旗标型家族走资源+旗标白名单，单宾语家族走宾语闭集。 */
+    private static boolean tailValid(CommandPolicyData.Family family, String tail) {
         if (tail.isEmpty()) {
             return false;
         }
         String[] args = tail.split("\\s+");
-        if (prefix.startsWith("kubectl")) {
-            boolean sawResource = false;
-            for (int i = 0; i < args.length; i++) {
-                String a = args[i];
-                if (a.startsWith("-") || a.startsWith("--")) {
-                    if (!KUBECTL_ROLLOUT_FLAGS.contains(a)) {
-                        return false;           // 闭集外旗标
-                    }
-                    i++;                        // 取值型旗标：吞掉它的值
-                    if (i >= args.length) {
-                        return false;           // 旗标缺值
-                    }
-                    if (!isPlainToken(args[i])) {
-                        return false;
-                    }
-                } else if (isPlainToken(a)) {
-                    sawResource = true;         // deployment/order-api
-                } else {
-                    return false;               // 资源名里有元字符
-                }
-            }
-            return sawResource;
+        if (family.shape() == CommandPolicyData.TailShape.SINGLE_UNIT) {
+            return args.length == 1 && family.units().contains(args[0]);
         }
-        // systemctl restart <unit>：单宾语，白名单闭集
-        return args.length == 1 && SYSTEMCTL_UNITS.contains(args[0]);
+        boolean sawResource = false;
+        for (int i = 0; i < args.length; i++) {
+            String a = args[i];
+            if (a.startsWith("-")) {
+                if (!family.flags().contains(a)) {
+                    return false;               // 闭集外旗标
+                }
+                i++;                            // 取值型旗标：吞掉它的值
+                if (i >= args.length) {
+                    return false;               // 旗标缺值
+                }
+                if (!isPlainToken(args[i])) {
+                    return false;
+                }
+            } else if (isPlainToken(a)) {
+                sawResource = true;             // deployment/order-api
+            } else {
+                return false;                   // 资源名里有元字符
+            }
+        }
+        return sawResource;
     }
 
     /**
-     * 抽取 L1 命令的目标（灰度白名单用）：kubectl → deployment/order-api；systemctl → unit。
-     * 抽不出返回 null（调用方按"不在白名单"处理 = 拒）。
+     * 抽取 L1 命令的目标（灰度白名单用）：前缀型家族取第一个非旗标的资源 token，单宾语家族取
+     * 唯一宾语。命令不命中任何数据文件前缀、或抽不出目标时返回 null（调用方按"不在白名单"
+     * 处理 = 拒）。
      */
     public static String targetOf(String command) {
         if (command == null || command.isBlank()) {
             return null;
         }
         String lower = command.trim().toLowerCase(Locale.ROOT);
-        String[] args = lower.split("\\s+");
-        if (lower.startsWith("kubectl")) {
-            for (int i = 3; i < args.length; i++) {          // kubectl rollout <verb> <target>
-                if (!args[i].startsWith("-") && isPlainToken(args[i])) {
-                    return args[i];
+        for (CommandPolicyData.Family family : DATA.families()) {
+            for (String prefix : family.prefixes()) {
+                if (!lower.equals(prefix) && !lower.startsWith(prefix + " ")) {
+                    continue;
                 }
+                if (lower.equals(prefix)) {
+                    return null;                // 缺宾语
+                }
+                String[] args = lower.substring(prefix.length()).strip().split("\\s+");
+                if (family.shape() == CommandPolicyData.TailShape.SINGLE_UNIT) {
+                    return args.length == 1 && isPlainToken(args[0]) ? args[0] : null;
+                }
+                for (String arg : args) {
+                    if (!arg.startsWith("-") && isPlainToken(arg)) {
+                        return arg;
+                    }
+                }
+                return null;
             }
-            return null;
-        }
-        if (lower.startsWith("systemctl restart")) {
-            return args.length == 3 && isPlainToken(args[2]) ? args[2] : null;
         }
         return null;
     }

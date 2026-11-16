@@ -162,6 +162,12 @@ jobs:
           python-version: "3.11"
       - name: Production gate (static)
         run: SKIP_TESTS=1 bash scripts/production_gate.sh --fast
+      # ADR-0029 R1：领域词词法门闩。只扫 R1 的干净底座包（action/ 延后），
+      # 代码/字符串字面量命中即红；注释命中默认也红，只有逐条登记的书面例外才放行
+      # （--strict 可忽略例外做审计）。它防的是"领域命令/服务名重新焊回信任底座"。
+      # 这正是 ADR-0029 决策 1 的静态判据。
+      - name: Domain-word lexical gate (ADR-0029 R1)
+        run: python scripts/check_domain_words.py
 
   panel-contract:
     runs-on: ubuntu-latest
