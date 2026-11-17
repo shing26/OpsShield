@@ -106,3 +106,6 @@ service=opspilot-vm，恢复后 resolved；Alertmanager webhook 成功通知新�
 `offline/corpus/runbooks/rb-115-h2-corruption-recovery.md` 仍写“schema.sql 启动自动建表”，
 而 schema 已由 Flyway V1 管理。改语料会改变 chunks 与评测报告同代摘要，需在 live 栈上
 重跑 reingest/评测/报告，不能只手改 `chunks.jsonl`。
+
+2026-11-17 自证 dogfood 已复现该漂移：以 `MVStoreException: File is corrupted ...` 查询命中 `rb-115`，
+但答案仍引用旧的 schema 说法（[case study](case-study-self-dogfood.md)，审计 `request_id=94a408b1`）。
