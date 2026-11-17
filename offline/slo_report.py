@@ -14,6 +14,9 @@ Prometheus 读数、并发样本与抓取连续性固化成可提交的文件。
    30 天的覆盖由这些周报求并集证明（`scripts/check_observation.py`）。
 3. **证明不了的判据写"未证明"，不写通过**。schema 1 的旧样本没有 `Retry-After` 与降级档，
    本工具把它们标成 `UNPROVEN`；这与仓库"不假装知道"的纪律一致。
+4. **未完结的 UTC 日不判**。Prometheus 会把未来的求值时间钳到"现在"，对一个还在进行的
+   日子求覆盖，得到的是仍在增长的值——写进周报后几小时内就会翻转。窗口末日一律裁到
+   最后一个已满 24h 的 UTC 日，原始请求末日记进 `window.requested_end`。
 
 用法：
     python offline/slo_report.py --kind weekly
@@ -73,6 +76,20 @@ def _iso_day(d: date) -> str:
 def _window_end(day: date) -> datetime:
     """窗口末端的求值时刻：当天 23:59:59 UTC。"""
     return datetime(day.year, day.month, day.day, 23, 59, 59, tzinfo=timezone.utc)
+
+
+def _now_utc() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def last_complete_day(now: datetime | None = None) -> date:
+    """最后一个已满 24 小时的 UTC 日——只有它的覆盖数才是定值。
+
+    未完结的日子判不得：Prometheus 对未来的求值时间会钳到"现在"，对一个还在进行的
+    UTC 日求 `sum_over_time(up[1d])`，拿到的是仍在增长的瞬时值，写进周报后几小时内
+    就会翻转（2026-11-16 实测：同一命令 20 分钟后 covered 从 [] 变 ['2026-11-15']）。
+    """
+    return ((now or _now_utc()) - timedelta(days=1)).date()
 
 
 class PrometheusError(Exception):
@@ -160,10 +177,15 @@ def collect_sli(client: PromClient, start: date, end: date, days: int) -> tuple[
 
 
 def scrape_coverage(client: PromClient, start: date, end: date) -> tuple[list[str], list[str], list[str]]:
-    """逐日证明"当天在抓"。返回 (covered, missing, notes)。
+    """逐日证明"当天应用真的被采到"。返回 (covered, missing, notes)。
 
-    每天单独求值一次 `count_over_time(up[1d])`：用 range query 拉 30 天会因保留期边界而截断，
-    而且渲染时需要的是"哪几天"，不是一条连续曲线。
+    每天单独求值一次 `sum_over_time(up{job="opspilot"}[1d])`：`up` 只有 0/1，求和即
+    "当天 up=1 的抓取点数"，≥ MIN_SCRAPES_PER_DAY 才算覆盖。用 range query 拉 30 天会因
+    保留期边界而截断，而且渲染时需要的是"哪几天"，不是一条连续曲线。
+
+    2026-11-16 口径修订：旧查询 `count_over_time(up[1d])` 把 `up=0` 的抓取点也计入——
+    采集器活着而应用已死时仍判"覆盖"（实测：网关停摆 6 天的一周被记成 7/7 覆盖）。
+    门禁 7 要的是应用指标被采到，不是 Prometheus 自己在跑。
     """
     covered: list[str] = []
     missing: list[str] = []
@@ -172,7 +194,7 @@ def scrape_coverage(client: PromClient, start: date, end: date) -> tuple[list[st
     while day <= end:
         at = _window_end(day)
         try:
-            n = client.query('count_over_time(up{job="opspilot"}[1d])', at)
+            n = client.query('sum_over_time(up{job="opspilot"}[1d])', at)
         except PrometheusError as exc:
             notes.append(f"{day}: {exc}")
             n = None
@@ -181,7 +203,7 @@ def scrape_coverage(client: PromClient, start: date, end: date) -> tuple[list[st
         else:
             missing.append(_iso_day(day))
             if n is not None:
-                notes.append(f"{day}: 仅 {int(n)} 个抓取点（门槛 {MIN_SCRAPES_PER_DAY}）")
+                notes.append(f"{day}: 仅 {int(n)} 个 up=1 抓取点（门槛 {MIN_SCRAPES_PER_DAY}）")
         day += timedelta(days=1)
     return covered, missing, notes
 
@@ -327,7 +349,7 @@ def render(payload: dict, kind: str) -> str:
 
     add("## 2. 抓取连续性")
     add("")
-    add(f"- 覆盖 {len(cov['covered'])}/{w['days']} 天（门槛：单日 ≥ {MIN_SCRAPES_PER_DAY} 个抓取点）")
+    add(f"- 覆盖 {len(cov['covered'])}/{w['days']} 天（门槛：单日 ≥ {MIN_SCRAPES_PER_DAY} 个 up=1 抓取点）")
     if cov["missing"]:
         add(f"- 缺失：{'、'.join(cov['missing'])}")
     for note in cov["notes"]:
@@ -380,11 +402,20 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
 
     try:
-        end = date.fromisoformat(args.end) if args.end else datetime.now(timezone.utc).date()
+        requested_end = date.fromisoformat(args.end) if args.end else _now_utc().date()
     except ValueError:
         print(f"--end 不是合法日期：{args.end}", file=sys.stderr)
         return 2
-    start, end, days = window_for(args.kind, end, args.month)
+    # 只判已完结的 UTC 日：weekly 以它重新取整窗，monthly 的月末也裁到它（见 AC-9）。
+    last_day = last_complete_day()
+    start, end, _ = window_for(args.kind, min(requested_end, last_day), args.month)
+    if end > last_day:
+        end = last_day
+    if end < start:
+        print(f"窗口 {start} ~ {requested_end} 尚未开始或未满一天，拒绝生成报表。", file=sys.stderr)
+        return 3
+    days = (end - start).days + 1
+    clamped = end != requested_end
 
     client = PromClient(args.prometheus)
     try:
@@ -396,14 +427,19 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     for w in warnings:
         print(f"warn: {w}", file=sys.stderr)
+    if clamped:
+        notes.append(f"末日未完结：请求末日 {requested_end}，本次只判到 {end}（UTC 日须满 24h 才可判定）")
+        print(f"warn: 末日未完结，窗口裁到 {end}（请求末日 {requested_end}）", file=sys.stderr)
 
     samples = load_samples(Path(args.samples_dir), start, end)
     payload = {
         "schema": 1, "kind": args.kind,
-        "window": {"start": start.isoformat(), "end": end.isoformat(), "days": days},
+        "window": {"start": start.isoformat(), "end": end.isoformat(), "days": days,
+                   "requested_end": requested_end.isoformat()},
         "prometheus": {"url": args.prometheus, "job": "opspilot"},
         "coverage": {"covered": covered, "missing": missing, "notes": notes,
-                     "retention_days": retention, "min_scrapes_per_day": MIN_SCRAPES_PER_DAY},
+                     "retention_days": retention, "min_scrapes_per_day": MIN_SCRAPES_PER_DAY,
+                     "scrape_metric": 'up{job="opspilot"}==1'},
         "sli": sli,
         "samples": samples,
         "gate6": gate6(samples),

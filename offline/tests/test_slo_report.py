@@ -11,7 +11,7 @@ import contextlib
 import io
 import json
 import sys
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 OFFLINE = Path(__file__).resolve().parent.parent
@@ -25,6 +25,7 @@ class FakeProm:
         self.retention = retention
         self.values = values or {}
         self.fail = fail
+        self.exprs = []
 
     def retention_days(self):
         if self.fail:
@@ -32,6 +33,7 @@ class FakeProm:
         return self.retention
 
     def query(self, expr, at):
+        self.exprs.append(expr)
         if self.fail:
             raise sr.PrometheusError("boom")
         for key, value in self.values.items():
@@ -119,10 +121,34 @@ def test_collect_sli_keeps_none_and_warns():
 
 
 def test_coverage_below_threshold_counts_as_missing():
-    client = FakeProm(values={"count_over_time": 10.0})
+    client = FakeProm(values={"sum_over_time": 10.0})
     covered, missing, notes = sr.scrape_coverage(client, date(2026, 11, 1), date(2026, 11, 2))
     assert covered == [] and len(missing) == 2
-    assert any("10 个抓取点" in n for n in notes), "要说明为什么判缺失，而不是静默"
+    assert any("10 个 up=1 抓取点" in n for n in notes), "要说明为什么判缺失，而不是静默"
+
+
+def test_coverage_ignores_scrape_points_where_target_is_down():
+    # 2026-11-16 实测形态：Prometheus 每 15s 都在抓（一天 5760 个点），但应用已死（up=0）。
+    # 旧口径 count_over_time 会把这种日子判成"覆盖"——这正是本次口径修订要消除的假绿。
+    client = FakeProm(values={"sum_over_time": 100.0, "count_over_time": 5760.0})
+    covered, missing, notes = sr.scrape_coverage(client, date(2026, 11, 10), date(2026, 11, 10))
+    assert covered == [] and missing == ["2026-11-10"]
+    assert any("100 个 up=1 抓取点" in n for n in notes)
+
+
+def test_coverage_threshold_boundary_is_inclusive():
+    ok = FakeProm(values={"sum_over_time": float(sr.MIN_SCRAPES_PER_DAY)})
+    assert sr.scrape_coverage(ok, date(2026, 11, 1), date(2026, 11, 1))[0] == ["2026-11-01"]
+    low = FakeProm(values={"sum_over_time": float(sr.MIN_SCRAPES_PER_DAY - 1)})
+    assert sr.scrape_coverage(low, date(2026, 11, 1), date(2026, 11, 1))[1] == ["2026-11-01"]
+
+
+def test_coverage_query_counts_only_up_samples():
+    client = FakeProm(values={"sum_over_time": 0.0})
+    sr.scrape_coverage(client, date(2026, 11, 1), date(2026, 11, 1))
+    assert client.exprs and all("sum_over_time(up" in e for e in client.exprs)
+    assert not any("count_over_time(up" in e for e in client.exprs), \
+        "up=0 的抓取点不得计入覆盖：那会把停机日算成覆盖日"
 
 
 # ---- 单样本判定 -----------------------------------------------------------------
@@ -258,6 +284,36 @@ def test_render_monthly_uses_month_title():
     assert sr.render(payload, "monthly").startswith("# SLO 月报 · 2026-11")
 
 
+# ---- 末日防呆 -------------------------------------------------------------------
+
+def _payload_of(args, now, monkeypatch, client, tmp_path):
+    monkeypatch.setattr(sr, "_now_utc", lambda: now)
+    code, text = _run(args + ["--stdout", "--json", "--samples-dir", str(tmp_path)],
+                      monkeypatch, client)
+    assert code == 0, text
+    return json.loads(text)
+
+
+def test_incomplete_end_day_is_clamped_to_last_complete_day(tmp_path, monkeypatch):
+    # 请求末日 11-16 而此刻 UTC 才 11-16T02:00Z：11-16 未满 24h，Prometheus 会把它钳到"现在"，
+    # 写进周报的数字几小时内就翻——只能判到 11-15。
+    payload = _payload_of(["--end", "2026-11-16"], datetime(2026, 11, 16, 2, 0, tzinfo=timezone.utc),
+                          monkeypatch, FakeProm(values={"sum_over_time": 5760.0}), tmp_path)
+    assert payload["window"]["end"] == "2026-11-15"
+    assert payload["window"]["requested_end"] == "2026-11-16"
+    assert payload["window"]["start"] == "2026-11-09" and payload["window"]["days"] == 7, \
+        "裁到已完结日之后仍须是完整 7 天窗，不能变成 6 天"
+    assert any("末日未完结" in n for n in payload["coverage"]["notes"])
+
+
+def test_complete_end_day_is_judged_as_requested(tmp_path, monkeypatch):
+    payload = _payload_of(["--end", "2026-11-15"], datetime(2026, 11, 16, 0, 5, tzinfo=timezone.utc),
+                          monkeypatch, FakeProm(values={"sum_over_time": 5760.0}), tmp_path)
+    assert payload["window"]["end"] == payload["window"]["requested_end"] == "2026-11-15"
+    assert not any("末日未完结" in n for n in payload["coverage"]["notes"]), \
+        "已完结的末日不得被裁剪或标注"
+
+
 # ---- main ----------------------------------------------------------------------
 
 def _run(args, monkeypatch, client):
@@ -272,7 +328,7 @@ def test_main_stdout_writes_no_files(tmp_path, monkeypatch):
     out = tmp_path / "out"
     code, text = _run(["--end", "2026-11-09", "--out", str(out), "--stdout",
                        "--samples-dir", str(tmp_path)], monkeypatch,
-                      FakeProm(values={"aiops_requests_total": 10.0, "count_over_time": 5760.0}))
+                      FakeProm(values={"aiops_requests_total": 10.0, "sum_over_time": 5760.0}))
     assert code == 0 and "门禁 6/7 观察周报" in text
     assert not out.exists(), "--stdout 只打印，不在磁盘留报表"
 
@@ -280,7 +336,7 @@ def test_main_stdout_writes_no_files(tmp_path, monkeypatch):
 def test_main_writes_deterministic_names(tmp_path, monkeypatch):
     code, _ = _run(["--end", "2026-11-09", "--out", str(tmp_path), "--samples-dir", str(tmp_path)],
                    monkeypatch,
-                   FakeProm(values={"aiops_requests_total": 10.0, "count_over_time": 5760.0}))
+                   FakeProm(values={"aiops_requests_total": 10.0, "sum_over_time": 5760.0}))
     assert code == 0
     assert (tmp_path / "slo-weekly-2026-11-09.md").exists()
     assert (tmp_path / "slo-weekly-2026-11-09.json").exists()
