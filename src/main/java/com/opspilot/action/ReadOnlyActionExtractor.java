@@ -1,11 +1,13 @@
 package com.opspilot.action;
 
+import com.opspilot.domain.DomainPack;
 import com.opspilot.metrics.OpsMetrics;
 import com.opspilot.retrieval.ScoredChunk;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
@@ -19,28 +21,23 @@ import org.springframework.stereotype.Component;
  *
  * <p><b>两道闸</b>：
  * <ul>
- *   <li><b>段名闸</b>：只认标题含「排查」的段（闭集 + 「陷阱/误判」排除词）。这一步就把
- *       {@code 止损操作}/{@code 修复措施}/{@code 处置} 这些写操作段排除在外——语料里
- *       {@code taskkill}、{@code KILL}、重启中间件都住在这类段里。</li>
+ *   <li><b>段名闸</b>：只认标题命中注入领域包的诊断段标记、且不含其排除词的段（闭集）。
+ *       这一步就把写操作段排除在外——语料里 {@code taskkill}、{@code KILL}、重启中间件
+ *       都住在这类段里。段标记/排除词来自 {@link DomainPack}（ADR-0031 薄切片），
+ *       本类只改段名来源，抽取与只读判定逻辑不动。</li>
  *   <li><b>命令闸</b>：段内每条命令再过 {@link ReadOnlyCommandPolicy}。判不过→丢弃并计数
  *       （{@code aiops.guard.action_commands_rejected}），不静默。</li>
  * </ul>
  *
- * <p>覆盖面是刻意的上限而非疏漏：{@code rb-101~105} 本机辖区手册把命令写在「处置」段
+ * <p>覆盖面是刻意的上限而非疏漏：本机辖区手册把命令写在写操作段
  * （因为那些段整体含写操作），按要求整段不进契约；PromQL 等查询语无命令形态同样不入。
- * 新增诊断段只需在语料里用含「排查」的标题，无需改代码；要放宽段名规则，先补变异测试。
+ * 新增诊断段只需在语料里用领域包声明的段标记标题，无需改代码；要放宽段名规则，先补变异测试。
  */
 @Component
 public class ReadOnlyActionExtractor {
 
     /** chunk 面包屑分隔符（语料 chunks.jsonl 的 {@code " > "}，与 PromptAssembler 同源）。 */
     private static final String SEP = " > ";
-
-    /** 段名判据：含「排查」视为诊断段。 */
-    private static final String SECTION_MARK = "排查";
-
-    /** 段名排除词：陷阱/误判是"别这么做"的警告，不该出现在行动清单里。 */
-    private static final List<String> SECTION_EXCLUDE = List.of("陷阱", "误判");
 
     /**
      * 允许一条语句跨多物理行（无 {@code \} 续行符）的围栏语言。SQL 手册里
@@ -51,9 +48,18 @@ public class ReadOnlyActionExtractor {
             Set.of("sql", "mysql", "pgsql", "plsql", "tsql", "cql", "hql");
 
     private final OpsMetrics metrics;
+    private final DomainPack domain;
 
-    public ReadOnlyActionExtractor(OpsMetrics metrics) {
+    /** 生产构造器（ADR-0031 D3）：段名判据由 {@code DomainRegistry} 供给的领域包决定。 */
+    @Autowired
+    public ReadOnlyActionExtractor(OpsMetrics metrics, DomainPack domain) {
         this.metrics = metrics;
+        this.domain = domain;
+    }
+
+    /** test-only / 兼容构造器：委托到 {@link DomainPack#sre()}，生产 bean 走上面的注入构造器。 */
+    public ReadOnlyActionExtractor(OpsMetrics metrics) {
+        this(metrics, DomainPack.sre());
     }
 
     /**
@@ -90,7 +96,7 @@ public class ReadOnlyActionExtractor {
     }
 
     /** 面包屑 {@code doc > 段 > 小节} 的「段」（第二段）；非诊断段返回空串。 */
-    private static String sectionOf(String breadcrumb) {
+    private String sectionOf(String breadcrumb) {
         if (breadcrumb == null) {
             return "";
         }
@@ -99,10 +105,10 @@ public class ReadOnlyActionExtractor {
             return "";
         }
         String section = parts[1].trim();
-        if (!section.contains(SECTION_MARK)) {
+        if (domain.diagnosticMarkers().stream().noneMatch(section::contains)) {
             return "";
         }
-        for (String ex : SECTION_EXCLUDE) {
+        for (String ex : domain.diagnosticExcludes()) {
             if (section.contains(ex)) {
                 return "";
             }

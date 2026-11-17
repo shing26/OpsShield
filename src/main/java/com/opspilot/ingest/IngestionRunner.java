@@ -25,6 +25,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.InitializingBean;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
@@ -34,6 +35,7 @@ import org.springframework.stereotype.Component;
 import com.opspilot.cache.L2SemanticCacheService;
 import com.opspilot.chunk.Chunk;
 import com.opspilot.config.OpsPilotProperties;
+import com.opspilot.domain.DomainPack;
 import com.opspilot.llm.EmbeddingClient;
 import com.opspilot.retrieval.InMemoryIndex;
 import com.opspilot.store.KvStore;
@@ -79,15 +81,21 @@ public class IngestionRunner implements ApplicationRunner, InitializingBean {
             .propertyNamingStrategy(tools.jackson.databind.PropertyNamingStrategies.SNAKE_CASE)
             .build();
     private final String chunksPath;
+    private final DomainPack domain;
     private final AtomicBoolean busy = new AtomicBoolean(false);
     private final AtomicReference<String> lastResult = new AtomicReference<>("never");
 
+    /**
+     * 生产构造器（ADR-0031 D3）：{@code DomainPack} 由 {@code DomainRegistry} 显式注入。
+     * {@code opspilot.chunks-path} 仍是部署者可信的运维覆盖口（保留），未配置时用 pack 的语料默认路径。
+     */
+    @Autowired
     public IngestionRunner(ObjectProvider<ElasticsearchClient> esProvider,
                            ObjectProvider<QdrantClient> qdrantProvider, KvStore store,
                            ObjectProvider<InMemoryIndex> memoryIndex,
                            EmbeddingClient embedding, OpsPilotProperties props,
-                           L2SemanticCacheService l2,
-                           @Value("${opspilot.chunks-path:offline/corpus/chunks.jsonl}") String chunksPath) {
+                           L2SemanticCacheService l2, DomainPack domain,
+                           @Value("${opspilot.chunks-path:}") String chunksPath) {
         this.esProvider = esProvider;
         this.qdrantProvider = qdrantProvider;
         this.store = store;
@@ -95,7 +103,21 @@ public class IngestionRunner implements ApplicationRunner, InitializingBean {
         this.embedding = embedding;
         this.props = props;
         this.l2 = l2;
-        this.chunksPath = chunksPath;
+        this.domain = domain;
+        this.chunksPath = chunksPath.isBlank() ? domain.corpusPath() : chunksPath;
+    }
+
+    /**
+     * test-only / 兼容构造器（ADR-0031 D3）：旧签名委托到 {@link DomainPack#sre()}，
+     * 供既有单测零改动使用。生产 bean 只走上面的注入构造器——没有调用点能"忘了传 pack"。
+     */
+    public IngestionRunner(ObjectProvider<ElasticsearchClient> esProvider,
+                           ObjectProvider<QdrantClient> qdrantProvider, KvStore store,
+                           ObjectProvider<InMemoryIndex> memoryIndex,
+                           EmbeddingClient embedding, OpsPilotProperties props,
+                           L2SemanticCacheService l2, String chunksPath) {
+        this(esProvider, qdrantProvider, store, memoryIndex, embedding, props, l2,
+                DomainPack.sre(), chunksPath);
     }
 
     @Override
@@ -466,7 +488,7 @@ public class IngestionRunner implements ApplicationRunner, InitializingBean {
      */
     static final Duration SOP_TTL = Duration.ofDays(7);
 
-    /** Level 2 兜底：止损步骤按 doc 与 error_code 双维度预热进 Redis（P1：键按租户分片）。 */
+    /** Level 2 兜底：止损步骤按 doc 与 error_code 双维度预热进 Redis（P1：键按租户分片）；段名来自领域包。 */
     private void warmSop(List<Chunk> chunks) {
         warmSop(chunks, null);
     }
@@ -488,7 +510,7 @@ public class IngestionRunner implements ApplicationRunner, InitializingBean {
         for (Chunk c : chunks) {
             String tenant = c.metadata().tenant();
             if (!tenants.contains(tenant)) continue;
-            if (c.breadcrumb() != null && c.breadcrumb().contains("止损操作")) {
+            if (c.breadcrumb() != null && isStopLoss(c.breadcrumb())) {
                 String stepsKey = "sop:" + tenant + ":steps";
                 store.mapPut(stepsKey, c.docId(), c.text());
                 touched.add(stepsKey);
@@ -507,6 +529,11 @@ public class IngestionRunner implements ApplicationRunner, InitializingBean {
         }
         log.info("SOP 预热完成（按租户分片）: 租户 {} 个, 键 {} 个, ttl={}d",
                 tenants.size(), touched.size(), SOP_TTL.toDays());
+    }
+
+    /** 段名闭集来自注入的领域包：多标记任一命中即预热；不在此处硬编码领域词。 */
+    private boolean isStopLoss(String breadcrumb) {
+        return domain.stopLossMarkers().stream().anyMatch(breadcrumb::contains);
     }
 
     /**

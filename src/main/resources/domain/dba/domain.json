@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "id": "dba",
+  "corpus_path": "offline/domains/dba/corpus/chunks.jsonl",
+  "stop_loss_markers": ["止血与恢复"],
+  "diagnostic_markers": ["核查步骤"],
+  "diagnostic_excludes": ["误判", "陷阱"]
+}
