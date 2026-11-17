@@ -18,7 +18,10 @@
 
 ## 证据绑定（契约起草时）
 
-- **基底**：main tip `422732453f285d8fe24190c6e90ccd0823bb931d`（2026-11-16）。
+- **基底**：main tip `04acce6`（2026-11-16，含 PR #86/#83 签收）；`4227324..04acce6`
+  对 `src/main/java/com/opspilot/action` 与 `src/test/java/com/opspilot/action` **零改动**
+  （`git diff --stat 4227324..04acce6 -- src/main/java/com/opspilot/action src/test/java/com/opspilot/action`
+  为空），故 4.2 节行为基线仍以 `4227324` 的实现在语义上成立。
 - **起草分支**：`docs/readonly-policy-contract`（独立 worktree
   `C:/Users/Shing/AppData/Local/Temp/opspilot-task2-readonly-policy`）。
 - **起草时 `git status --short`**：干净（契约提交前为空）。
@@ -113,13 +116,18 @@ SQL 首关键字 → 工具/外壳/动词门 → `toolReadOnly`（外壳递归 /
 拒绝规则（任一命中即启动期 `IllegalStateException`，不静默忽略、不回落默认值）：
 
 1. **未知 `schema_version`**：不是整数 `1`（含 `1.0`、字符串 `"1"`、缺失）→ 失败。
-2. **未知键**：根节点多/少键；`verbs` 里出现 `KNOWN_TOOLS` / `VERB_TOOLS` 以外的工具键；
+2. **未知键**：根节点多/少键；`verbs` 里出现 `VERB_TOOLS` 以外的工具键；
    `subverbs` 里出现 `verbs` 以外的工具键；子动词对象里出现该工具动词集以外的键；任何层级
    出现 schema 未定义的键 → 失败。
 3. **未知工具**：`tools` 的每一项、`verbs` 的每个键、`subverbs` 的每个键，必须在
    `KNOWN_TOOLS` 闭集（63 个：56 个 `TOOLS` ∪ 7 个 `VERBS` 独有工具）内；否则失败。
    `sh`/`bash`/`zsh`/`dash`/`ash`/`powershell`/`pwsh`/`ssh`/`find`/`sed` **不在**
    `KNOWN_TOOLS` 内——数据列出即失败（它们是机制入口，不能借内容扩权）。
+   `KNOWN_TOOLS` 与 `VERB_TOOLS` 必须是 `ReadOnlyCommandPolicyData` 内的
+   `private static final Set<String>` 字面量（63 / 10 项），**不得从 `tools()` / `verbs()`
+   派生**。`VERB_TOOLS` 恰为 10 个多态工具；`KNOWN_TOOLS` = 56 个纯读工具 ∪ 7 个
+   `VERBS` 独有工具（`kubectl`、`docker`、`git`、`systemctl`、`service`、`jcmd`、`redis-cli`）。
+   若把它们写成数据派生，"未知工具"判据会退化成同义反复，AC-2 直接 FAIL。
 4. **动词家族闭集**：`verbs` 的键必须**恰为** 10 个多态工具
    `kubectl/docker/git/systemctl/service/timedatectl/chronyc/openssl/jcmd/redis-cli`；
    多一个或少一个 → 失败。这保证数据不能在"纯读工具"与"多态工具"之间搬动工具，
@@ -287,6 +295,13 @@ SQL 首关键字 → 工具/外壳/动词门 → `toolReadOnly`（外壳递归 /
 - 新增测试 `loadedContentEqualsFrozenSets` 证明加载后的三张表与 AC-4 冻结集合逐项相等。
   这条测试是"数据单一事实源"的最终判据——即使有人把字面量偷偷加回机制，集合相等测试
   仍会暴露内容漂移。
+- **已知宇宙不是数据自证**：`KNOWN_TOOLS` / `VERB_TOOLS` 必须是
+  `ReadOnlyCommandPolicyData` 的 `private static final Set<String>` 字面量（63 / 10 项），
+  **不得**由 `tools()` / `verbs()` 派生；新增测试 `knownUniverseEqualsFrozenSets` 逐项断言
+  这两个集合与本节冻结内容相等。机械判据：
+  `grep -nE 'private static final Set<String> (KNOWN_TOOLS|VERB_TOOLS)' src/main/java/com/opspilot/action/ReadOnlyCommandPolicyData.java`
+  必须 **≥2 命中**，且源码中不得出现 `Set.copyOf(tools())` / `Set.copyOf(verbs().keySet())`
+  这类派生写法。
 
 **AC-3 数据 schema 严格且 fail-closed。** 第 3.2 节 12 条规则逐条有测试或机械判据，且：
 - 未知 `schema_version` / 未知顶层键 / 未知工具 / 未知动词家族 / 未知子动词键 →
@@ -297,6 +312,11 @@ SQL 首关键字 → 工具/外壳/动词门 → `toolReadOnly`（外壳递归 /
   大小写归一；
 - 文件缺失/不可读/非法 JSON/类型错误 → 启动失败；
 - 只从 classpath 固定路径读取，无环境变量/HTTP/租户覆盖/热加载面，不回落默认值。
+- `ReadOnlyCommandPolicyDataTest` 必须包含以下**具名**负向测试（缺少任一即 FAIL）：
+  `unknownToolFails`、`unknownVerbFamilyFails`、`duplicateJsonKeyFails`、`emptySetFails`、
+  `missingResourceFails`、`unreadableResourceFails`、`invalidSchemaVersionFails`；
+  重复 JSON 键不得用 `python json.load` 证明（它静默取后值），必须由加载器自身的严格解析
+  测试证明。
 
 **AC-4 冻结内容逐项相等。** `src/main/resources/policy/readonly-command-policy.json`
 必须逐项等于下方冻结内容（数组顺序不作判据，集合相等即可）：
@@ -442,10 +462,17 @@ grep -nE 'private static final (Set<String> TOOLS|Map<String, Set<String>> VERBS
 grep -n 'ReadOnlyCommandPolicyData.load()' src/main/java/com/opspilot/action/ReadOnlyCommandPolicy.java
 grep -rn 'policy/readonly-command-policy.json' src/main/java
 
-# AC-3 / AC-4 数据文件 schema 与冻结内容
+# AC-3 / AC-4 数据文件 schema 与冻结内容（严格重复键检测）
 python - <<'PY'
 import json
-d = json.load(open('src/main/resources/policy/readonly-command-policy.json', encoding='utf-8'))
+
+def no_dupes(pairs):
+    keys = [k for k, _ in pairs]
+    assert len(keys) == len(set(keys)), f'duplicate JSON key: {keys}'
+    return dict(pairs)
+
+d = json.load(open('src/main/resources/policy/readonly-command-policy.json', encoding='utf-8'),
+              object_pairs_hook=no_dupes)
 assert d['schema_version'] == 1
 assert len(d['tools']) == 56
 assert set(d['verbs']) == {'kubectl','docker','git','systemctl','service',
@@ -455,6 +482,14 @@ assert set(d['subverbs']) == {'redis-cli'}
 assert sum(len(v) for v in d['subverbs']['redis-cli'].values()) == 27
 print('L0 schema/content ok')
 PY
+
+# AC-2 / AC-3 已知宇宙与负向测试必须存在
+grep -nE 'private static final Set<String> (KNOWN_TOOLS|VERB_TOOLS)' \
+  src/main/java/com/opspilot/action/ReadOnlyCommandPolicyData.java
+for t in unknownToolFails unknownVerbFamilyFails duplicateJsonKeyFails emptySetFails \
+         missingResourceFails unreadableResourceFails invalidSchemaVersionFails; do
+  grep -q "void $t" src/test/java/com/opspilot/action/ReadOnlyCommandPolicyDataTest.java
+done
 
 # AC-5 既有 18 条零删改
 git diff -U0 -- src/test/java/com/opspilot/action/ReadOnlyCommandPolicyTest.java \
@@ -557,6 +592,16 @@ git diff --name-only origin/main...HEAD \
 5. 另起 `chore(accept)` 提交追加签收记录，不改判据。
 
 ## 12. 修订记录
+
+### R1（2026-11-17，草案修订）
+
+- **基底更新**：`origin/main` 到 `04acce6`；确认 `4227324..04acce6` 对 `src/main/java/com/opspilot/action`
+  与 `src/test/java/com/opspilot/action` 零改动，4.2 节行为基线不变。
+- **补 P1 判据**：`KNOWN_TOOLS` / `VERB_TOOLS` 必须是 `ReadOnlyCommandPolicyData` 的字面量，
+  不得由数据派生；新增 `knownUniverseEqualsFrozenSets` 与 7 条具名负向测试，防止"未知工具"
+  判据退化为同义反复。
+- **验证脚本**：重复 JSON 键改用 `object_pairs_hook` 严格检测（`json.load` 会静默取后值）。
+- **仍未冻结、未实现**；等待 Lead 人审。
 
 ### R0（2026-11-16，草案）
 
