@@ -139,6 +139,7 @@ cron（Linux 部署版；本机手动跑同样有效）：
 
 | 静态 SOP 缺 `auth_level` 维度（ADR-0020 理由③ 登记：`IngestionRunner.warmSop` 只按 tenant 分区、`SopFallbackService.lookup` 不收 `authLevel`，L2 直出时 level-2 止损段对 level-1 主体可达） | 出现一次"低密级主体在 L2 静态 SOP 直出中读到高于自身 `auth_level` 的止损段"且被真人/QA 复现（判据：能指到具体 query 与 `auth_level` 组合的审计行）→ 立项给 `warmSop` 分区键与 `lookup` 签名加 `auth_level` 维度 | 只读立场不豁免：它是 ADR-0008 在 L2 静态 SOP 面上的缺口。**在它修掉之前，对外不得宣称"静态 SOP 也按密级隔离"**（ADR-0020 已写此口径）；L2 直出只在降级期发生，故暴露面受限 |
 | 插件契约提取（[ADR-0029](docs/adr/0029-reuse-boundary-trust-base-vs-domain-plugins.md) 决策 2 五件事的接口化：去重键归一化策略 / 命令白名单数据 / Runbook 提供方 / Prompt 模板 / 语料来源声明为契约） | **rule of three**：第三个真实用例需要同一接口点时才提取（第一个=排障、第二个=ADR-0028 执行闭环的 runbook 引擎落位），不为不存在的用例提前抽象；每次提取独立走验收链路 | 分层判据已立（底座包不含领域词汇，可升级为 CI 词法门闩）；五件事的接口点现状登记在 ADR-0029 决策 2 的表中，触发前**不动代码** |
+| 第二领域薄切片（[ADR-0031](docs/adr/0031-second-reference-implementation.md) / 契约 [second-domain-accept](plans/second-domain-accept.md)）：语料来源 + SOP/诊断段名已数据化为领域包（`opspilot.domain` 单值选择，默认 sre、未知启动失败） | 薄切片通过独立验收后，下一份契约按「Prompt/文案外置 → `ingest/` 纳入领域词门闩 → 指纹归一化（MySQL errno/SQLSTATE）」顺序择一；每项独立冻结、独立验收 | 命令判定机制 / Prompt / 文案 / 指纹 / 权限本切片零改动；DBA 包下 Prompt 与 mock 回答仍是 SRE 形状（**已知限制**，本切片不声明 DBA 文案）；领域是部署选择，不是租户/权限维度 |
 
 ### 5.1 历史遗留项的触发线收敛（2026-09-17）
 

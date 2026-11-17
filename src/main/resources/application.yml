@@ -73,6 +73,9 @@ spring:
       password: ${REDIS_PASSWORD:}   # P3：中间件凭据只从环境注入；空=无认证（CI/单测形态）
 
 opspilot:
+  # ADR-0031 薄切片：领域是部署期的单值选择，默认 sre、未知即启动失败、不自动回退。
+  # 生产由 DomainRegistry 解析并构造器注入，没有全局回落；领域不是租户/权限维度。
+  domain: ${OPSPILOT_DOMAIN:}
   storage:
     # live=真中间件（缺则启动失败，与历史行为一致）| memory=内存实现，零外部依赖（ADR-0022）。
     # **不自动回退**：探不到中间件只打印一条可执行的提示，然后照常失败——配置期事实不该

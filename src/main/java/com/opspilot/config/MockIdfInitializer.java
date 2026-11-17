@@ -9,8 +9,10 @@ import java.util.ArrayList;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import com.opspilot.domain.DomainPack;
 import com.opspilot.llm.MockEngine;
 
 /**
@@ -25,10 +27,20 @@ public class MockIdfInitializer {
     private final OpsPilotProperties props;
     private final String chunksPath;
 
-    public MockIdfInitializer(OpsPilotProperties props,
-                              @Value("${opspilot.chunks-path:offline/corpus/chunks.jsonl}") String chunksPath) {
+    /**
+     * 生产构造器（ADR-0031 D3）：语料默认路径来自注入的领域包；
+     * {@code opspilot.chunks-path} 仍是部署者可信的运维覆盖口（保留）。
+     */
+    @Autowired
+    public MockIdfInitializer(OpsPilotProperties props, DomainPack domain,
+                              @Value("${opspilot.chunks-path:}") String chunksPath) {
         this.props = props;
-        this.chunksPath = chunksPath;
+        this.chunksPath = chunksPath.isBlank() ? domain.corpusPath() : chunksPath;
+    }
+
+    /** test-only / 兼容构造器：委托到 {@link DomainPack#sre()}，生产 bean 走上面的注入构造器。 */
+    public MockIdfInitializer(OpsPilotProperties props, String chunksPath) {
+        this(props, DomainPack.sre(), chunksPath);
     }
 
     @PostConstruct

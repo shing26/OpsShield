@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "id": "sre",
+  "corpus_path": "offline/corpus/chunks.jsonl",
+  "stop_loss_markers": ["止损操作"],
+  "diagnostic_markers": ["排查"],
+  "diagnostic_excludes": ["陷阱", "误判"]
+}
