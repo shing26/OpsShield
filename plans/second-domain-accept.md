@@ -352,6 +352,34 @@ git diff --name-only origin/main...HEAD \
 
 ### R3（2026-11-17，冻结）
 
+## 人审签收（2026-11-18）
+
+- **签收人**：Lead（shing26）；**载体**：PR #92；**合并**：squash → `5bfba3f`
+  （分支 `feat/second-domain-impl` 保留，head `12594c8`）。
+- **验证历程**：单轮独立 verifier。实现由另一会话在独立 worktree 完成
+  （自报 Java 463 / Python 656 全绿，不构成证据）；verifier 在干净 worktree
+  `opspilot-verify-second-domain` 亲跑契约 §8，**AC-1…AC-9 全部 PASS**，
+  验证前后 `git status --short` 为空。
+- **关键证据**（verifier 亲跑）：`mvn -o test` 463/0/0/0；`pytest offline/tests -q`
+  656 passed；`check_domain_words.py` 退 0、`--strict` 退 1 且仅两条既有 EXEMPT；
+  `doc_numbers` / `provenance` / `check_public_copy` / `check_panel_contract` /
+  `redteam`（32/32）全退 0；DBA 语料重生成 SHA256 与入库 `chunks.jsonl` 一致；
+  变更面恰 20 个 Allowed paths 文件，契约/ADR/门闩/既有测试/`pom.xml`/CI 零 diff。
+- **人审四问**（签收即表示无异议）：
+  1. **证据充分性**：无异议——verifier 亲跑、证据绑定实现 HEAD `12594c8`、
+     CI 11/11 全绿可复核。
+  2. **判据纪律**：无异议——无改/删/弱化断言、无跳测试不记录、无关 lint/typecheck、
+     实现方自评未被采信；契约判据 R3 原样未动。
+  3. **变更面封闭**：无异议——仅 20 个 Allowed paths 文件；`application.yml` 仅新增
+     `domain` 一行及 2 行注释；禁用 Java 路径、`offline/corpus`、`scripts`、`.github`
+     零改动。
+  4. **遗留边界**：**接受为已知项**——本切片无 Prompt/文案外置与 golden 集（ADR-0031
+     已登记）；`DomainContentTest` 未单列 `:code:` / `:service:` 键断言（代码路径零
+     diff）；嵌套未知键由根键闭集结构性 fail-closed 覆盖。Issue #89（命令产额为 0）
+     合并后另立契约；Issue #91（`jcmd` 大写动词不可达）走独立安全评审。
+- **禁令复核**：未以改/删/弱化断言换通过、未跳测试不记录、未关检查消警、
+  实现方未自宣通过、未绕过人审、本次合并有书面签收。
+
 - **决定**：Lead（shing26）书面签收，契约由草案转为冻结；判据未改。
 - **三项签收**：
   1. 批准薄切片范围（语料来源 + SOP/诊断段名），Prompt/文案推迟；
