@@ -19,8 +19,11 @@
 
 ## 证据绑定（契约起草时）
 
-- **main tip**：`7df3c03f9793ec19eb69bdd255851e914377227c`（2026-11-16，PR #86 领域词门闩）。
-- **设计分支**：`design/second-domain`，已把 `origin/main` 合入（merge `4a86bc6`，不 rebase）。
+- **main tip（本稿更新）**：`04acce6`（2026-11-16，PR #83 签收）；设计稿基于 `7df3c03`
+  （PR #86 领域词门闩），`7df3c03..04acce6` 对 `domain/`、`ingest/`、`action/`、`config/`
+  **零改动**，故 AC-2/AC-5/AC-6 的事实不变。
+- **设计分支**：`design/second-domain`，已把 `origin/main` 合入（merge `4a86bc6`；2026-11-17
+  再合入 `04acce6`，不 rebase）。
 - **契约/ADR 的位置**：`plans/second-domain-accept.md` 与
   `docs/adr/0031-second-reference-implementation.md` 是**先合入 main 的输入**；实现分支从
   包含它们的 main 切出，因此它们**不出现在实现 diff 里**。契约提交单独登记，不用它反推实现
@@ -346,6 +349,14 @@ git diff --name-only origin/main...HEAD \
 任一条 FAIL → 退回实现方，契约不变，修复后从同一契约重验。
 
 ## 契约修订记录
+
+### R2（2026-11-17，草案修订）
+
+- **基底更新**：`origin/main` 前进到 `04acce6`；`7df3c03..04acce6` 对 `domain/`、`ingest/`、
+  `action/`、`config/` 零改动，判据未改。
+- **范围外显式登记**：2026-11-17 dogfood 发现的命令契约产额缺口（`rb-115`/`rb-103`
+  在 Top-3 引用下 `actions=0`）**不在**本薄切片内——本切面只改段名来源，不改检索/chunking。
+  另立 [issue #89](https://github.com/shing26/OpsShield/issues/89) 与后续契约；本契约不新增该 AC。
 
 ### R1（2026-11-16，薄切片收窄）
 
