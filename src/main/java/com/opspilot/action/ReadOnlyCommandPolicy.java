@@ -49,80 +49,11 @@ public final class ReadOnlyCommandPolicy {
             Set.of("sh", "bash", "zsh", "dash", "ash", "powershell", "pwsh", "ssh");
 
     /**
-     * 第 1 层：第一 token 白名单（闭集）。只收"读"是唯一语义的诊断二进制。
-     * 有意<b>不收</b>的：解释器与可执行脚本入口（{@code java}/{@code python}/{@code node}/
-     * {@code mysql}/{@code psql}——客户端语义随语句走，无法在词法层收敛）、
-     * 文件/进程变更器（{@code rm}/{@code mv}/{@code cp}/{@code tee}/{@code chmod}/{@code chown}/
-     * {@code kill}/{@code taskkill}/{@code truncate}）、流量捕获（{@code tcpdump} 默认落 pcap 文件）、
-     * 落盘型下载（{@code wget} 默认把响应写进当前目录）、执行器 {@code env}
-     * （{@code env rm -rf /} 的首词会过任何白名单，2026-10-11 评审批移出），
-     * 以及多态但未收敛子动词的网络配置四件套
-     * （{@code ip}/{@code ifconfig}/{@code route}/{@code arp} 都能改路由表与网卡）。后两者的
-     * 收敛成本高于收益、语料也没用到——真需要时照 {@code VERBS} 的现例补子动词闭集即可。
+     * 第 1/2 层成员关系表的唯一事实源是 classpath 数据文件（ADR-0029 第二个切面）：
+     * 工具白名单、多态工具动词集、子动词集由 {@link ReadOnlyCommandPolicyData} 严格加载；
+     * 四层判定机制与逐工具旗标校验仍在本类，判定顺序不变。
      */
-    private static final Set<String> TOOLS = Set.of(
-            // 进程与系统
-            "ps", "top", "uptime", "free", "vmstat", "iostat", "mpstat", "pidstat", "sar",
-            // 文件与文本
-            "ls", "cat", "file", "stat", "head", "tail", "wc", "sort", "uniq", "cut", "tr", "jq",
-            "grep", "egrep", "fgrep", "rg",
-            // 环境
-            "echo", "printf", "date", "printenv", "id", "whoami", "hostname", "uname",
-            "dmesg", "lsb_release",
-            // 网络探测（只发不收）
-            "ping", "traceroute", "tracepath", "ss", "netstat", "dig", "nslookup",
-            "host", "curl",
-            // 时间同步
-            "timedatectl", "chronyc", "ntpq", "ntpstat",
-            // JVM 观测
-            "jps", "jstack", "jstat", "jinfo", "jmap",
-            // 证书
-            "keytool", "openssl",
-            // 系统日志
-            "journalctl"
-    );
-
-    /**
-     * 第 2 层：多态工具的动词闭集。键=第一 token 之后的<b>动词</b>位置（通常是 argv[1]）。
-     * 注意 {@code redis-cli} 的动词前面可能跟连接旗标（{@code -h host}），另行定位（见 {@link #verbIndex}）。
-     */
-    private static final Map<String, Set<String>> VERBS = Map.of(
-            "kubectl", Set.of("get", "logs", "describe", "top", "explain", "api-resources",
-                    "version", "cluster-info", "events", "exec"),
-            "docker", Set.of("ps", "logs", "inspect", "stats", "top", "images", "version",
-                    "info", "port", "exec"),
-            // git 刻意不收 branch/tag/remote：-d/-D/add 是元数据写，旗标闭集成本高于收益
-            // （语料零使用，2026-10-11 评审批收紧）
-            "git", Set.of("status", "log", "ls-files", "show", "diff", "blame", "rev-parse",
-                    "check-ignore", "describe", "shortlog", "grep"),
-            "systemctl", Set.of("status", "list-units", "list-unit-files", "is-active",
-                    "is-enabled", "show", "cat"),
-            "service", Set.of("status"),
-            "timedatectl", Set.of("status", "show", "list-timezones"),
-            "chronyc", Set.of("tracking", "sources", "sourcestats", "clients", "serverstats"),
-            "openssl", Set.of("x509", "s_client", "version", "ciphers"),
-            "jcmd", Set.of("VM.version", "VM.uptime", "VM.info", "VM.flags", "VM.command_line",
-                    "VM.system_properties", "Thread.print", "GC.class_histogram", "GC.heap_info"),
-            "redis-cli", Set.of("info", "slowlog", "cluster", "get", "mget", "exists", "ttl",
-                    "pttl", "type", "scan", "dbsize", "keys", "hget", "hgetall", "lrange",
-                    "smembers", "zrange", "zscore", "config", "memory", "client", "monitor",
-                    "object", "command", "latency", "xinfo", "randomkey")
-    );
-
-    /** 第 2 层的子动词：复合动词的第二 token 闭集（缺省=该动词不再有子动词约束）。 */
-    private static final Map<String, Map<String, Set<String>>> SUBVERBS = Map.of(
-            "redis-cli", Map.of(
-                    "slowlog", Set.of("get", "len"),
-                    "cluster", Set.of("info", "nodes", "slots", "shards"),
-                    "config", Set.of("get"),
-                    "memory", Set.of("usage", "doctor", "stats"),
-                    "client", Set.of("list", "info"),
-                    "object", Set.of("encoding", "refcount", "idletime", "freq"),
-                    "command", Set.of("count", "docs", "info", "getkeys"),
-                    "latency", Set.of("history", "latest", "doctor", "graph"),
-                    "xinfo", Set.of("stream", "groups", "consumers")
-            )
-    );
+    private static final ReadOnlyCommandPolicyData DATA = ReadOnlyCommandPolicyData.load();
 
     /** {@code redis-cli} 取值型旗标：跳过后才是动词（{@code -h host INFO clients}）。 */
     private static final Set<String> REDIS_VALUE_FLAGS = Set.of("-h", "-p", "-n", "-a", "-s", "-u");
@@ -291,7 +222,8 @@ public final class ReadOnlyCommandPolicy {
             return sqlReadOnly(args);
         }
         String tool = args.get(0).toLowerCase(Locale.ROOT);
-        if (!TOOLS.contains(tool) && !SHELLS.contains(tool) && !VERBS.containsKey(tool)) {
+        if (!DATA.tools().contains(tool) && !SHELLS.contains(tool)
+                && !DATA.verbs().containsKey(tool)) {
             return false;
         }
         return toolReadOnly(tool, args, depth);
@@ -346,9 +278,9 @@ public final class ReadOnlyCommandPolicy {
             return args.stream().noneMatch(a -> a.equals("-s") || a.startsWith("--set"));
         }
         // 动词型工具
-        Set<String> verbs = VERBS.get(tool);
+        Set<String> verbs = DATA.verbs().get(tool);
         if (verbs == null) {
-            return true;   // 纯读工具：进得了 TOOLS 白名单即无语义歧义，也无旗标级写形态
+            return true;   // 纯读工具：进得了工具白名单即无语义歧义，也无旗标级写形态
         }
         if (args.size() < 2) {
             return false;   // 动词型工具没带动词（裸 kubectl / 裸 git）不猜
@@ -365,7 +297,7 @@ public final class ReadOnlyCommandPolicy {
         if (!verbs.contains(verb)) {
             return false;
         }
-        Map<String, Set<String>> subs = SUBVERBS.get(tool);
+        Map<String, Set<String>> subs = DATA.subverbs().get(tool);
         if (subs != null && subs.containsKey(verb)) {
             Set<String> allowed = subs.get(verb);
             if (vi + 1 >= args.size() || !allowed.contains(args.get(vi + 1).toLowerCase(Locale.ROOT))) {

@@ -1,9 +1,12 @@
 package com.opspilot.action;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -356,5 +359,108 @@ class ReadOnlyCommandPolicyTest {
         ).forEach(cmd -> assertFalse(ReadOnlyCommandPolicy.isReadOnly(cmd), "git 元数据写被放行: " + cmd));
         assertTrue(ReadOnlyCommandPolicy.isReadOnly("git status"));
         assertTrue(ReadOnlyCommandPolicy.isReadOnly("git log --oneline -5"));
+    }
+
+    // ─────────────── ADR-0029 第二个切面：L0 内容外置后的等价性/冻结内容锁 ───────────────
+
+    /** 加载后的三张表与契约 AC-4 冻结集合逐项相等（数据单一事实源的最终判据）。 */
+    @Test
+    @DisplayName("加载后的三张成员关系表与冻结内容逐项相等")
+    void loadedContentEqualsFrozenSets() {
+        ReadOnlyCommandPolicyData data = ReadOnlyCommandPolicyData.load();
+        assertEquals(Set.of(
+                "ps", "top", "uptime", "free", "vmstat", "iostat", "mpstat", "pidstat", "sar",
+                "ls", "cat", "file", "stat", "head", "tail", "wc", "sort", "uniq", "cut", "tr", "jq",
+                "grep", "egrep", "fgrep", "rg",
+                "echo", "printf", "date", "printenv", "id", "whoami", "hostname", "uname",
+                "dmesg", "lsb_release",
+                "ping", "traceroute", "tracepath", "ss", "netstat", "dig", "nslookup", "host", "curl",
+                "timedatectl", "chronyc", "ntpq", "ntpstat",
+                "jps", "jstack", "jstat", "jinfo", "jmap",
+                "keytool", "openssl", "journalctl"), data.tools(), "工具 56 项");
+        assertEquals(56, data.tools().size(), "工具项数");
+
+        assertEquals(Set.of("kubectl", "docker", "git", "systemctl", "service",
+                "timedatectl", "chronyc", "openssl", "jcmd", "redis-cli"),
+                data.verbs().keySet(), "动词家族 10 个");
+        assertEquals(expectedVerbs(), data.verbs(), "动词闭集逐项相等");
+        assertEquals(87, data.verbs().values().stream().mapToInt(Set::size).sum(), "动词 token 数");
+
+        assertEquals(Set.of("redis-cli"), data.subverbs().keySet(), "子动词家族 1 个");
+        assertEquals(Map.of("redis-cli", Map.of(
+                "slowlog", Set.of("get", "len"),
+                "cluster", Set.of("info", "nodes", "slots", "shards"),
+                "config", Set.of("get"),
+                "memory", Set.of("usage", "doctor", "stats"),
+                "client", Set.of("list", "info"),
+                "object", Set.of("encoding", "refcount", "idletime", "freq"),
+                "command", Set.of("count", "docs", "info", "getkeys"),
+                "latency", Set.of("history", "latest", "doctor", "graph"),
+                "xinfo", Set.of("stream", "groups", "consumers"))),
+                data.subverbs(), "子动词闭集逐项相等");
+        assertEquals(27, data.subverbs().get("redis-cli").values().stream()
+                .mapToInt(Set::size).sum(), "子动词 token 数");
+    }
+
+    /** 契约 4.2 节 24 个输入的 verdict 逐项断言：内容外置不改变任何一层的判定。 */
+    @Test
+    @DisplayName("数据外置与既有机制的 24 项行为等价表")
+    void dataMechanismEquivalenceTable() {
+        // 真（10 项）
+        for (String cmd : List.of(
+                "ps aux",
+                "journalctl -u opspilot-gateway --since \"1 hour ago\"",
+                "timedatectl status",
+                "kubectl get pods -n prod",
+                "redis-cli -h redis-session-0.prod.internal INFO clients | grep connected",
+                "jstack <pid> | grep -A 20 \"ConsumeMessageThread\"",
+                "sh -c 'cat /etc/os-release'",
+                "ssh -i ~/.ssh/id_rsa gateway-1 'cat /var/log/app/error.log'",
+                "curl -s -o /dev/null -w \"%{http_code}\" https://gateway.example/health",
+                "sort /etc/passwd")) {
+            assertTrue(ReadOnlyCommandPolicy.isReadOnly(cmd),
+                    "等价表期望 true，实际判拒: " + cmd);
+        }
+        // 假（14 项）：含 jcmd 大写动词折叠、find/sed 不可达分支的既有保守偏差
+        for (String cmd : List.of(
+                "rm -rf /tmp/cache",
+                "kubectl delete pod payment-7d9f4",
+                "redis-cli FLUSHALL",
+                "git push origin main",
+                "jcmd VM.version",
+                "find /data -name '*.tmp' -delete",
+                "sed -i 's/a/b/' f",
+                "ls $(rm -rf /data)",
+                "cat <(rm -rf /data)",
+                "kubectl get pods; rm -rf /data",
+                "sh -c 'sh -c \"bash -c 'sh -c ls'\"'",
+                "openssl x509 -in a.pem -out forged.pem",
+                "dmesg -C",
+                "curl -X POST localhost:8080/api/v1/search/reindex")) {
+            assertFalse(ReadOnlyCommandPolicy.isReadOnly(cmd),
+                    "等价表期望 false，实际放行: " + cmd);
+        }
+    }
+
+    private static Map<String, Set<String>> expectedVerbs() {
+        return Map.of(
+                "kubectl", Set.of("get", "logs", "describe", "top", "explain", "api-resources",
+                        "version", "cluster-info", "events", "exec"),
+                "docker", Set.of("ps", "logs", "inspect", "stats", "top", "images", "version",
+                        "info", "port", "exec"),
+                "git", Set.of("status", "log", "ls-files", "show", "diff", "blame", "rev-parse",
+                        "check-ignore", "describe", "shortlog", "grep"),
+                "systemctl", Set.of("status", "list-units", "list-unit-files", "is-active",
+                        "is-enabled", "show", "cat"),
+                "service", Set.of("status"),
+                "timedatectl", Set.of("status", "show", "list-timezones"),
+                "chronyc", Set.of("tracking", "sources", "sourcestats", "clients", "serverstats"),
+                "openssl", Set.of("x509", "s_client", "version", "ciphers"),
+                "jcmd", Set.of("VM.version", "VM.uptime", "VM.info", "VM.flags", "VM.command_line",
+                        "VM.system_properties", "Thread.print", "GC.class_histogram", "GC.heap_info"),
+                "redis-cli", Set.of("info", "slowlog", "cluster", "get", "mget", "exists", "ttl",
+                        "pttl", "type", "scan", "dbsize", "keys", "hget", "hgetall", "lrange",
+                        "smembers", "zrange", "zscore", "config", "memory", "client", "monitor",
+                        "object", "command", "latency", "xinfo", "randomkey"));
     }
 }
