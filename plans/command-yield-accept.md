@@ -53,16 +53,19 @@ Issue #89 初判为"检索包含 + chunk 粒度 + 段名策略"。复核代码�
 
 ## 变更面（实现 diff）
 
-实现文件（**恰 6 个**）：
+实现文件（**恰 7 个**）：
 
-- `src/main/java/com/opspilot/action/ReadOnlyActionExtractor.java`（只新增一个包可见静态帮助方法，
-  供选槽判断"该 chunk 是否有可抽取的只读围栏命令"；`extract` 行为不变）
+- `src/main/java/com/opspilot/action/ReadOnlyActionExtractor.java`（只新增一个 `public static`
+  帮助方法，供跨包选槽判断"该 chunk 是否有可抽取的只读围栏命令"；仅帮助方法，不构成接口/SPI；
+  `extract` 行为不变）
 - `src/main/java/com/opspilot/retrieval/HybridSearchService.java`（选槽后处理）
 - `src/main/java/com/opspilot/metrics/OpsMetrics.java`（新增计数器
   `aiops.retrieval.diagnostic_leaf_swap`，仅 Prometheus）
 - `src/test/java/com/opspilot/retrieval/HybridSearchServiceTest.java`（只追加）
 - `src/test/java/com/opspilot/action/ActionYieldGoldenTest.java`（新增；语料级 golden）
-- `README.md`、`docs/repo-map.md`（Java 单测数与 badge 同步；实现文件 6 个 + 文档 2 个，见下）
+- `src/test/java/com/opspilot/action/ReadOnlyActionExtractorTest.java`（**只允许** §AC-6a 枚举的
+  一处误报修正 + 两条变异测试）
+- `README.md`、`docs/repo-map.md`（Java 单测数与 badge 同步；实现文件 7 个 + 文档 2 个，见下）
 
 语料与派生（**只允许这 4 个路径出现 diff**）：
 
@@ -97,8 +100,9 @@ Issue #89 初判为"检索包含 + chunk 粒度 + 段名策略"。复核代码�
 **AC-2 选槽保位规则（唯一允许的引用组成变化）。**
 在 `HybridSearchService` 选出 `top` 之后、返回 `SearchOutcome` 之前执行，规则必须**同时**满足：
 1. 只对 `top[0].docId()` 生效；不引入其他文档的 chunk；
-2. 仅当 `top` 中该文档没有任何 chunk 属于"诊断段"（面包屑第二段命中 `DomainPack.diagnosticMarkers`
-   且不含 `diagnosticExcludes`）时触发；
+2. 仅当 `top` 中该文档没有任何 chunk 属于"可抽取诊断叶"（面包屑第二段命中
+   `DomainPack.diagnosticMarkers`、不含 `diagnosticExcludes`，且围栏块内至少一条命令通过
+   `ReadOnlyCommandPolicy.isReadOnly`）时触发；
 3. 候选叶必须来自该文档、来自本次候选池（rerank 路径取 rerank 候选池，fast path 取 fused 池）、
    属于诊断段、且围栏块内**至少一条命令**通过 `ReadOnlyCommandPolicy.isReadOnly`；
 4. 替换槽位：优先替换 `top` 中该文档里面包屑少于 3 段的最低排名 chunk（文档标题 / 段头）；
@@ -143,6 +147,19 @@ Issue #89 初判为"检索包含 + chunk 粒度 + 段名策略"。复核代码�
 - `bash scripts/smoke.sh` 通过；`python offline/action_contract_probe.py` 不运行也可（无活体
   ES/Qdrant 时），但 `offline/action_contract_probe.py` 与 `offline/tests/` 零 diff；
 - `aiops.guard.action_commands_rejected` 语义不变（判拒即递增）。
+
+**AC-6a 误报修正的范围（R2 新增，唯一授权改动）。**
+`ReadOnlyActionExtractorTest.liveCorpusSweepIsVerbatimAndSectionSafe` 的"写操作/警告段黑名单"
+当前扫描**整条 breadcrumb**；rb-115 的 H1 标题是「…排查与处置手册…」，chunker 把 H1 放进每级
+breadcrumb，导致任何 rb-115 诊断叶都误报。允许的修正**仅限**：
+- 把黑名单检查从整条 `a.breadcrumb()` 改为**段名层级**（按 `" > "` 切分后的第二段；
+  少于两段即 FAIL）；`止损/修复/处置/误判/陷阱` 五个词一个不少；
+- 新增两条变异测试：
+  (a) `disposalSectionStillExcluded`：面包屑 `Doc > 处置` + 围栏 `ps aux` → 抽不出 action；
+  (b) `docTitleWithDisposalWordDoesNotBlockDiagnosticLeaf`：面包屑
+  `…排查与处置手册… > 排查步骤 > 第四步` + 围栏 `ps aux` → 能抽出 action；
+- `acts.size() >= 38`、`acts.size() <= 120`、`rejected >= 5`、逐字性断言全部不动；
+- 该文件其他方法体零改动；不得删除或弱化任何断言。
 
 **AC-7 全量测试与文档门闩。**
 - `mvn -o test` 全绿；`python -m pytest offline/tests -q` 全绿；
@@ -332,3 +349,15 @@ git diff --name-only origin/main...HEAD -- src/main/resources/policy \
 - **Lead 决定**：接受 Q1/Q2 的引用组成变化（refs 仍为 3、仅 Top-1 同文档保位）；
   允许修改 `rb-115`/`rb-103` 的只读排查段。
 - **冻结**：Lead 书面冻结并授权派实现；判据未改；实现未开始。
+
+### R2（2026-11-18，冻结后修订：误报修正授权）
+
+- **触发**：实现方实测 `ReadOnlyActionExtractorTest.liveCorpusSweepIsVerbatimAndSectionSafe`
+  失败——该断言扫描整条 breadcrumb，而 rb-115 的 H1 标题含「处置」，导致任何 rb-115 诊断叶
+  必被误判为"写操作段"。
+- **修订**：授权把该黑名单检查改为**段名层级**（`" > "` 第二段），五个黑名单词不变；新增
+  两条变异测试证明"处置段仍拒、标题含处置不误伤"。其余断言与阈值零改动。
+- **同时澄清**：① `ReadOnlyActionExtractor` 的帮助方法为 `public static`（跨包调用，不构成
+  接口/SPI）；② AC-2 的触发条件统一为"可抽取诊断叶"（诊断段 + 至少一条过 L0 的围栏命令），
+  与 AC-3 一致。
+- **判据未变**：refs 仍为 3、仅 Top-1 同文档保位、金标准 actions>=1；本次只消除测试误报。
