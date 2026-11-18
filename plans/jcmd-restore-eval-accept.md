@@ -185,3 +185,40 @@ python -m pytest offline/tests -q                 # 656 passed（数量以实测
   「68 篇」→「69 篇」计数行，不改口径文字；`doc_numbers.json` 仍不在 Allowed paths
   （登记表是判据本体，改它等于削门闩，禁止）。
 - **判据未变**：AC-1…AC-5 口径不变；本次只修"检索型计数引用与变更面冻结的冲突"。
+
+## 人审签收（2026-11-19）
+
+- **签收人**：Lead（shing26，书面"签收 PR #97"）；**合并**：squash → `1673517`
+  （分支 `feat/jcmd-restore-docs-impl` 保留，head `e8844d8`）。
+- **验证历程**：单轮独立 verifier。实现由另一会话在独立 worktree 完成
+  （自报全绿，不构成证据）；verifier 在干净 worktree `opspilot-verify-jcmd-restore`
+  亲跑 AC-1…AC-5 全部 PASS，验证首尾 `git status --short` 为空；CI 11/11 全绿。
+- **关键证据**（verifier 亲跑）：变更面 8 文件恰为 Allowed paths 子集、src/** 与
+  三处锁（15 条矩阵 / cc-004~006 / KNOWN_TOOLS=62 / VERB_TOOLS=9）零 diff；
+  `build_chunks.py` 确定性零 diff（chunks=459）；`doc_numbers`（33 条/48 处）、
+  `provenance`（chunks=459、golden=68、语料 70 篇）、`answer_eval --check`
+  （answers=11 / codes=21 / rate=100%）、`check_public_copy`、`check_panel_contract`
+  全退 0；`mvn -o test` 492/0/0/0；`pytest` 656 passed；红队 35/35、SKIP 0、泄漏 0；
+  接地报告 `chunks_sha256` 与 PROVENANCE、文件实算三方一致。
+- **人审四问**（签收即表示无异议）：
+  1. **证据充分性**：无异议——verifier 亲跑、实现方日志未被采信、证据可重跑。
+  2. **判据纪律**：无异议——评估切片判据（AC-1…AC-5）未动；三处锁零改动；
+     rb-116 围栏纪律实测满足（围栏内 jcmd 计数=0，命令全在白名单）。
+  3. **变更面封闭**：无异议——恰 8 文件；R1 补充的 `docs/positioning-aiops.md`
+     仅计数行；禁用路径零 diff；`doc_numbers.json` 未动。
+  4. **遗留边界**：**接受为已知项**——见下"登记的偏离与边界"。
+- **禁令复核**：未以改/删/弱化断言换通过、未跳测试不记录、未关检查消警、
+  实现方未自宣通过、未绕过人审、本次合并有书面签收。
+
+### 登记的偏离与边界
+
+- **V4 语态门 mock 口径 2 项 FAIL**：与 #94 R3 同一已知形态产物（mock-template
+  固定答案无 hedge）；V9 接地 PASS（codes=21、无据 0），live 口径的 V4 门不弱化。
+- **验证程序回灌（R1，不改判据）**：① 本机系统 `bash` 指向 WSL
+  （`C:\Windows\System32\bash.exe`）会无限挂起，`check_panel_contract` 与红队须用
+  `E:\Git\bin\bash.exe` 全量执行；② verifier 复跑红队会重生成
+  `offline/redteam/report/*`（时间戳/耗时/action 计数 diff，35 项无翻转）——验证后
+  须按 HEAD 还原，`offline/redteam/**` 保持冻结零 diff。
+- **决策留档链**：jcmd 能力口径现由 ADR-0017 附记三层承载（2026-11-18 删除附记 →
+  2026-11-19 评估附记）；如再演进，建议收敛为独立 ADR 或状态表，避免附记链过长
+  （契约风险条 4 的既有建议，未变）。
