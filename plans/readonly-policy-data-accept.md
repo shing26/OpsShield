@@ -662,3 +662,9 @@ git diff --name-only origin/main...HEAD \
 - **回灌**：后续验证 `fault_drill.sh` 前须清理测试运行产生的 `logs/` 产物（或在干净
   worktree 中先生成单链审计文件）。本次 Verifier 按此口径复跑，B 段篡改检测已真实行使。
 - **边界**：本条只修验证程序，AC-1…AC-10 的判据、阈值、期望集合均未改动。
+
+> **计数取代指针（2026-11-19）**：本契约 AC-4 的"10 家族 / 87 动词 / 27 子动词"冻结集合
+> 已被 `jcmd-verb-case-accept`（PR #95，选 A 删除 jcmd 死面）取代——现行为
+> **9 家族 / 78 动词 / 62 KNOWN_TOOLS**（`redis-cli` 子动词家族保留：9 复合动词 / 27 子动词）。
+> 本契约判据正文按历史快照保留、不追改；现行单一事实源见
+> `plans/jcmd-verb-case-accept.md` 与其签收记录。

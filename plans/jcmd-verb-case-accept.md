@@ -243,3 +243,41 @@ grep -rn "jcmd" src/main/resources/policy src/main/java/com/opspilot/action/Read
 - **Lead 决定（2026-11-18）**：选 **A 删除 jcmd 死面**；本契约改写为 A 方案。
 - **冻结**：Lead 书面冻结并授权派实现；判据由"扩权可达矩阵"改为"收缩全拒矩阵 + 计数同步"；
   实现未开始。
+
+## 人审签收（2026-11-19）
+
+- **签收人**：Lead（shing26，书面"签收 PR #95"）；**合并**：squash → `d3af41d`
+  （分支 `feat/jcmd-removal-impl` 保留，head `5df58ac`，rebase 到 main `0a04917`）。
+- **验证历程**：两轮独立 verifier，均绑定 HEAD + `git status --short` 首尾为空。
+  ① 实现轮（head `2c4b703`）：干净 worktree 亲跑 AC-1…AC-10 全部 PASS；
+  `mvn -o test` 478/0/0/0、`pytest` 656 passed、红队 35/35（0 泄漏、0 SKIP）。
+  ② rebase 增量轮（head `5df58ac`）：逐文件 patch-id 证明 jcmd 自身改动与 `2c4b703`
+  完全一致、无 rebase 夹带（16 文件差异全部归因 #94 新 main 或测试数同步）；
+  `mvn -o test` 492/0/0/0、`pytest` 656 passed、`@Test` 实测 492 与 README badge /
+  正文 / repo-map 三处一致；数据口径 56 工具 / 9 家族 78 动词 /
+  `KNOWN_TOOLS=62` / `VERB_TOOLS=9`；CI 11/11 全绿（run 44350736884，redteam 在
+  新 HEAD 上通过；红队文件 patch-id 未变，本地 35/35 证据沿用）。
+- **人审四问**（签收即表示无异议）：
+  1. **证据充分性**：无异议——两轮 verifier 亲跑、实现方日志未被采信。
+  2. **判据纪律**：无异议——收缩全拒矩阵 + 计数闭集判据未动；`jcmd` 从数据文件
+     彻底移除且不扩权；既有测试零删改（红队用例新增 cc-004/005/006，Java 15 条矩阵
+     为权威正负锁）。
+  3. **变更面封闭**：无异议——`origin/main...HEAD` 恰 17 个 Allowed paths 文件；
+     禁止路径零 diff；rebase 无夹带。
+  4. **遗留边界**：**接受为已知项**——见下"登记的偏离与边界"。
+- **禁令复核**：未以改/删/弱化断言换通过、未跳测试不记录、未关检查消警、
+  实现方未自宣通过、未绕过人审、本次合并有书面签收。
+
+### 登记的偏离与边界
+
+- **红队 report `commit` 字段**：提交内 report 记录的是中间提交 `552bb88`
+  （同样 35/35）；rebase 后未重跑本地红队，CI redteam job 在 `5df58ac` 上通过。
+- **cc-004 / cc-006 空契约通过**：Java 15 条矩阵才是权威正负锁；三条受控 chunk 用例
+  的检索命中依赖 memory 栈，属辅助证据。
+- **AC-5 措辞与实现的偏差**：契约写"解析夹具改为其他已知工具"，实现为删除该条目
+  （schema 要求 `verbs` 键恰等于 `VERB_TOOLS`，合成夹具不可行）；判据
+  （schema 允许大写、加载器不归一）由剩余矩阵覆盖，未弱化。
+- **旧契约计数指针**：已按契约处置路径第 4 条放进本次 `chore(accept)` 提交
+  （`readonly-policy-data-accept.md` 末尾追加 AC-4 取代指针），不改旧契约判据正文。
+- **`jcmd` 独有能力缺口**：`VM.system_properties` 等暂不可达；`jps`/`jstack`/`jstat`/
+  `jinfo`/`jmap` 仍覆盖主要只读诊断；如需恢复须另立扩权评审。
