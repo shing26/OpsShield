@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-18T19:40:14+08:00",
+  "generated_at": "2026-11-19T02:04:29+08:00",
   "produced_by": "offline/eval/evaluate.py",
   "reproduce": "cd offline && python eval/build_golden.py && python eval/evaluate.py   # 需活体栈；live 数字还需 DASHSCOPE_API_KEY",
   "report_mode": "live",
@@ -9,12 +9,12 @@
     "embedding": "dashscope:text-embedding-v3"
   },
   "corpus_docs": {
-    "sha256": "3899b82a646ca0e8597d9188dfb83ec1a73aea671be3088db7eafd23a6fa26ad",
-    "files": 69
+    "sha256": "ebcff83a8ce3b8996ce6f545175282843ed586a78f874906946a375efde4c8eb",
+    "files": 70
   },
   "chunks": {
-    "sha256": "9059b6ce119b13fa06e26e32a837245ee13b43cb7c9809e71be1f6d9a99c2f5f",
-    "lines": 450
+    "sha256": "e1a873afb729efd4f504ed31eaa3df1a09dd02bb1a458096d8fef9914ecf6bae",
+    "lines": 459
   },
   "golden": {
     "sha256": "8e6b7584254b1008f530be2d19bb231e35e61dfcacc3babb12b7ab2742a64d27",
