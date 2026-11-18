@@ -67,7 +67,7 @@ Issue #89 初判为"检索包含 + chunk 粒度 + 段名策略"。复核代码�
   一处误报修正 + 两条变异测试）
 - `README.md`、`docs/repo-map.md`（Java 单测数与 badge 同步；实现文件 7 个 + 文档 2 个，见下）
 
-语料与派生（**只允许这 4 个路径出现 diff**）：
+语料与派生（**只允许这 5 个路径出现 diff**；R3 勘误，原 4 + `grounding_report.json`）：
 
 - `offline/corpus/runbooks/rb-115-h2-corruption-recovery.md`
 - `offline/corpus/runbooks/rb-103-port-occupied-wrong-service.md`
@@ -380,3 +380,40 @@ git diff --name-only origin/main...HEAD -- src/main/resources/policy \
   （3 个 main + 3 个 test，含 R2 授权修改的 `ReadOnlyActionExtractorTest.java`）；
   已按 `origin/main...feat/command-yield-impl` 的实测变更面更正，判据口径不变。
 - **判据未变**：refs=3、actions>=1、逐字性、变更面与安全边界均不变；本次只补"报告同代"。
+
+## 人审签收（2026-11-19）
+
+- **签收人**：Lead（shing26，书面"签收 PR #94"）；**合并**：squash → `f5100ce`
+  （分支 `feat/command-yield-impl` 保留，head `da3508d`）。
+- **验证历程**：两轮独立 verifier，均绑定 HEAD + `git status --short` 首尾为空。
+  ① 实现轮（head `f673270`）：干净 worktree 亲跑全部 Verification commands，
+  AC-1…AC-10 全部 PASS；`mvn -o test` 491/0/0/0、`pytest` 656 passed、
+  金标准 rb-115 `actions=4` / rb-103 `actions=2` / 中文查询 `actions=2`（refs 均 3）。
+  ② R3 增量轮（head `da3508d`）：实现代码自 `f673270` 零 diff（src/main src/test 恰 6 个）；
+  接地报告 `chunks_sha256` 与当前语料、PROVENANCE 三方一致（`9059b6ce…`），
+  `chunks_lines=450`、`answers=11`、`codes_total=21`、`codes_ungrounded=0`；
+  `answer_eval --check` 亲跑 exit 0；CI 11/11 全绿（run 44347713146，含 provenance）。
+- **人审四问**（签收即表示无异议）：
+  1. **证据充分性**：无异议——两轮 verifier 亲跑、实现方日志未被采信、证据可重跑。
+  2. **判据纪律**：无异议——refs=3、Top-1 同文档保位、金标准 actions>=1 判据未动；
+     R3 只补"报告同代"门闩，未放宽任何既有阈值。
+  3. **变更面封闭**：无异议——恰 15 个路径 = 原 14 + `grounding_report.json`；
+     `golden_dataset.jsonl` 零 diff；禁用路径零 diff。
+  4. **遗留边界**：**接受为已知项**——见下"登记的偏离与边界"。
+- **禁令复核**：未以改/删/弱化断言换通过、未跳测试不记录、未关检查消警、
+  实现方未自宣通过、未绕过人审、本次合并有书面签收。
+
+### 登记的偏离与边界
+
+- **V4 mock 形态失败（不在 R3 判据内）**：mock-template 答案恒以「## 问题定位」开头、
+  无 hedge 语态，V4-colloquial/V4-formal 在 mock 口径下 FAIL。V4 是 live 软上限判据
+  （脚本 docstring：上限=探针选词，升级触发线见 OPS 债务闹钟表/ADR-0010），R3 只要求
+  报告由 V2/V4/V9 在 memory+mock 重生成 + `answer_eval --check` 同代零无据。
+  live 口径的 V4 门保持原状、不弱化、不豁免。
+- **报告 backend=mock**：报告自身 `known_boundary` 已声明 mock 下接地判据恒真；
+  R3 门闩证明的是"报告与当前语料同代且零无据"，不是 live 接地质量。
+- **既有残余风险（上轮已登记，本轮未变化）**：`topRelevance` 在选槽前计算（换下标 0 时
+  置信度取替换前）；rerank 候选池未进 Top-3 的叶 rerank 分常为 0，排序实际由
+  RRF/`chunk_id` 兜底。
+- **勘误**：AC-1 变更面 5→6 个实现文件、"语料与派生"4→5 个路径，均已随本提交更正，
+  判据口径不变。
