@@ -73,6 +73,8 @@ Issue #89 初判为"检索包含 + chunk 粒度 + 段名策略"。复核代码�
 - `offline/corpus/runbooks/rb-103-port-occupied-wrong-service.md`
 - `offline/corpus/chunks.jsonl`（由 `offline/chunkers/build_chunks.py` 确定性重生成）
 - `offline/eval/reports/PROVENANCE.json`（由 `offline/provenance.py --stamp` 重登记）
+- `offline/eval/reports/grounding_report.json`（由 `offline/qa_gen_quality_probes.py V2 V4 V9`
+  在 memory+mock 活体栈按新语料重生成；R3 新增）
 
 数字引用（**只允许这 4 个路径出现 diff**）：
 
@@ -92,8 +94,10 @@ Issue #89 初判为"检索包含 + chunk 粒度 + 段名策略"。复核代码�
 ## Acceptance criteria
 
 **AC-1 变更面封闭。**
-- 实现文件 `git diff --name-only origin/main...HEAD -- src/main src/test` 恰为 5 个
-  （4 个 Java + 1 个新增测试；`README.md`/`docs/repo-map.md` 另计）。
+- 实现文件 `git diff --name-only origin/main...HEAD -- src/main src/test` 恰为 6 个
+  （3 个 main + 3 个 test；其中 `ActionYieldGoldenTest.java` 为新增测试，
+  `ReadOnlyActionExtractorTest.java` 为 R2 授权追回的既有测试；R3 勘误，
+  `README.md`/`docs/repo-map.md` 另计）。
 - 语料派生 diff 只允许出现在上述 4 个路径；`offline/eval/golden_dataset.jsonl` 零 diff。
 - 禁用路径零 diff（见上）。
 
@@ -166,6 +170,7 @@ breadcrumb，导致任何 rb-115 诊断叶都误报。允许的修正**仅限**�
 - `cd offline && python chunkers/build_chunks.py` 重跑后 `chunks.jsonl` **零 diff**（确定性）；
 - `python offline/doc_numbers.py --check` 退 0（含新的 chunk 数、单测数）；
 - `python offline/provenance.py --check` 退 0；`python scripts/check_public_copy.py --check` 退 0；
+- `cd offline && python eval/answer_eval.py --check` 退 0（接地报告与新语料同代）；
 - `bash scripts/check_panel_contract.sh` 退 0；
 - README 的 `Java_Tests-<n>_Passed` badge 与 `grep -rE '^\s*@Test\b' src/test --include=*.java`
   的实际值一致；`docs/repo-map.md` 同步。
@@ -268,6 +273,7 @@ cd offline && python chunkers/build_chunks.py && cd ..
 git diff --exit-code -- offline/corpus/chunks.jsonl && echo "chunks 重生成零 diff（预期）"
 python offline/doc_numbers.py --check
 python offline/provenance.py --check
+cd offline && python eval/answer_eval.py --check && cd ..
 python scripts/check_public_copy.py --check
 bash scripts/check_panel_contract.sh
 ACTUAL=$(grep -rE '^\s*@Test\b' src/test --include=*.java | wc -l | tr -d ' ')
@@ -361,3 +367,16 @@ git diff --name-only origin/main...HEAD -- src/main/resources/policy \
   接口/SPI）；② AC-2 的触发条件统一为"可抽取诊断叶"（诊断段 + 至少一条过 L0 的围栏命令），
   与 AC-3 一致。
 - **判据未变**：refs 仍为 3、仅 Top-1 同文档保位、金标准 actions>=1；本次只消除测试误报。
+
+### R3（2026-11-18，冻结后修订：接地报告同代门闩）
+
+- **触发**：PR #94 的 CI `provenance` 作业运行 `cd offline && python eval/answer_eval.py --check`
+  失败——`grounding_report.json` 的 `chunks_sha256` 仍是旧语料（报告
+  `156c7af5…` vs 新语料 `9059b6ce…`）。契约原 Verification commands 漏了这条既有 CI 门闩。
+- **修订**：Allowed paths 增加 `offline/eval/reports/grounding_report.json`；AC-7 与
+  Verification commands 增加 `cd offline && python eval/answer_eval.py --check`；
+  报告由 `offline/qa_gen_quality_probes.py V2 V4 V9` 在 memory+mock 活体栈按新语料重生成。
+- **勘误**：AC-1 原文「5 个（4 个 Java + 1 个新增测试）」与实现事实不符——实际 6 个
+  （3 个 main + 3 个 test，含 R2 授权修改的 `ReadOnlyActionExtractorTest.java`）；
+  已按 `origin/main...feat/command-yield-impl` 的实测变更面更正，判据口径不变。
+- **判据未变**：refs=3、actions>=1、逐字性、变更面与安全边界均不变；本次只补"报告同代"。
