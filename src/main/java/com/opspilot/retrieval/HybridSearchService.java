@@ -1,15 +1,18 @@
 package com.opspilot.retrieval;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
+import com.opspilot.action.ReadOnlyActionExtractor;
 import com.opspilot.config.OpsPilotProperties;
+import com.opspilot.domain.DomainPack;
 import com.opspilot.llm.RerankClient;
 import com.opspilot.metrics.OpsMetrics;
 
@@ -33,18 +36,29 @@ public class HybridSearchService {
     private final OpsMetrics metrics;
     private final ExecutorService vt;
     private final OpsPilotProperties props;
+    private final DomainPack domain;
 
+    /** 生产构造器：领域包由 DomainRegistry 注入，段名判据与行动契约抽取共用同一份。 */
+    @Autowired
     public HybridSearchService(@Qualifier("lexicalLeg") RetrievalLeg lexicalLeg,
                                @Qualifier("vectorLeg") RetrievalLeg vectorLeg,
                                RerankClient rerank,
                                OpsMetrics metrics, ExecutorService virtualThreadExecutor,
-                               OpsPilotProperties props) {
+                               OpsPilotProperties props, DomainPack domain) {
         this.lexicalLeg = lexicalLeg;
         this.vectorLeg = vectorLeg;
         this.rerank = rerank;
         this.metrics = metrics;
         this.vt = virtualThreadExecutor;
         this.props = props;
+        this.domain = domain;
+    }
+
+    /** test-only / 兼容构造器：段名判据显式取 SRE 领域包，生产 bean 走上面的注入构造器。 */
+    public HybridSearchService(RetrievalLeg lexicalLeg, RetrievalLeg vectorLeg,
+                               RerankClient rerank, OpsMetrics metrics,
+                               ExecutorService virtualThreadExecutor, OpsPilotProperties props) {
+        this(lexicalLeg, vectorLeg, rerank, metrics, virtualThreadExecutor, props, DomainPack.sre());
     }
 
     public SearchOutcome search(String query, String tenant, int authLevel, String mode) {
@@ -84,9 +98,11 @@ public class HybridSearchService {
         // 变量按真实语义命名：命中即"本次不调 Rerank"，而非字面"只有 ES"。
         boolean noRerank = mode.equals("es_only") || (degraded && vecRes.isEmpty());
         List<ScoredChunk> top;
+        List<ScoredChunk> candidatePool;
         double topRelevance;
         long rerankMs;
         if (fastPath || noRerank) {
+            candidatePool = fused;   // 快路径：候选池即 fused 池
             top = fused.subList(0, Math.min(cfg.finalTopK(), fused.size()));
             topRelevance = 1.0;   // 快路径精确命中 / 降级纯 ES：best-effort 不做 rerank 门控
             rerankMs = 0;         // 0 = **未调用**，不是"很快"（口径见 LegTimings）
@@ -94,10 +110,12 @@ public class HybridSearchService {
             long rrStart = System.nanoTime();
             RerankResult rr = rerankStage(query, fused, cfg);
             rerankMs = (System.nanoTime() - rrStart) / 1_000_000;
+            candidatePool = rr.candidates();   // rerank 路径：候选池是进 rerank 的前 20
             top = rr.chunks();
             // rerank 不可用时不门控（避免误杀），置 1.0；正常则用 Top-1 相关度
             topRelevance = rr.applied() && !top.isEmpty() ? top.get(0).rerankScore() : 1.0;
         }
+        top = preserveTop1DiagnosticLeaf(top, candidatePool);
         long tookMs = (System.nanoTime() - t0) / 1_000_000;
         String effectiveMode = degraded ? (esRes.isEmpty() ? "vector_only" : "es_only") : mode;
         if (degraded && !esRes.isEmpty()) metrics.esOnly();
@@ -105,12 +123,12 @@ public class HybridSearchService {
         return new SearchOutcome(top, effectiveMode, fastPath, degraded, topRelevance, tookMs, legs);
     }
 
-    private record RerankResult(List<ScoredChunk> chunks, boolean applied) {}
+    private record RerankResult(List<ScoredChunk> chunks, List<ScoredChunk> candidates, boolean applied) {}
 
     private RerankResult rerankStage(String query, List<ScoredChunk> fused,
                                      OpsPilotProperties.Retrieval cfg) {
         List<ScoredChunk> candidates = fused.subList(0, Math.min(cfg.rerankTopK(), fused.size()));
-        if (candidates.isEmpty()) return new RerankResult(candidates, false);
+        if (candidates.isEmpty()) return new RerankResult(candidates, candidates, false);
         try {
             List<String> docs = candidates.stream().map(ScoredChunk::text).toList();
             List<RerankClient.Ranked> ranked = rerank.rerank(query, docs, cfg.finalTopK());
@@ -118,13 +136,87 @@ public class HybridSearchService {
             for (RerankClient.Ranked r : ranked) {
                 out.add(candidates.get(r.index()).withRerank(r.score()));
             }
-            return new RerankResult(out, true);
+            return new RerankResult(out, candidates, true);
         } catch (Exception e) {
             // Rerank 失败不致命：回退 RRF 顺序，标记未应用（不触发置信度门控）。
             // G1：必须计数——否则"门控被静默关闭"这件事在指标上不可见（ADR-0012 未登记这条代价）。
             metrics.rerankFailed();
-            return new RerankResult(candidates.subList(0, Math.min(cfg.finalTopK(), candidates.size())), false);
+            return new RerankResult(candidates.subList(0, Math.min(cfg.finalTopK(), candidates.size())),
+                    candidates, false);
         }
+    }
+
+    /**
+     * command-yield-accept AC-2：Top-3 选出后，若 Top-1 文档的引用槽里没有任何诊断叶，
+     * 就用**同一文档候选池里**的一个诊断叶替换一个低信息槽（标题/段头优先，最多 1 个）。
+     * 引用数、其余槽位、Top-1 文档都不变；跨文档候选一律不参与。
+     */
+    private List<ScoredChunk> preserveTop1DiagnosticLeaf(List<ScoredChunk> top,
+                                                         List<ScoredChunk> candidatePool) {
+        if (top.isEmpty() || candidatePool == null || candidatePool.isEmpty()) {
+            return top;
+        }
+        String topDoc = top.get(0).docId();
+        // (2) Top 中该文档已有诊断叶（诊断段 + 可抽取的只读命令）→ 不动。
+        // AC-3 用的是"诊断叶"，与 AC-2(3) 的候选叶判据同源：只有标题/段头而没有
+        // 围栏命令的诊断段槽不算叶——否则 rb-115 的「排查步骤」段头会把保位规则挡死。
+        for (ScoredChunk c : top) {
+            if (topDoc.equals(c.docId())
+                    && ReadOnlyActionExtractor.isDiagnosticActionLeaf(c, domain)) {
+                return top;
+            }
+        }
+        // (3) 候选叶：同文档、诊断段、围栏块内至少一条命令过 L0；确定性排序 rerank→rrf→chunk_id
+        ScoredChunk leaf = candidatePool.stream()
+                .filter(c -> topDoc.equals(c.docId()))
+                .filter(c -> isDiagnosticSection(c.breadcrumb()))
+                .filter(c -> ReadOnlyActionExtractor.isDiagnosticActionLeaf(c, domain))
+                .sorted(Comparator
+                        .comparingDouble(ScoredChunk::rerankScore).reversed()
+                        .thenComparing(Comparator.comparingDouble(ScoredChunk::rrfScore).reversed())
+                        .thenComparing(ScoredChunk::chunkId))
+                .findFirst().orElse(null);
+        if (leaf == null) {
+            return top;
+        }
+        List<ScoredChunk> out = new ArrayList<>(top);
+        // 两轮：先找面包屑 < 3 段的标题/段头槽，没有再退到非诊断段槽；
+        // 每轮取**排名最低**（top 里靠后）的那个，保持被替换槽位的原下标。
+        for (boolean requireLowInfo : new boolean[]{true, false}) {
+            int victim = -1;
+            for (int i = 0; i < out.size(); i++) {
+                ScoredChunk c = out.get(i);
+                if (!topDoc.equals(c.docId())) {
+                    continue;
+                }
+                int segments = c.breadcrumb() == null ? 0 : c.breadcrumb().split(" > ", -1).length;
+                boolean lowInfo = segments < 3;
+                boolean nonDiagnostic = !isDiagnosticSection(c.breadcrumb());
+                if ((requireLowInfo ? lowInfo : nonDiagnostic) && (victim < 0 || i > victim)) {
+                    victim = i;
+                }
+            }
+            if (victim >= 0) {
+                out.set(victim, leaf);
+                metrics.diagnosticLeafSwap();
+                return List.copyOf(out);
+            }
+        }
+        return top;
+    }
+
+    /** 面包屑第二段是否属诊断段（与 DomainPack 段名的匹配口径同源，不含排除词）。 */
+    private boolean isDiagnosticSection(String breadcrumb) {
+        if (breadcrumb == null) {
+            return false;
+        }
+        String[] parts = breadcrumb.split(" > ", -1);
+        if (parts.length < 2) {
+            return false;
+        }
+        String section = parts[1].trim();
+        return domain.diagnosticMarkers().stream().anyMatch(section::contains)
+                && domain.diagnosticExcludes().stream().noneMatch(section::contains);
     }
 
     /** 腿内计时：finally 里记耗时，异常路径也留数（超时腿的耗时正是最该看到的）。 */
