@@ -144,7 +144,7 @@ curl -s -X POST http://localhost:8081/api/v1/admin/cache/flush -H "Authorization
 | --- | --- |
 | 端口 8081 被占 / 启动即退 | `powershell "Get-Process java -ErrorAction SilentlyContinue | Stop-Process -Force"` 重试；`8080` 被本机 nexus-web 占用是既定事实 |
 | `JWT_SECRET 环境变量未设置` | .env 未 source，或行内有前导空格/值带引号 |
-| 检索结果异常少 / mode 一直 es_only | 中间件没起来：`docker compose up -d`；Qdrant 集合空（曾 `down -v`）→ 启动参数加 `--opspilot.ingest=true` 重灌（450 chunks 实测 24.4s，live） |
+| 检索结果异常少 / mode 一直 es_only | 中间件没起来：`docker compose up -d`；Qdrant 集合空（曾 `down -v`）→ 启动参数加 `--opspilot.ingest=true` 重灌（459 chunks 实测 24.4s，live） |
 | rerank 403 | 旧 `gte-rerank` 已停授权；确认 `${RERANK_MODEL:gte-rerank-v2}`（ADR-0002 有修订注记） |
 | `curl -d` 发中文报 400 请求体解析失败 | Git Bash/CMD 的 curl 按本地代码页发中文（GBK 出局）→ 带中文的请求一律走 python（`offline/localapi.py` 的 `post_json`/`stream_chat`） |
 

@@ -199,3 +199,36 @@ L0 只读命令白名单删除：数据文件 `verbs` 去 `jcmd` 键（9 家族 
 15 条 jcmd 形态（裸工具/旗标/PID 动词/无 PID/大小写）一律判拒。上文第 2 条提到的 `jcmd`
 是当时的历史快照，现势以本附记为准；四层判定机制与其他 9 个家族行为零变化。红队侧新增
 三条用例（cc-004~006）以受控语料 chunk + 确定性判定器锁死"契约中不得出现 jcmd"。
+
+
+## 附记：2026-11-19 jcmd 恢复评估（Lead 选 A）
+
+这是 #91 后续切片（契约 `plans/jcmd-restore-eval-accept.md` R1）的评估结论。**Lead 选 A：
+维持现状 + 映射落档**——L0 白名单**不恢复 jcmd**，机制、白名单与三处锁（15 条矩阵、
+cc-004~006、`KNOWN_TOOLS=62` / `VERB_TOOLS=9`）零改动。本附记是 jcmd 诊断能力映射、
+无等价物与永不放行口径的**单一事实源**；OPS §5 只留一行指针，不重复判据。
+
+**诊断子命令 → 既有工具等价映射**（jcmd 形态只作行内文本，不是可执行契约）：
+
+| jcmd 子命令 | 既有工具等价命令 | 说明 |
+| --- | --- | --- |
+| `Thread.print` | `jstack <pid>` | 线程栈快照，已在工具表 |
+| `VM.system_properties` / `VM.flags` | `jinfo <pid>` / `jinfo -flags <pid>` | 系统属性与 JVM 旗标，已在工具表；见下方 JDK 口径注 |
+| `GC.class_histogram` | `jmap -histo <pid>` | 类直方图，已在工具表 |
+| `GC.heap_info` | `jmap -heap <pid>` / `jstat -gc <pid>` | 堆配置/占用与 GC 统计，已在工具表 |
+| `VM.command_line` | `ps -fp <pid>` | 进程命令行，已在工具表（等价可读 `cat /proc/<pid>/cmdline`） |
+| `VM.uptime` / `VM.version` | `jinfo <pid>` | 运行时长与版本口径，已在工具表 |
+
+**JDK 口径注**：`jinfo <pid>` 不带参数时一次打印 sysprops + flags，该形态在 **JDK 17+** 有
+弃用告警；落档与排障指引以显式旗标形态（如 `jinfo -flags <pid>`）为准，不把无参形态
+当作长期口径。该告警只影响命令写法选择，不改变上面的等价关系。
+
+**无等价物清单**：`VM.native_memory` 无白名单等价物——它要求目标 JVM 启动时预埋 NMT
+（`-XX:NativeMemoryTracking=summary|detail`）；没预埋就取不到数据，需另立可观测性评审，
+不以"恢复 jcmd"绕过。
+
+**永不放行清单**：`GC.run`（触发 GC，写语义）、`ManagementAgent.*`（改管理代理配置）、
+`JVMTI.*`（native 代理/插桩面）——三者即使未来另行评估扩权也不进只读面。
+
+排障语料侧的执行映射见 `offline/corpus/runbooks/rb-116-jvm-runtime-diagnostics.md`：
+jcmd 形态仅作行内说明，围栏块里只放既有工具命令，故映射段过段名闸后仍产出只读行动契约。
