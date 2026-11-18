@@ -27,18 +27,18 @@ class ReadOnlyCommandPolicyDataTest {
                 "kubectl": ["get"], "docker": ["ps"], "git": ["status"],
                 "systemctl": ["status"], "service": ["status"],
                 "timedatectl": ["status"], "chronyc": ["tracking"],
-                "openssl": ["x509"], "jcmd": ["VM.version"], "redis-cli": ["slowlog"]
+                "openssl": ["x509"], "redis-cli": ["slowlog"]
               },
               "subverbs": {"redis-cli": {"slowlog": ["get"]}}
             }
             """;
 
-    /** 已知宇宙必须是代码字面量（63 / 10 项），不得由数据派生——否则"未知工具"退化为同义反复。 */
+    /** 已知宇宙必须是代码字面量（62 / 9 项），不得由数据派生——否则"未知工具"退化为同义反复。 */
     @Test
     void knownUniverseEqualsFrozenSets() {
-        assertEquals(63, knownTools().size(), "KNOWN_TOOLS 项数");
+        assertEquals(62, knownTools().size(), "KNOWN_TOOLS 项数");
         assertEquals(Set.of("kubectl", "docker", "git", "systemctl", "service",
-                        "timedatectl", "chronyc", "openssl", "jcmd", "redis-cli"),
+                        "timedatectl", "chronyc", "openssl", "redis-cli"),
                 verbTools(), "VERB_TOOLS 闭集");
         for (String forbidden : Set.of("sh", "bash", "zsh", "dash", "ash", "powershell",
                 "pwsh", "ssh", "find", "sed", "env", "wget", "tcpdump")) {
@@ -54,8 +54,8 @@ class ReadOnlyCommandPolicyDataTest {
                 "timedatectl", "chronyc", "ntpq", "ntpstat",
                 "jps", "jstack", "jstat", "jinfo", "jmap",
                 "keytool", "openssl", "journalctl",
-                "kubectl", "docker", "git", "systemctl", "service", "jcmd", "redis-cli"),
-                knownTools(), "KNOWN_TOOLS 冻结内容（56 纯读 ∪ 7 verbs 独有）");
+                "kubectl", "docker", "git", "systemctl", "service", "redis-cli"),
+                knownTools(), "KNOWN_TOOLS 冻结内容（56 纯读 ∪ 6 verbs 独有）");
     }
 
     @Test
@@ -186,15 +186,16 @@ class ReadOnlyCommandPolicyDataTest {
             assertRejected(VALID.replace("\"slowlog\": [\"get\"]",
                     "\"slowlog\": [\"" + bad + "\"]"), "非法子动词");
         }
-        // 动词闭集允许大写（jcmd 逐字保留），但元字符/空白仍拒绝；大小写归一被禁止。
+        // 动词闭集允许大写（合成夹具验证逐字保留），但元字符/空白仍拒绝；大小写归一被禁止。
         for (String bad : Set.of("*", ".*", " get", "get ", "get;id", "get|id", "VM version",
                 "get$", "get`id`", "get\\n", "get\\t", "get?id", "get[id]", "get{x}",
                 "get(1)", "get>out", "--flag=value", "")) {
             assertRejected(VALID.replace("\"kubectl\": [\"get\"]",
                     "\"kubectl\": [\"" + bad + "\"]"), "非法动词");
         }
-        ReadOnlyCommandPolicyData parsed = ReadOnlyCommandPolicyData.parse(VALID);
-        assertTrue(parsed.verbs().get("jcmd").contains("VM.version"), "jcmd 大写动词原样保留");
+        ReadOnlyCommandPolicyData parsed = ReadOnlyCommandPolicyData.parse(
+                VALID.replace("\"kubectl\": [\"get\"]", "\"kubectl\": [\"Get\"]"));
+        assertTrue(parsed.verbs().get("kubectl").contains("Get"), "合成夹具的大写动词原样保留（不归一）");
     }
 
     @Test

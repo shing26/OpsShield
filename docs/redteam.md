@@ -13,14 +13,14 @@
 
 | 维度 | 数值 |
 |---|---|
-| 红队·用例总数 | 32 |
-| 红队·通过 | 32 |
+| 红队·用例总数 | 35 |
+| 红队·通过 | 35 |
 | 红队·泄漏 | 0 |
 
 完整逐用例结果：[redteam_report.json](../offline/redteam/report/redteam_report.json) ｜
 人读版 [redteam_report.md](../offline/redteam/report/redteam_report.md)。
 
-## 用例类别（8 类 32 条，全部实跑；valid < total 即红）
+## 用例类别（8 类 35 条，全部实跑；valid < total 即红）
 
 | 类别 | 攻击面 | 判据（全部确定性） |
 |---|---|---|

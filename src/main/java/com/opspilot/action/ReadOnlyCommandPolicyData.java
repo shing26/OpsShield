@@ -50,11 +50,11 @@ public final class ReadOnlyCommandPolicyData {
     /** 工具：小写字母数字开头，余下允许点/横杠（{@code redis-cli}、{@code jps} 等）。 */
     private static final Pattern TOOL_TOKEN = Pattern.compile("[a-z0-9][a-z0-9._-]*");
 
-    /** 动词：允许大写，因为现役 {@code jcmd} 动词（{@code VM.version} 等）必须逐字保留。 */
+    /** 动词：允许大写（大写动词数据可与闭集逐字匹配），但加载器不做大小写归一。 */
     private static final Pattern VERB_TOKEN = Pattern.compile("[A-Za-z0-9][A-Za-z0-9._-]*");
 
     /**
-     * 已知工具宇宙（63 项 = 56 个纯读工具 + 7 个 verbs 独有工具）。<b>代码字面量，不从数据派生</b>：
+     * 已知工具宇宙（62 项 = 56 个纯读工具 + 6 个 verbs 独有工具）。<b>代码字面量，不从数据派生</b>：
      * 否则"未知工具"判据退化为同义反复。{@code sh}/{@code bash}/{@code ssh}/{@code find}/
      * {@code sed} 等机制入口刻意不在表内——数据列出即启动失败。
      */
@@ -70,13 +70,13 @@ public final class ReadOnlyCommandPolicyData {
             "jps", "jstack", "jstat", "jinfo", "jmap",
             "keytool", "openssl",
             "journalctl",
-            // 7 个 verbs 独有工具
-            "kubectl", "docker", "git", "systemctl", "service", "jcmd", "redis-cli");
+            // 6 个 verbs 独有工具
+            "kubectl", "docker", "git", "systemctl", "service", "redis-cli");
 
-    /** 恰为 10 个多态工具；动词家族键必须与之精确相等，防止数据把多态工具降级为纯读工具。 */
+    /** 恰为 9 个多态工具；动词家族键必须与之精确相等，防止数据把多态工具降级为纯读工具。 */
     private static final Set<String> VERB_TOOLS = Set.of(
             "kubectl", "docker", "git", "systemctl", "service",
-            "timedatectl", "chronyc", "openssl", "jcmd", "redis-cli");
+            "timedatectl", "chronyc", "openssl", "redis-cli");
 
     private static final Set<String> ROOT_KEYS =
             Set.of("schema_version", "tools", "verbs", "subverbs");
@@ -163,7 +163,7 @@ public final class ReadOnlyCommandPolicyData {
         requireObject(verbsNode, "verbs");
         if (verbsNode.isEmpty() || !verbsNode.propertyNames().containsAll(VERB_TOOLS)
                 || verbsNode.size() != VERB_TOOLS.size()) {
-            throw new IllegalStateException("verbs 的键必须恰为 10 个多态工具 " + VERB_TOOLS);
+            throw new IllegalStateException("verbs 的键必须恰为 9 个多态工具 " + VERB_TOOLS);
         }
         Map<String, Set<String>> verbs = new HashMap<>();
         for (String tool : VERB_TOOLS) {

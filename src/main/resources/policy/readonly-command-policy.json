@@ -25,8 +25,6 @@
     "timedatectl": ["status", "show", "list-timezones"],
     "chronyc": ["tracking", "sources", "sourcestats", "clients", "serverstats"],
     "openssl": ["x509", "s_client", "version", "ciphers"],
-    "jcmd": ["VM.version", "VM.uptime", "VM.info", "VM.flags", "VM.command_line",
-             "VM.system_properties", "Thread.print", "GC.class_histogram", "GC.heap_info"],
     "redis-cli": ["info", "slowlog", "cluster", "get", "mget", "exists", "ttl",
                   "pttl", "type", "scan", "dbsize", "keys", "hget", "hgetall",
                   "lrange", "smembers", "zrange", "zscore", "config", "memory",
