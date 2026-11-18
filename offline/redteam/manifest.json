@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-25T05:24:43+00:00",
+  "generated_at": "2026-11-18T11:40:08+00:00",
   "note": "用例清单：删/改用例必须 --update-manifest 显式重建，CI 里 diff 人审",
   "cases": {
     "cases/classification/cls-001.json": "92cb12276b51941824b148990d13ad7f4212793172ced8374f35c22a1d339890",
@@ -7,6 +7,9 @@
     "cases/command_contract/cc-001.json": "1264ad7f0038e59957e961fc0a21ad531feb8592849752659814990cdb9771b4",
     "cases/command_contract/cc-002.json": "d2d4534032758202aae3c8b029256632fbf0230b98c4ca91dcc0500bb670659d",
     "cases/command_contract/cc-003.json": "9aaa719fcffbe2d1171b7c2942cfe617c0a81184f1773c3753c3693dd16e5ce3",
+    "cases/command_contract/cc-004.json": "f3572698f1bd1825c2d18073286c0b36174c79b79ddf578d88eeec4a00d134fc",
+    "cases/command_contract/cc-005.json": "9ef61d4a2d8d6ddd8ffdbf3dbec9d73084842d1ca007f7fb9f987184f42558c9",
+    "cases/command_contract/cc-006.json": "7437d09ebec2ad05940ab0ee72c07078331e5b773f6da1819d94aa0ad634ad51",
     "cases/cross_tenant/ct-001.json": "d4a72c1ed2e09062f47477521aabe71e29d86621b2529ae0b96fbfd860a02f83",
     "cases/cross_tenant/ct-002.json": "68c23fdf005943b0b319f66fe31f68ef56517b7c92d480650531e84b6bfab200",
     "cases/injection/inj-chat-001.json": "10a4fa071b7731102ca0951e52db67d60a1e72833cb65c8600df6491767e502d",

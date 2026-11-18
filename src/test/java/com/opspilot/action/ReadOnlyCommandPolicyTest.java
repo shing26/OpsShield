@@ -381,10 +381,10 @@ class ReadOnlyCommandPolicyTest {
         assertEquals(56, data.tools().size(), "工具项数");
 
         assertEquals(Set.of("kubectl", "docker", "git", "systemctl", "service",
-                "timedatectl", "chronyc", "openssl", "jcmd", "redis-cli"),
-                data.verbs().keySet(), "动词家族 10 个");
+                "timedatectl", "chronyc", "openssl", "redis-cli"),
+                data.verbs().keySet(), "动词家族 9 个");
         assertEquals(expectedVerbs(), data.verbs(), "动词闭集逐项相等");
-        assertEquals(87, data.verbs().values().stream().mapToInt(Set::size).sum(), "动词 token 数");
+        assertEquals(78, data.verbs().values().stream().mapToInt(Set::size).sum(), "动词 token 数");
 
         assertEquals(Set.of("redis-cli"), data.subverbs().keySet(), "子动词家族 1 个");
         assertEquals(Map.of("redis-cli", Map.of(
@@ -400,6 +400,33 @@ class ReadOnlyCommandPolicyTest {
                 data.subverbs(), "子动词闭集逐项相等");
         assertEquals(27, data.subverbs().get("redis-cli").values().stream()
                 .mapToInt(Set::size).sum(), "子动词 token 数");
+    }
+
+    /**
+     * jcmd 死面收缩后的权威矩阵（契约 AC-3）：家族已从闭集移除，所有形态必须 false。
+     * 含裸工具、旗标、PID + 动词、无 PID 动词、大小写两种动词形态。
+     */
+    @Test
+    @DisplayName("jcmd 全形态从闭集移除后一律判拒（AC-3 权威矩阵 15 条）")
+    void jcmdRemovedFromClosedSet() {
+        List.of(
+                "jcmd",
+                "jcmd -l",
+                "jcmd 1234 help",
+                "jcmd 1234 VM.version",
+                "jcmd 1234 VM.uptime",
+                "jcmd 1234 VM.info",
+                "jcmd 1234 VM.flags",
+                "jcmd 1234 VM.command_line",
+                "jcmd 1234 VM.system_properties",
+                "jcmd 1234 Thread.print",
+                "jcmd 1234 GC.class_histogram",
+                "jcmd 1234 GC.heap_info",
+                "jcmd 1234 GC.run",
+                "jcmd VM.version",
+                "jcmd vm.version"
+        ).forEach(cmd -> assertFalse(ReadOnlyCommandPolicy.isReadOnly(cmd),
+                "jcmd 已移除，仍被放行: " + cmd));
     }
 
     /** 契约 4.2 节 24 个输入的 verdict 逐项断言：内容外置不改变任何一层的判定。 */
@@ -456,8 +483,6 @@ class ReadOnlyCommandPolicyTest {
                 "timedatectl", Set.of("status", "show", "list-timezones"),
                 "chronyc", Set.of("tracking", "sources", "sourcestats", "clients", "serverstats"),
                 "openssl", Set.of("x509", "s_client", "version", "ciphers"),
-                "jcmd", Set.of("VM.version", "VM.uptime", "VM.info", "VM.flags", "VM.command_line",
-                        "VM.system_properties", "Thread.print", "GC.class_histogram", "GC.heap_info"),
                 "redis-cli", Set.of("info", "slowlog", "cluster", "get", "mget", "exists", "ttl",
                         "pttl", "type", "scan", "dbsize", "keys", "hget", "hgetall", "lrange",
                         "smembers", "zrange", "zscore", "config", "memory", "client", "monitor",
