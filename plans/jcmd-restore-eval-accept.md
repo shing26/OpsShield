@@ -144,3 +144,32 @@ python -m pytest offline/tests -q                 # 656 passed（数量以实测
 - 初始草案：#91 A 方案遗留的「jcmd 独有能力恢复」评估；给出 A 维持现状 + 映射落档 /
   B 选择性恢复（扩权）/ C 语料侧替代 三选一，推荐 A。
 - **未冻结、未实现**；等待 Lead 人审与 Q1-Q3 拍板。
+
+### R1（2026-11-19，冻结：Lead 选 A）
+
+- **Lead 决定**：Q1 选 **A 维持现状 + 映射落档**（书面"Q1:选A"）；B/C 否决留档。
+- **Q2 裁定**：Lead 委托判断，按草案倾向定为 **ADR-0017 为映射表单一事实源**，
+  OPS §5 只留一行指针指向 ADR；签收时如不同意可改判（只影响落档位置，不影响判据）。
+- **Q3 不适用**（未选 B）。
+- **落档形态细化（判据澄清，非改动）**：
+  - ADR-0017 新增附记「2026-11-19 jcmd 恢复评估（Lead 选 A）」：逐条映射表
+    （契约事实基线第 3 条）+ 无等价物清单（`VM.native_memory`，需 NMT 预埋）+
+    **永不放行清单**（`GC.run` / `ManagementAgent.*` / `JVMTI.*`，写或配置语义）+
+    JDK 版本口径注（`jinfo <pid>` 无参打印 sysprops+flags 在 JDK 17+ 有弃用告警）。
+  - OPS §5 追加一行指针（不改触发线判据）。
+  - 语料新增 **`offline/corpus/runbooks/rb-116-jvm-runtime-diagnostics.md`**
+    （rb-1xx 本机系列顺延）：映射段中 jcmd 形态**只作行内文本**（不进围栏块，
+    否则会被抽取并被 L0 拒、诊断叶无 actions），既有工具等价命令用**围栏块**
+    （过 L0 产生 actions，金标准/逐字性判据不受影响）。
+- **Allowed paths（冻结）**：`docs/adr/0017-read-only-action-contract.md`、`OPS.md`、
+  `offline/corpus/runbooks/rb-116-jvm-runtime-diagnostics.md`、
+  `offline/corpus/chunks.jsonl`（确定性重生成）、
+  `offline/eval/reports/PROVENANCE.json`（--stamp 重登记）、
+  `offline/eval/reports/grounding_report.json`（如语料变更，按 #94 R3 流程
+  memory+mock 重生成）、`docs/DEMO.md`、`README.md`、`docs/repo-map.md`
+  （后三者仅 chunks/文件计数与测试数同步）。
+- **明确不在 Allowed paths**：`src/**`（含三处锁：15 条矩阵、cc-004~006、
+  KNOWN_TOOLS/VERB_TOOLS）、`offline/redteam/**`、`scripts/**`、
+  `offline/eval/golden_dataset.jsonl`（零 diff）、`application.yml`、其余契约文件。
+- **冻结**：判据口径未变（AC-1…AC-5 为 A/C 落档子集，语料围栏纪律为澄清）；
+  授权派实现。
