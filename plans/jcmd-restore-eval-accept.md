@@ -173,3 +173,15 @@ python -m pytest offline/tests -q                 # 656 passed（数量以实测
   `offline/eval/golden_dataset.jsonl`（零 diff）、`application.yml`、其余契约文件。
 - **冻结**：判据口径未变（AC-1…AC-5 为 A/C 落档子集，语料围栏纪律为澄清）；
   授权派实现。
+
+### R1 补充（2026-11-19，冻结后边界勘误：计数行同步）
+
+- **触发**：实现方实测——`offline/doc_numbers.json` 登记 `postmortem_runbook_docs`
+  （runbooks + postmortems 文件数），唯一 cited_in 为 `docs/positioning-aiops.md:15`
+  的「68 篇复盘/Runbook」；新增 rb-116 后真值变 69，`doc_numbers --check` 必 FAIL，
+  而该文件不在 R1 冻结的 Allowed paths 内。属「Allowed paths 与检索型判据自相矛盾」
+  的已知同型问题（与 #94 R2/R3 同源）。
+- **Lead 裁定**：Allowed paths **补进 `docs/positioning-aiops.md`**，仅限
+  「68 篇」→「69 篇」计数行，不改口径文字；`doc_numbers.json` 仍不在 Allowed paths
+  （登记表是判据本体，改它等于削门闩，禁止）。
+- **判据未变**：AC-1…AC-5 口径不变；本次只修"检索型计数引用与变更面冻结的冲突"。
