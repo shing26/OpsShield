@@ -624,3 +624,41 @@ git diff --name-only origin/main...HEAD \
 - 起草时事实：`ReadOnlyCommandPolicy` 仍为 Java 字面量；`ReadOnlyCommandPolicyTest` 18 条；
   `CommandPolicyData` 已证明加载器形状；`command-policy.json` 与 L1 契约已冻结。
 - **未实现，未冻结**；等待人审决定是否派实现。
+
+## 人审签收（2026-11-18）
+
+- **签收人**：Lead（shing26）；**载体**：PR #93；**合并**：squash → `bc98bba`
+  （分支 `feat/readonly-policy-impl` 保留，head `87395fe`）。
+- **验证历程**：单轮独立 verifier。实现由另一会话在独立 worktree 完成
+  （自报 477 单测 / 656 pytest，不构成证据）；verifier 在干净 worktree
+  `opspilot-verify-readonly-policy` 亲跑契约 §8，**AC-1…AC-10 全部 PASS**，
+  验证首尾 `git status --short` 为空。
+- **关键证据**（verifier 亲跑）：`mvn -o test` 477/0/0/0；`pytest offline/tests -q`
+  656 passed；`redteam` 32/32、0 泄漏、0 SKIP；`smoke.sh` 全绿；
+  `fault_drill.sh` A 段 strict 拒绝 PASS、B 段篡改检测真实行使（改一行 → exit=3）；
+  `doc_numbers` / `check_public_copy` / `check_panel_contract` 全退 0；
+  数据文件 56 工具 / 10 家族 87 动词 / redis-cli 9 复合动词 27 子动词，与冻结集合逐项
+  相等；`git diff --name-only` 恰 8 个 Allowed paths；CI 11/11 全绿。
+- **人审四问**（签收即表示无异议）：
+  1. **证据充分性**：无异议——verifier 亲跑、证据绑定实现 HEAD `87395fe`、可重跑命令
+     齐备。
+  2. **判据纪律**：无异议——既有 18 条测试纯追加零删改；`KNOWN_TOOLS`/`VERB_TOOLS`
+     为字面量闭集；`jcmd` 大写折叠保留、`find`/`sed` 不可达保持；无 ServiceLoader/SPI；
+     实现方自评未被采信。
+  3. **变更面封闭**：无异议——恰 8 个 Allowed paths；`command-policy.json`、L1 判定器、
+     `application.yml`、语料、探针、ADR、CI 零 diff。
+  4. **遗留边界**：**接受为已知项**——pytest 首跑 1 例环回 socket 抖动（复跑全绿，非
+     回归）；`smoke.sh` 首跑环境口径（需按脚本注释设 `JAVA_BIN`/`PYTHON`）；`jcmd` 大写
+     动词不可达行为按契约保留（Issue #91 独立评审）；契约验证程序缺口见下。
+- **禁令复核**：未以改/删/弱化断言换通过、未跳测试不记录、未关检查消警、
+  实现方未自宣通过、未绕过人审、本次合并有书面签收。
+
+### 程序缺口回灌（R3，不改判据）
+
+- **事实**：契约 §8 的命令顺序先 `mvn -o test` 后 `fault_drill.sh`；mvn 测试的多个
+  Spring 上下文会向 worktree 的 git-ignored `logs/audit.jsonl` 写入多段链（后启动上下文
+  在文件为空时以 GENESIS 初始化），导致 `fault_drill.sh` B 段不按 WARN 跳过而直接 FAIL。
+  任何按命令顺序执行的 Verifier 都会踩中。
+- **回灌**：后续验证 `fault_drill.sh` 前须清理测试运行产生的 `logs/` 产物（或在干净
+  worktree 中先生成单链审计文件）。本次 Verifier 按此口径复跑，B 段篡改检测已真实行使。
+- **边界**：本条只修验证程序，AC-1…AC-10 的判据、阈值、期望集合均未改动。
