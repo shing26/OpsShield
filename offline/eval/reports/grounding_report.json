@@ -1,18 +1,18 @@
 {
-  "measured_at": "2026-10-07T02:40:14+08:00",
+  "measured_at": "2026-11-19T00:18:17+08:00",
   "produced_by": "offline/qa_gen_quality_probes.py（V9，复用 V2/V4 已产出答案，零额外 chat 预算）",
   "answers": 11,
-  "codes_total": 15,
+  "codes_total": 21,
   "codes_ungrounded": 0,
   "grounding_rate": 1.0,
   "ungrounded_samples": [],
   "backend": {
-    "llm": "dashscope:qwen-plus",
-    "rerank": "dashscope:gte-rerank-v2",
-    "embedding": "dashscope:text-embedding-v3"
+    "embedding": "mock-lexical-hash",
+    "rerank": "mock-idf-coverage",
+    "llm": "mock-template"
   },
-  "chunks_sha256": "156c7af50bfc8bcf522182c2dffc97db7ebaba35fbcc650105a77d510b9258f1",
-  "chunks_lines": 448,
+  "chunks_sha256": "9059b6ce119b13fa06e26e32a837245ee13b43cb7c9809e71be1f6d9a99c2f5f",
+  "chunks_lines": 450,
   "chat_calls_this_run": 11,
   "judge": "offline/grounding.py——答案里出现的错误码必须落在本轮 refs 的 error_codes 并集内",
   "known_boundary": "只管**错误码**这一种精确符号；runbook 步骤编号（pm-*/rb-*）、配置项名、服务名不在管辖内（要纳入须先给出'有据'的可判读定义，否则门闩变噪音源）。另：mock 后端上本判据恒真（答案是逐字复制 chunk 正文），故本报告只在 live 口径下有意义。"
