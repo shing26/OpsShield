@@ -25,7 +25,7 @@
 | `src/main/java/com/opspilot/` | 在线面：`gateway`(协议/编排) `retrieval` `llm` `resilience` `auth` `cache` `storm` `metrics` `health` `ingest` `chunk` `config` `common`(跨层控制信号) `store`(存储接缝) | ✅ |
 | `src/main/java/com/opspilot/store/` | **存储接缝**（[ADR-0022](adr/0022-standalone-storage-mode.md)）：`KvStore` 窄接口（15 操作）+ `RedisKvStore`/`MemoryKvStore` 两实现 + `StoreConfig` 按 `opspilot.storage.mode` 装配。内存实现**刻意复刻 Redis 语义**（TTL 仅建于创建、闭区间窗口裁剪、成员去重、`mapValues` 无顺序承诺）——不是"够用就行"，否则两套实现会在窗口计数/配额水位上悄悄分叉 | ✅ |
 | `src/main/java/com/opspilot/retrieval/` | 检索腿接缝（[ADR-0022](adr/0022-standalone-storage-mode.md)）：`RetrievalLeg` 接口（ES/Qdrant 与内存腿同形）+ `IdentityFilter`（`tenant × auth_level` 过滤**单一事实源**，检索与覆盖范围共用）+ `InMemoryIndex`/`InMemoryLegs`/`Vectors`（内存词法+向量腿，词法哈希非神经语义）+ `RetrievalWiring`（`lexicalLeg`/`vectorLeg` 命名 bean）。**权限过滤复用同一份判据是构造保证**，不是两套实现各自承诺 | ✅ |
-| `src/test/java/` | 单测与集成（477 用例，`@Test` 声明数） | ✅ |
+| `src/test/java/` | 单测与集成（491 用例，`@Test` 声明数） | ✅ |
 | `src/main/java/com/opspilot/domain/` | **领域包**（[ADR-0031](adr/0031-second-reference-implementation.md) 薄切片）：`DomainPack` 是不可变 record，五字段（id / 语料默认路径 / 止损段 / 诊断段 / 排除词），从 classpath 固定路径严格加载（未知键/schema/空段/相交/正则元字符/越界路径一律启动失败、不回落）；`DomainRegistry` 按 `opspilot.domain` 单值解析并以 lite `@Bean` 供构造器注入。无 SPI / 热加载 / 全局默认。段名来源离开 `ingest/` 与 `action/`；Prompt/文案与命令判定机制本切片零改动 | ✅ |
 | `src/main/resources/domain/` | 领域包 manifest（当前 `sre` / `dba` 两份 `domain.json`），只声明语料默认路径与段名集合；无 prompt 槽位 | ✅ |
 | `offline/domains/` | 第二领域语料根（当前 `dba/corpus/`，≥5 篇 + `chunks.jsonl`），用既有 `build_chunks.py --corpus/--out` 生成；**不进** `offline/corpus/` 的 glob，SRE 计数/`provenance` 不漂移。每篇 `source_incident` 指回既有事故，错误码限定既有集合，诊断段命令必须过现有 L0 策略 | ✅ |

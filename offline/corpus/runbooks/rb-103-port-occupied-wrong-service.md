@@ -27,6 +27,18 @@ curl http://localhost:8091/actuator/health   → 503   ← 这是 ShopPilot biz-
 本机是多项目共存开发机：8080=nexus-web、8091=shoppilot-biz-mock、8092 被占。
 完整占用表见 rb-101（本机辖区清单）。
 
+## 排查步骤
+
+先只读确认端口占用与健康响应，再决定换端口还是停旧实例（不要抢端口）：
+
+```bash
+netstat -ano | grep :8091
+curl -s -o /dev/null -w "%{http_code}" http://localhost:8091/actuator/health
+```
+
+`netstat` 给出 LISTENING 的 pid；`curl` 的 200/503 只用于辨认是谁在服务，
+不改动任何进程。下面的处置按身份判断后再执行。
+
 ## 处置
 
 1. `bash scripts/start_gateway.sh` —— 它会**预检端口占用并点名占用者**（含完整命令行），

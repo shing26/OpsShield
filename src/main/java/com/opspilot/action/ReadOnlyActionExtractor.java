@@ -95,6 +95,46 @@ public class ReadOnlyActionExtractor {
         return out;
     }
 
+    /**
+     * 选槽保位用（command-yield-accept）：该 chunk 是否住着"能产行动契约的诊断叶"——
+     * 面包屑第二段命中领域包诊断段标记且不含排除词，且围栏块里**至少一条**命令通过 L0。
+     *
+     * <p>刻意只复用 {@link #sectionOf} / {@link #fencedBlocks} / {@link #commands} 这三段既有判据，
+     * 不改 {@link #extract} 行为：选槽用的闸与出契约用的闸必须是同一个，否则"选进来却抽不出"
+     * 或"没选却可抽"都会让 Top-3 的引用组成说服不了人。本方法不计数判拒——那只属于真正
+     * 出契约的路径，选槽只是看一眼候选。
+     *
+     * <p>可见性：契约写"包可见"，但调用方在 {@code com.opspilot.retrieval} 包，Java 包可见
+     * 跨包不可调用；为兑现"供选槽判断"的用途，本方法必须是 {@code public static}。
+     */
+    public static boolean isDiagnosticActionLeaf(ScoredChunk chunk, DomainPack domain) {
+        if (chunk == null || domain == null) {
+            return false;
+        }
+        String[] parts = chunk.breadcrumb() == null ? new String[0]
+                : chunk.breadcrumb().split(SEP, -1);
+        if (parts.length < 2) {
+            return false;
+        }
+        String section = parts[1].trim();
+        if (domain.diagnosticMarkers().stream().noneMatch(section::contains)) {
+            return false;
+        }
+        for (String ex : domain.diagnosticExcludes()) {
+            if (section.contains(ex)) {
+                return false;
+            }
+        }
+        for (Fenced fenced : fencedBlocks(chunk.text())) {
+            for (String command : commands(fenced)) {
+                if (ReadOnlyCommandPolicy.isReadOnly(command)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     /** 面包屑 {@code doc > 段 > 小节} 的「段」（第二段）；非诊断段返回空串。 */
     private String sectionOf(String breadcrumb) {
         if (breadcrumb == null) {

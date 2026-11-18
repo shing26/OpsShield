@@ -108,7 +108,7 @@ cron（Linux 部署版；本机手动跑同样有效）：
 
 ## 5. 知识库运维与债务闹钟表
 
-- 语料改动 → `cd offline && .venv/Scripts/python chunkers/build_chunks.py` → `POST /api/v1/admin/reingest`（level≥3；busy 时 409，结果看 `/metrics` 的 `reingest_busy/reingest_last`）。零空窗，白天可操作（实测 448 chunks 24.4s，live、服务端日志口径；mock 后端 8.0s；live+账户限流最坏 ~6min）。**动语料后 `build_golden.py` 必须与 `evaluate.py` 同批跑**——只改语料不重生成评测集，会让报告与语料悄悄分叉（旧 golden 的 `exact-50012` 就是这样与入库语料不自洽的）。
+- 语料改动 → `cd offline && .venv/Scripts/python chunkers/build_chunks.py` → `POST /api/v1/admin/reingest`（level≥3；busy 时 409，结果看 `/metrics` 的 `reingest_busy/reingest_last`）。零空窗，白天可操作（实测 450 chunks 24.4s，live、服务端日志口径；mock 后端 8.0s；live+账户限流最坏 ~6min）。**动语料后 `build_golden.py` 必须与 `evaluate.py` 同批跑**——只改语料不重生成评测集，会让报告与语料悄悄分叉（旧 golden 的 `exact-50012` 就是这样与入库语料不自洽的）。
 - **语料命名纪律**（2026-10-07 撞号事故后立）：md 的 doc_id 由**文件名前缀**（`[a-z]+-\d+`，如 `rb-102-*.md` → `rb-102`）派生，frontmatter 里的 `doc_id` 只是文档性记录、不参与索引。两个文件取同一前缀 = 两篇内容**静默混入同一 doc_id**——引用与 golden 的期望文档从此歧义（实测：rb-101~105 段被新旧两批共占，10 篇在索引里只占 5 个身份，chunks 行数不变、一切照常绿）。`build_chunks.py` 已加 doc_id 唯一性断言 + 回归锁，新语料落盘前先核前缀未占用。
 - **同代性不必靠记性**（2026-09-18 起）：`cd offline && python provenance.py --check` 当场判定"报告是否仍是当前语料的报告"（内容摘要判据，零凭据零网络），CI 的 `provenance` job 跑的就是它。漏跑评测时它会点名哪个输入变了并给出修复命令：`python eval/build_golden.py && python eval/evaluate.py`；`evaluate.py` 会自动刷新出处登记 `eval/reports/PROVENANCE.json`。
 - **交接/对外给证据**：`python scripts/pack_evidence.py`（加 `--zip` 出压缩包）产出自述快照到 `_archive/evidence/`，入口 `MANIFEST.md` 逐项写明出处与"当前模式下能否复核"。默认**不含**本机运行态证据（`logs/`）；要看运行史用 `--include-local-evidence`——**该档含查询内容与租户标识，别原样对外发**。
@@ -154,7 +154,7 @@ cron（Linux 部署版；本机手动跑同样有效）：
 | 告警接入从 bridge 提升为网关原生端点（`/api/v1/alerts/webhook`） | 两组析取项任一成立即到期：① §13 台账里的指纹分布证明确有"真实标签导致的误收敛"需要服务端介入（判据：能指到具体 `fp` 与两条本该不同指纹的告警）；② 出现**桥形态跑不动**的真实部署需求（多实例部署 / 需要网关原生鉴权与配额归属，判据：桥的单实例锁成为实际瓶颈而非纸面限制） | 桥已覆盖单机全部需求；提升为端点要先发明"机器调用者的身份与配额归属"——JWT 是给人（和 agent）用的，Alertmanager 不是账号。这是真实的地基工作，不做在证据之前。**2026-10-17 补注**：方案 C 修的是"误分裂"（碎），**不是**本条触发线①的"误收敛"（本该不同的指纹撞在一起），故这次修复**没有**触碰本条触发线。**2026-10-20 复核·仍未触发**：本机 `logs/alert-bridge.jsonl` 中 25 条带 `alert_id` 且有网关 `fp` 的有效投递记录里，同一 `fp` 对应不同 `alert_id` 的组数为 0；部署仍是单实例，且尚无实际多实例部署或单实例锁造成等待、拒绝、漏告警的证据。故不创建 C3 issue，不进入 spec/tickets/实现 |
 | 指纹契约与真实告警文案的错配（Alertmanager 模板把 `$value` 渲染进注解，同一条告警每次重发都是新指纹 ⇒ L1 与单飞双双失效） | **触发线已兑现（2026-10-17 首次实测即复现）→ 当日定案并实施"方案 C：服务端拆身份"**。实证见 [qa/2026-10-17-alertmanager-intake.md](docs/qa/2026-10-17-alertmanager-intake.md) §3。**判据不是"再做一次实验"**，而是先回答"治不治得了别人写的规则"——方案 A 只在自家规则里成立，故排除；选定 C，使服务端不再从人类可读文案里推断身份。**仍未做（如实登记）**：§3.5 的同身份降级/失败重复穿透是独立问题（见下一行）。跨指纹关联已于当日同轮落成（上一行 / qa §7） | 规则与桥都保持原职：规则照旧把 `$value` 渲染进文案，桥不替网关归一化，只多派生一个与 message 无关的 `alert_id`（四元组 alertname/job/error_code/status）。人工提问与既有自举源不传该字段，逐字回退到原文本指纹，行为不变。**产品面只多一个可选 body 字段**（`ChatRequest.alertId`），无新端点、无新鉴权维度；契约与验收见 §13 / qa §6，定案见 [ADR-0018](docs/adr/0018-alert-identity-split-from-query-fingerprint.md) |
 | 降级/失败路径的告警重复穿透（L1 只缓存"成功且非 SOP"的答案；来源：qa 2026-10-17 §3.5） | 出现一次**真实告警风暴窗**且重复穿透造成可测成本——判据：同一 `alert_id` 在 ≤15 分钟内被投递 ≥3 次、`cache_hit=none`，且该窗内 `degradation_level≠L0` 或 `sent_ok=false` 占多数，并能指到配额/上游调用/延迟任一读数 | 本轮**刻意不动**：这是"降级期答案要不要进 L1"的独立取舍（SOP 不入是 A2-6 的既有决策），与方案 C 的"身份碎"是两回事。当下单飞只能折**并发**同身份请求，折不了 Alertmanager 的**顺序重发**；观测面 = 台账 `alert_id` 分组 + `cache_hit` |
-| 复盘 → 知识回灌（真实排障结论沉淀为可检索语料） | 两组析取项任一成立即到期：① **同一根因的故障被人工复盘 ≥2 次**；② 外部监控 adapter 触发后同批处理。**【2026-10-06 触发线①兑现·已完成第一次真实回灌】**：2026-10-04 宿主 OOM 连杀容器**两次**（同一根因），2026-10-06 写成复盘 `rb-102` 入语料——第二次就该沉淀复用，本条正是这么做的。同批复盘共 5 篇（rb-101 本机辖区清单 / rb-102 容器 OOM / rb-103 端口占用 / rb-104 面板旧缓存 / rb-105 截断 jar），**全部是本机真实发生过的事故**（签名/命令/处置均当晚实测），走 `build_chunks → reingest → evaluate` 全链路入库（448 chunks，live 24.4s 零空窗），并接上**真实 Docker 告警源** `scripts/watchdog_alerts.py`（容器状态翻转 → `source=alert` 走完整编排链，实测 exit 137 告警 → 检索命中 rb-102）。**仍未做（如实登记）**：回灌仍是**人工离线**写 md → 重灌，运行期依旧**无"结论→语料"写路径**（`IngestionRunner` 只读 `chunks.jsonl`；全仓唯一写它的仍是 `build_chunks.py`）——要不要做运行期自动回灌是新决策，不在本触发线范围内；告警看门狗也未进 CI 常驻（与 liveness 同批，待部署环境接线） | 语料现含 68 篇复盘/Runbook（5 篇真实 + 63 篇 fixture），运行期**无"结论→语料"写路径**不变。**陷阱提醒修订**：rb-101~105 **是**做过的故障（当晚实录），其余 63 篇仍是喂检索的 fixture——两者在语料里并存，检索时不区分，但对外引用证据时必须分得清 |
+| 复盘 → 知识回灌（真实排障结论沉淀为可检索语料） | 两组析取项任一成立即到期：① **同一根因的故障被人工复盘 ≥2 次**；② 外部监控 adapter 触发后同批处理。**【2026-10-06 触发线①兑现·已完成第一次真实回灌】**：2026-10-04 宿主 OOM 连杀容器**两次**（同一根因），2026-10-06 写成复盘 `rb-102` 入语料——第二次就该沉淀复用，本条正是这么做的。同批复盘共 5 篇（rb-101 本机辖区清单 / rb-102 容器 OOM / rb-103 端口占用 / rb-104 面板旧缓存 / rb-105 截断 jar），**全部是本机真实发生过的事故**（签名/命令/处置均当晚实测），走 `build_chunks → reingest → evaluate` 全链路入库（450 chunks，live 24.4s 零空窗），并接上**真实 Docker 告警源** `scripts/watchdog_alerts.py`（容器状态翻转 → `source=alert` 走完整编排链，实测 exit 137 告警 → 检索命中 rb-102）。**仍未做（如实登记）**：回灌仍是**人工离线**写 md → 重灌，运行期依旧**无"结论→语料"写路径**（`IngestionRunner` 只读 `chunks.jsonl`；全仓唯一写它的仍是 `build_chunks.py`）——要不要做运行期自动回灌是新决策，不在本触发线范围内；告警看门狗也未进 CI 常驻（与 liveness 同批，待部署环境接线） | 语料现含 68 篇复盘/Runbook（5 篇真实 + 63 篇 fixture），运行期**无"结论→语料"写路径**不变。**陷阱提醒修订**：rb-101~105 **是**做过的故障（当晚实录），其余 63 篇仍是喂检索的 fixture——两者在语料里并存，检索时不区分，但对外引用证据时必须分得清 |
 | 拒答路径 TTFT（persona-eval P2-6） | 拒答延迟进入对外 SLO，或被真人/QA 作为体验问题复现 | 拒答在 LLM 前 return（不烧 token）；慢在检索自身耗时，属检索优化非生成链 |
 | metrics 观测缺口：5xx 计数 / 延迟分位 / 别名指向 / H2 健康 / 最近成功备份时间 | 任一项成为排障瓶颈——判据：再次出现"**只能靠翻日志才能判断**"的事故（2026-09-17 的登录 500 正是此类） | 面板已吸收依赖灯 / 降级档位 / 配额水位 / 在途组；`daily_usage` 有磁盘哨兵 |
 | 超长 query 软上限（persona-eval P2） | 出现超长输入导致的成本或延迟事故，或对外提供公网入口 | 拒答门控 + 单主体日配额 5000 + LLM 调用超时 |
@@ -318,7 +318,7 @@ python scripts/liveness.py --interval 30
 |---|---|---|
 | H2 `./data/users.mv.db`（口令散列 + token_ver 吊销状态） | **唯一不可再生** | `scripts/backup.sh` 每日（网关活着走 `POST /admin/backup`、DB 所有者在线 `BACKUP TO` 事务一致；网关停了走 CLI 嵌入式。**禁止 cp 热拷运行中的库文件**） |
 | `logs/audit.jsonl` | 合规留痕，logback **180 天**滚动（G0）会回收 | backup.sh 一并 tar（本地保 14 天） |
-| ES / Qdrant | **派生索引，不备份**——chunks.jsonl 在 git（ADR-0001），恢复=reingest（实测 448 chunks 24.4s，live、服务端日志口径；mock 8.0s） | 无需动作 |
+| ES / Qdrant | **派生索引，不备份**——chunks.jsonl 在 git（ADR-0001），恢复=reingest（实测 450 chunks 24.4s，live、服务端日志口径；mock 8.0s） | 无需动作 |
 
 **审计防篡改（G1，2026-10-22）**：每行带 `prev_hash`/`hash`（SHA-256 链，首行 `GENESIS`），链头同步落 `logs/.audit-head`；校验：
 
@@ -668,7 +668,7 @@ STORAGE_MODE=memory DASHSCOPE_MODE=mock bash scripts/start_gateway.sh
 
 **怎么看"这次跑的是哪条链路"（不靠人回忆启动命令）**：启动摘要打印
 `storage=memory backend=in-memory（…不承诺检索质量）`，日志里另有
-`[startup-memory] 内存索引装载完成: 448 chunks, 耗时 Nms`；`GET /api/v1/admin/health`（需 platform 门禁）
+`[startup-memory] 内存索引装载完成: 450 chunks, 耗时 Nms`；`GET /api/v1/admin/health`（需 platform 门禁）
 自报：
 
 ```json

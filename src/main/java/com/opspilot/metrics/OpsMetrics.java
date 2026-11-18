@@ -49,6 +49,9 @@ public class OpsMetrics {
     // ADRs 0017：只读行动契约里被命令策略判拒的条数（Prometheus 侧，**不进 snapshot**——
     // 面板契约的键集已锁死，见 check_panel_contract.sh 第二层；这个是抓取侧的可观测性)
     private final Counter actionCommandsRejected;
+    // command-yield-accept：Top-3 里"标题/段头槽被同文档诊断叶替换"的次数（Prometheus-only）。
+    // 面板契约的键集锁死，不进 snapshot——消费者是抓取侧产额观测，不是磁贴。
+    private final Counter diagnosticLeafSwaps;
 
     // G1-W1.4：SLO 直接信号。timer 记分布（分位/直方图），counter 记"发生了多少次"。
     private final Timer ttft;
@@ -114,6 +117,8 @@ public class OpsMetrics {
                 "VerbatimGuard 拦截次数：逐字导出中被出口护栏掩码的句数（按句累计）");
         actionCommandsRejected = counter(registry, "aiops.guard.action_commands_rejected",
                 "只读行动契约里被命令策略判拒的命令条数（ADRs 0017：判拒即丢弃，不静默）");
+        diagnosticLeafSwaps = counter(registry, "aiops.retrieval.diagnostic_leaf_swap",
+                "Top-3 中同文档诊断叶保位替换的次数（command-yield-accept；仅 Prometheus）");
         // 派生比率：无分母时给 0 而不是 NaN——NaN 写进抓取体会让部分 Prometheus 客户端解析失败，
         // 而"还没来过请求"恰是新实例最常见的状态
         gauge(registry, "aiops.storm.suppression.ratio", this, m -> m.ratio(m.dedupAggregated, m.totalRequests),
@@ -141,6 +146,7 @@ public class OpsMetrics {
     public void request() { totalRequests.increment(); }
     public void verbatimMasked(int n) { verbatimMasked.increment(n); }
     public void actionCommandRejected() { actionCommandsRejected.increment(); }
+    public void diagnosticLeafSwap() { diagnosticLeafSwaps.increment(); }
 
     /**
      * 人工反馈计数（verdict 已在 DTO 侧收口为 up|down）。

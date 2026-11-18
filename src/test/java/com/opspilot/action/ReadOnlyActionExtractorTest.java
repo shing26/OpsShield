@@ -244,15 +244,46 @@ class ReadOnlyActionExtractorTest {
         assertTrue(acts.size() >= 38, "可抽命令数低于历史基线（抽取链路疑似退步）: " + acts.size());
         assertTrue(acts.size() <= 120, "可抽命令数异常膨胀（段名闸疑似被放开）: " + acts.size());
         assertTrue(rejected >= 5, "判拒数低于历史基线——策略可能变恒真或计数器没接: " + rejected);
-        // 写操作/警告段的黑名单独立断言：只靠白名单一旦被改成黑名单，这条必红
+        // 写操作/警告段的黑名单独立断言：只靠白名单一旦被改成黑名单，这条必红。
+        // R2/AC-6a：只检查段名层级（面包屑第二段）——H1 标题本身含「处置」是合法语料，
+        // 不能因为标题词而把诊断叶误判成写操作段；五个黑名单词与阈值均不变。
         for (Action a : acts) {
+            String[] crumbs = a.breadcrumb().split(" > ", -1);
+            assertTrue(crumbs.length >= 2, "面包屑不足两段，无法判定段名: " + a.breadcrumb());
+            String section = crumbs[1];
             for (String bad : List.of("止损", "修复", "处置", "误判", "陷阱")) {
-                assertTrue(!a.breadcrumb().contains(bad),
+                assertTrue(!section.contains(bad),
                         "写操作/警告段混进契约: " + a.breadcrumb());
             }
         }
         System.out.println("SWEEP acts=" + acts.size() + " rejected=" + rejected
                 + " chunks=" + chunks.size());
+    }
+
+    // ────────────────────────── R2/AC-6a 变异测试 ──────────────────────────
+
+    /** 变异 (a)：段名本身是「处置」时必须仍然抽不出 action——段名闸没被放宽。 */
+    @Test
+    @DisplayName("R2 变异：处置段仍被排除")
+    void disposalSectionStillExcluded() {
+        ScoredChunk c = chunk("rb-103::s-disposal", "rb-103", "opspilot",
+                "起不来 / 连不上 > 处置",
+                "[起不来 / 连不上 > 处置]\n\n```bash\nps aux\n```\n");
+        assertTrue(extractor().extract(List.of(c)).isEmpty(),
+                "「处置」段必须整段不进契约");
+    }
+
+    /** 变异 (b)：标题含「处置」但段名是诊断段时必须能抽——排除标题层级误报。 */
+    @Test
+    @DisplayName("R2 变异：标题含处置词不阻塞诊断叶")
+    void docTitleWithDisposalWordDoesNotBlockDiagnosticLeaf() {
+        ScoredChunk c = chunk("rb-115::s-preflight", "rb-115", "opspilot",
+                "H2 库文件损坏（无法启动 / chunk 不可恢复）排查与处置手册 > 排查步骤 > 第四步：只读预检",
+                "[H2 库文件损坏（无法启动 / chunk 不可恢复）排查与处置手册"
+                        + " > 排查步骤 > 第四步：只读预检]\n\n```bash\nps aux\n```\n");
+        List<Action> acts = extractor().extract(List.of(c));
+        assertEquals(1, acts.size(), "标题含「处置」不得误伤合法诊断叶");
+        assertEquals("ps aux", acts.get(0).command());
     }
 
     // ────────────────────────── 辅助 ──────────────────────────

@@ -167,4 +167,158 @@ class HybridSearchServiceTest {
         assertTrue(poolTexts.containsAll(List.of("text-A", "text-B", "text-C")),
                 "ES 腿独有 chunk 也必须进池: " + poolTexts);
     }
+
+    // ───────────────── command-yield-accept AC-2/3：选槽保位（只追加，不改上面任何断言）───────────────
+
+    /** 构造一个可被 L0 抽取的诊断叶：面包屑第二段含「排查」，围栏块内一条只读命令。 */
+    private static ScoredChunk leaf(String id, String doc, double rerank, double rrf) {
+        return new ScoredChunk(id, doc, "runbook",
+                "[" + doc + " > 排查步骤 > 预检]\n\n```bash\nnetstat -ano | grep :8091\n```\n",
+                doc + " > 排查步骤 > 预检", "opspilot", List.of(), 1,
+                new ScoredChunk.Scores(1, 0, rrf, rerank));
+    }
+
+    /** 构造低信息槽（标题/段头）：面包屑 < 3 段、不在诊断段。 */
+    private static ScoredChunk header(String id, String doc, String breadcrumb, double rerank, double rrf) {
+        return new ScoredChunk(id, doc, "runbook", "[" + breadcrumb + "]\n# " + breadcrumb,
+                breadcrumb, "opspilot", List.of(), 1,
+                new ScoredChunk.Scores(1, 0, rrf, rerank));
+    }
+
+    @Test
+    void diagnosticLeafReplacesLowestRankedHeaderSlotInTop1Doc() throws Exception {
+        ScoredChunk t1 = header("T1", "rb-103", "rb-103 > 根因", 0.9, 5);
+        ScoredChunk t2 = header("T2", "rb-103", "rb-103 > 验证身份而非端口", 0.8, 4);
+        ScoredChunk other = header("O1", "rb-101", "rb-101 > 处置", 0.7, 3);
+        ScoredChunk candidateLeaf = leaf("LEAF", "rb-103", 0.6, 2);
+        when(es.search(anyString(), anyString(), anyInt(), anyInt()))
+                .thenReturn(List.of(t1, t2, other, candidateLeaf));
+        when(rerank.rerank(anyString(), anyList(), anyInt())).thenReturn(List.of(
+                new RerankClient.Ranked(0, 0.9), new RerankClient.Ranked(1, 0.8),
+                new RerankClient.Ranked(2, 0.7)));
+
+        SearchOutcome out = service().search("端口被占的排查步骤", "tenant-demo", 1, "hybrid");
+
+        assertEquals(3, out.chunks().size(), "引用数恒为 3");
+        assertEquals(List.of("T1", "LEAF", "O1"), ids(out),
+                "应替换 Top-1 文档中排名最低的标题槽（下标 1），其余槽位不变");
+        verify(metrics, times(1)).diagnosticLeafSwap();
+    }
+
+    @Test
+    void noSwapWhenTopAlreadyHasDiagnosticLeaf() throws Exception {
+        ScoredChunk present = leaf("PRESENT", "rb-103", 0.9, 5);
+        ScoredChunk other = header("O1", "rb-101", "rb-101 > 处置", 0.8, 4);
+        ScoredChunk candidateLeaf = leaf("LEAF2", "rb-103", 0.6, 2);
+        when(es.search(anyString(), anyString(), anyInt(), anyInt()))
+                .thenReturn(List.of(present, other, candidateLeaf));
+        when(rerank.rerank(anyString(), anyList(), anyInt())).thenReturn(List.of(
+                new RerankClient.Ranked(0, 0.9), new RerankClient.Ranked(1, 0.8),
+                new RerankClient.Ranked(2, 0.6)));
+
+        SearchOutcome out = service().search("端口被占的排查步骤", "tenant-demo", 1, "hybrid");
+
+        assertEquals(List.of("PRESENT", "O1", "LEAF2"), ids(out), "Top 已含诊断叶时不得再换");
+        verify(metrics, never()).diagnosticLeafSwap();
+    }
+
+    @Test
+    void diagnosticSectionHeaderWithoutCommandsDoesNotBlockSwap() throws Exception {
+        ScoredChunk sectionHead = header("HEAD", "rb-115", "rb-115 > 排查步骤", 0.9, 5);
+        ScoredChunk other = header("O1", "rb-101", "rb-101 > 处置", 0.8, 4);
+        ScoredChunk title = header("TITLE", "rb-115", "rb-115", 0.7, 3);
+        ScoredChunk candidateLeaf = leaf("LEAF", "rb-115", 0.6, 2);
+        when(es.search(anyString(), anyString(), anyInt(), anyInt()))
+                .thenReturn(List.of(sectionHead, other, title, candidateLeaf));
+        when(rerank.rerank(anyString(), anyList(), anyInt())).thenReturn(List.of(
+                new RerankClient.Ranked(0, 0.9), new RerankClient.Ranked(1, 0.8),
+                new RerankClient.Ranked(2, 0.7)));
+
+        SearchOutcome out = service().search("H2 库损坏的排查步骤", "tenant-demo", 1, "hybrid");
+
+        assertEquals(List.of("HEAD", "O1", "LEAF"), ids(out),
+                "只有诊断段头（无围栏命令）不算诊断叶，应继续保位；替换同文档排名最低的标题槽（下标 2）");
+        verify(metrics, times(1)).diagnosticLeafSwap();
+    }
+
+    @Test
+    void noSwapWhenCandidatePoolHasNoReadableDiagnosticLeaf() throws Exception {
+        ScoredChunk t1 = header("T1", "rb-103", "rb-103 > 根因", 0.9, 5);
+        ScoredChunk t2 = header("T2", "rb-103", "rb-103 > 处置", 0.8, 4);
+        ScoredChunk other = header("O1", "rb-101", "rb-101 > 处置", 0.7, 3);
+        ScoredChunk unreadable = new ScoredChunk("BAD", "rb-103", "runbook",
+                "[rb-103 > 排查步骤]\n\n```bash\nrm -rf data\n```\n",
+                "rb-103 > 排查步骤", "opspilot", List.of(), 1,
+                new ScoredChunk.Scores(1, 0, 2, 0.6));
+        when(es.search(anyString(), anyString(), anyInt(), anyInt()))
+                .thenReturn(List.of(t1, t2, other, unreadable));
+        when(rerank.rerank(anyString(), anyList(), anyInt())).thenReturn(List.of(
+                new RerankClient.Ranked(0, 0.9), new RerankClient.Ranked(1, 0.8),
+                new RerankClient.Ranked(2, 0.7)));
+
+        SearchOutcome out = service().search("端口被占的排查步骤", "tenant-demo", 1, "hybrid");
+
+        assertEquals(List.of("T1", "T2", "O1"), ids(out), "候选池无可抽取诊断叶时原样返回");
+        verify(metrics, never()).diagnosticLeafSwap();
+    }
+
+    @Test
+    void crossDocumentCandidateLeafIsRejected() throws Exception {
+        ScoredChunk t1 = header("T1", "rb-103", "rb-103 > 根因", 0.9, 5);
+        ScoredChunk t2 = header("T2", "rb-103", "rb-103 > 处置", 0.8, 4);
+        ScoredChunk other = header("O1", "rb-101", "rb-101 > 处置", 0.7, 3);
+        ScoredChunk foreign = leaf("FOREIGN", "rb-115", 0.6, 2);  // 别的文档的诊断叶
+        when(es.search(anyString(), anyString(), anyInt(), anyInt()))
+                .thenReturn(List.of(t1, t2, other, foreign));
+        when(rerank.rerank(anyString(), anyList(), anyInt())).thenReturn(List.of(
+                new RerankClient.Ranked(0, 0.9), new RerankClient.Ranked(1, 0.8),
+                new RerankClient.Ranked(2, 0.7)));
+
+        SearchOutcome out = service().search("端口被占的排查步骤", "tenant-demo", 1, "hybrid");
+
+        assertEquals(List.of("T1", "T2", "O1"), ids(out), "不得跨文档选叶");
+        verify(metrics, never()).diagnosticLeafSwap();
+    }
+
+    @Test
+    void leafSelectionIsDeterministicByRerankThenRrfThenId() throws Exception {
+        ScoredChunk t1 = header("T1", "rb-103", "rb-103 > 根因", 0.9, 5);
+        ScoredChunk t2 = header("T2", "rb-103", "rb-103 > 处置", 0.8, 4);
+        ScoredChunk other = header("O1", "rb-101", "rb-101 > 处置", 0.7, 3);
+        // 注意：RrfFuser 构造候选时 rerank 分恒 0（只有进入 Top 的 chunk 才有 rerank 分），
+        // 因此候选叶的实际排序键是 rrf 分；这里用不同 rrf 验证确定性排序的第二级。
+        ScoredChunk leafLowRerank = leaf("A-LOW", "rb-103", 0.5, 9);
+        ScoredChunk leafHighRerank = leaf("B-HIGH", "rb-103", 0.65, 1);
+        when(es.search(anyString(), anyString(), anyInt(), anyInt()))
+                .thenReturn(List.of(t1, t2, other, leafLowRerank, leafHighRerank));
+        when(rerank.rerank(anyString(), anyList(), anyInt())).thenReturn(List.of(
+                new RerankClient.Ranked(0, 0.9), new RerankClient.Ranked(1, 0.8),
+                new RerankClient.Ranked(2, 0.7)));
+
+        SearchOutcome first = service().search("端口被占的排查步骤", "tenant-demo", 1, "hybrid");
+
+        assertEquals(List.of("T1", "A-LOW", "O1"), ids(first), "候选叶按 rrf 分确定性排序");
+    }
+
+    @Test
+    void fastPathSwapUsesFusedPoolAndKeepsRefsCount() throws Exception {
+        String code = "51103_H2_CONCURRENT_WRITE_CORRUPTION";
+        ScoredChunk t1 = new ScoredChunk("T1", "rb-115", "runbook", "[rb-115 > 适用症状]\n# 适用症状",
+                "rb-115 > 适用症状", "opspilot", List.of(code), 1, new ScoredChunk.Scores(1, 0, 0, 0));
+        ScoredChunk t2 = header("T2", "rb-115", "rb-115 > 处置", 0, 4);
+        ScoredChunk other = header("O1", "rb-101", "rb-101 > 处置", 0, 3);
+        ScoredChunk candidateLeaf = leaf("LEAF-FAST", "rb-115", 0, 2);
+        when(es.search(anyString(), anyString(), anyInt(), anyInt()))
+                .thenReturn(List.of(t1, t2, other, candidateLeaf));
+        // 查询含错误码符号且 ES Top-1 命中该码 → 走快路径，不调 rerank
+
+        SearchOutcome out = service().search(code + " MVStoreException: File is corrupted",
+                "tenant-demo", 1, "hybrid");
+
+        assertTrue(out.fastPath(), "应走快路径");
+        verifyNoInteractions(rerank);
+        assertEquals(3, out.chunks().size());
+        assertEquals(List.of("T1", "LEAF-FAST", "O1"), ids(out), "快路径从 fused 池选叶");
+        verify(metrics, times(1)).diagnosticLeafSwap();
+    }
 }
