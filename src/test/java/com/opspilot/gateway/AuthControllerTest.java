@@ -41,12 +41,22 @@ class AuthControllerTest {
     @Test
     void loginLockedUsesSameShape() throws Exception {
         MockHttpServletResponse resp = new MockHttpServletResponse();
-        controller.locked(resp);
+        controller.locked(new com.opspilot.auth.AuthService.LoginLockedException(900), resp);
 
         assertEquals(429, resp.getStatus());
+        assertEquals("900", resp.getHeader("Retry-After"), "429 必须告诉客户端真实等待秒数");
         JsonNode body = mapper.readTree(resp.getContentAsString());
         assertEquals("TOO_MANY_REQUESTS", body.get("code").asText());
         assertEquals("temporarily locked", body.get("message").asText());
+    }
+
+    /** 存储没给 TTL 时不写 Retry-After——UI 宁可说"请稍后"，也不编一个假秒数。 */
+    @Test
+    void loginLockedOmitsRetryAfterWhenTtlUnknown() throws Exception {
+        MockHttpServletResponse resp = new MockHttpServletResponse();
+        controller.locked(new com.opspilot.auth.AuthService.LoginLockedException(0), resp);
+        assertEquals(429, resp.getStatus());
+        assertNull(resp.getHeader("Retry-After"));
     }
 
     /**

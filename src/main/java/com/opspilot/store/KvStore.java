@@ -38,6 +38,12 @@ public interface KvStore {
     /** 只读计数；不存在返回 0（**读不得消耗/创建配额**）。 */
     long readLong(String key);
 
+    /**
+     * 剩余 TTL（秒，向上取整）。**无 TTL / 键不存在一律返回 0**——调用方据此显示
+     * "请稍后重试"，不得把 0 当"马上可用"编造一个秒数（登录锁定的 Retry-After 依赖它）。
+     */
+    long ttlSeconds(String key);
+
     /** 删单键（登录成功后清零失败计数）。 */
     void delete(String key);
 

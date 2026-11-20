@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>版本 C · 平台能力中心 — 高保真草图</title>
+<style>
+:root{
+  color-scheme:dark;
+  --bg:#0c1015;--surface:#141a21;--surface-2:#1a212a;--surface-3:#212a35;
+  --line:#28313d;--line-soft:#1f2731;
+  --txt:#e6edf3;--txt-2:#b0bdca;--muted:#798798;
+  --ok:#3fb950;--warn:#d29922;--err:#f85149;--accent:#58a6ff;--purple:#a371f7;
+  --r:9px;--s2:8px;--s3:12px;--s4:16px;--s5:22px;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif;
+  --mono:ui-monospace,"Cascadia Mono",Consolas,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--txt);font:13px/1.55 var(--sans);overflow:hidden;-webkit-font-smoothing:antialiased}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+[hidden]{display:none!important}
+button{font:inherit;cursor:pointer}
+a{color:inherit;text-decoration:none}
+.nd{width:7px;height:7px;border-radius:50%;display:inline-block;flex:0 0 auto}
+
+/* 顶栏 */
+.top{height:50px;display:flex;align-items:center;gap:var(--s3);padding:0 var(--s4);border-bottom:1px solid var(--line);background:var(--surface)}
+.brand{display:flex;align-items:center;gap:9px}
+.brand .lg{width:24px;height:24px;border-radius:6px;background:#1f6feb;display:grid;place-items:center;color:#fff;font-weight:700;font-size:12px}
+.brand b{font-size:14px}.brand span{font-size:11px;color:var(--muted);margin-left:2px}
+.env{font-size:10.5px;color:#56d364;border:1px solid rgba(63,185,80,.3);background:rgba(63,185,80,.08);padding:2px 8px;border-radius:999px;font-family:var(--mono)}
+.spacer{flex:1}
+.top .item{font-size:11.5px;color:var(--txt-2);display:flex;align-items:center;gap:6px;padding:5px 9px;border-radius:7px}
+.top .item:hover{background:var(--surface-2)}
+.av{width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,#1f6feb,#8957e5);display:grid;place-items:center;font-size:10px;color:#fff}
+
+/* 壳 */
+.shell{display:grid;grid-template-columns:216px minmax(0,1fr);height:calc(100% - 50px)}
+
+/* 侧栏 */
+.side{background:var(--surface);border-right:1px solid var(--line);padding:12px 9px;display:flex;flex-direction:column;overflow:auto}
+.nav-grp{font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;padding:14px 10px 6px}
+.nav{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:7px;color:var(--txt-2);font-size:12.5px;margin-bottom:2px;cursor:pointer;border:1px solid transparent}
+.nav:hover{background:var(--surface-2)}
+.nav.on{background:rgba(88,166,255,.12);color:#79c0ff;border-color:rgba(88,166,255,.2);font-weight:500}
+.nav svg{flex:0 0 auto;opacity:.8}
+.nav .badge{margin-left:auto;font-size:9.5px;font-family:var(--mono);background:var(--surface-3);padding:1px 6px;border-radius:999px;color:var(--muted)}
+.side-foot{margin-top:auto;padding:10px;border-top:1px solid var(--line-soft);font-size:10px;color:var(--muted);line-height:1.7}
+.side-foot .num{color:var(--txt-2)}
+
+/* 内容区 */
+.main{overflow:auto}
+.main::-webkit-scrollbar{width:8px}.main::-webkit-scrollbar-thumb{background:var(--surface-3);border-radius:8px}
+.pg{padding:20px var(--s5) 70px;max-width:1400px;margin:0 auto}
+.ph{display:flex;align-items:flex-start;gap:14px;margin-bottom:18px}
+.ph h1{font-size:18px;font-weight:650;margin:0 0 4px}
+.ph p{margin:0;color:var(--muted);font-size:11.5px}
+.ph .spacer{flex:1}
+.btn{border:1px solid var(--line);background:var(--surface-2);color:var(--txt-2);border-radius:7px;padding:6px 11px;font-size:11.5px}
+.btn:hover{border-color:var(--muted)}
+.btn.pri{background:var(--accent);color:#06121f;border-color:transparent;font-weight:600}
+.btn.danger{color:#ff7b72;border-color:rgba(248,81,73,.3)}
+
+/* KPI */
+.kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:16px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 13px}
+.kpi .k{font-size:10.5px;color:var(--muted);margin-bottom:7px;display:flex;align-items:center;gap:5px}
+.kpi .v{font-size:21px;font-weight:600;font-family:var(--mono);letter-spacing:-.5px;line-height:1}
+.kpi .d{font-size:10px;margin-top:7px;font-family:var(--mono)}
+.kpi .d.up{color:#56d364}.kpi .d.dn{color:#ff7b72}
+.kpi .nd{margin-left:auto}
+
+/* 网格 */
+.grid{display:grid;gap:14px;margin-bottom:14px}
+.g-2{grid-template-columns:1.35fr 1fr}
+.g-3{grid-template-columns:repeat(3,1fr)}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.phd{padding:10px 13px;border-bottom:1px solid var(--line-soft);display:flex;align-items:center;gap:9px}
+.phd b{font-size:12px;font-weight:600}
+.phd .tag{font-size:10px;color:var(--muted)}
+.phd .spacer{flex:1}
+.pbd{padding:13px}
+
+/* 到达率图 */
+.chart{height:150px;position:relative;display:flex;align-items:flex-end;gap:2px;padding:8px 0 0;border-bottom:1px solid var(--line)}
+.bar{flex:1;background:var(--accent);border-radius:2px 2px 0 0;opacity:.75;min-height:2px;position:relative}
+.bar:hover{opacity:1}
+.chart-lbl{display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:6px}
+.axis{position:absolute;left:0;right:0;top:30px;border-top:1px dashed var(--line-soft)}
+
+/* 健康灯 */
+.dep{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line-soft);font-size:11.5px}
+.dep:last-child{border:0}
+.dep .n{display:flex;align-items:center;gap:8px;color:var(--txt-2)}
+.dep .s{font-family:var(--mono);font-size:10.5px}
+
+/* 降级步骤 */
+.degsteps{display:flex;gap:5px;margin-bottom:10px}
+.degstep{flex:1;text-align:center;padding:8px 4px;border-radius:7px;background:var(--surface-2);border:1px solid var(--line-soft);font-size:10.5px;color:var(--muted)}
+.degstep.on{background:rgba(63,185,80,.1);border-color:rgba(63,185,80,.4);color:#56d364}
+.meter{margin-top:12px}
+.meter .cap{display:flex;justify-content:space-between;font-size:11px;color:var(--txt-2);margin-bottom:6px}
+.track{height:6px;background:var(--surface-3);border-radius:4px;overflow:hidden}
+.track i{display:block;height:100%;background:var(--accent);border-radius:4px}
+
+/* 表格 */
+table{width:100%;border-collapse:collapse;font-size:11.5px}
+th{text-align:left;color:var(--muted);font-weight:500;padding:8px 10px;border-bottom:1px solid var(--line);font-size:10px;text-transform:uppercase;letter-spacing:.3px}
+td{padding:9px 10px;border-bottom:1px solid var(--line-soft);color:var(--txt-2);vertical-align:middle}
+tr:last-child td{border:0}
+td code{font-family:var(--mono);font-size:10.5px;color:#a5d6ff}
+.tagx{font-size:9.5px;font-family:var(--mono);padding:2px 6px;border-radius:4px}
+.tagx.ok{background:rgba(63,185,80,.12);color:#56d364}
+.tagx.warn{background:rgba(210,153,34,.12);color:#e3b341}
+.tagx.err{background:rgba(248,81,73,.12);color:#ff7b72}
+.tagx.info{background:rgba(88,166,255,.12);color:#79c0ff}
+
+/* 接入页 */
+.code{background:var(--bg);border:1px solid var(--line-soft);border-radius:8px;padding:12px 14px;font-family:var(--mono);font-size:11px;color:#a5d6ff;line-height:1.7;overflow-x:auto;white-space:pre;position:relative}
+.code .cm{color:var(--muted)}
+.code .cp{position:absolute;top:8px;right:8px;font-size:10px;background:var(--surface-2);border:1px solid var(--line);color:var(--txt-2);padding:3px 8px;border-radius:6px}
+.fld{margin-bottom:14px}
+.fld label{display:block;font-size:11px;color:var(--txt-2);margin-bottom:6px}
+.keybox{display:flex;gap:8px;align-items:center}
+.keybox input{flex:1;background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:8px 11px;color:var(--txt);font-family:var(--mono);font-size:11px}
+.stepnum{width:20px;height:20px;border-radius:6px;background:var(--surface-3);display:inline-grid;place-items:center;font-family:var(--mono);font-size:11px;margin-right:7px}
+
+/* 治理开关 */
+.govrow{display:flex;align-items:center;gap:12px;padding:14px 0;border-bottom:1px solid var(--line-soft)}
+.govrow:last-child{border:0}
+.govrow .info{flex:1}
+.govrow .info b{font-size:12px;display:block;margin-bottom:3px}
+.govrow .info span{font-size:10.5px;color:var(--muted)}
+.sw{width:36px;height:20px;border-radius:999px;background:var(--surface-3);border:1px solid var(--line);position:relative;cursor:pointer;transition:.15s}
+.sw::after{content:"";position:absolute;left:2px;top:2px;width:14px;height:14px;border-radius:50%;background:var(--muted);transition:.15s}
+.sw.on{background:rgba(63,185,80,.25);border-color:var(--ok)}
+.sw.on::after{left:18px;background:var(--ok)}
+.warnbox{background:rgba(210,153,34,.08);border:1px solid rgba(210,153,34,.25);border-radius:8px;padding:10px 12px;font-size:11px;color:#e3b341;line-height:1.6;margin-top:12px}
+
+/* 权限锁整页 */
+.lock{max-width:560px;margin:70px auto;background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--warn);border-radius:var(--r);padding:28px}
+.lock .ic{width:42px;height:42px;border-radius:10px;background:rgba(210,153,34,.12);display:grid;place-items:center;margin-bottom:14px}
+.lock h2{margin:0 0 8px;font-size:16px}
+.lock p{color:var(--txt-2);font-size:12.5px;line-height:1.75;margin:6px 0}
+.lock code{font-family:var(--mono);color:#e3b341;background:var(--surface-2);padding:1px 5px;border-radius:4px}
+
+/* 状态演示条 */
+.demo-bar{position:fixed;left:50%;transform:translateX(-50%);bottom:14px;z-index:50;background:rgba(20,26,33,.96);border:1px solid var(--line);border-radius:12px;padding:7px 9px;display:flex;gap:5px;align-items:center;box-shadow:0 10px 40px rgba(0,0,0,.5);backdrop-filter:blur(8px);flex-wrap:wrap;justify-content:center;max-width:95vw}
+.demo-bar .lb{font-size:10px;color:var(--muted);padding:0 6px 0 4px}
+.demo-bar button{font-size:11px;background:transparent;border:1px solid var(--line);color:var(--txt-2);padding:5px 10px;border-radius:7px}
+.demo-bar button.on{background:var(--accent);color:#06121f;border-color:transparent;font-weight:600}
+.demo-bar .sep{width:1px;height:18px;background:var(--line);margin:0 3px}
+.pulse{animation:pl 1.6s ease-in-out infinite}
+@keyframes pl{50%{opacity:.45}}
+
+@media(max-width:1150px){.kpis{grid-template-columns:repeat(3,1fr)}.g-2,.g-3{grid-template-columns:1fr}}
+@media(max-width:820px){
+  .shell{grid-template-columns:minmax(0,1fr)}
+  .side{display:none}
+  .pg{padding:16px}
+  .kpis{grid-template-columns:repeat(2,1fr)}
+  .top .item{display:none}
+}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="brand"><div class="lg">P</div><b>OpsPilot</b><span>平台能力中心</span></div>
+  <span class="env">● PROD · L0</span>
+  <div class="spacer"></div>
+  <div class="item"><span class="nd" style="background:var(--ok)"></span>全系统正常</div>
+  <div class="item" id="pollItem">⟳ 2s 轮询 · 14:18:06</div>
+  <div class="av">AD</div>
+</div>
+
+<div class="shell">
+  <aside class="side">
+    <div class="nav-grp">监控</div>
+    <div class="nav on" data-pg="overview"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>概览</div>
+    <div class="nav" data-pg="sre"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>排障能力</div>
+    <div class="nav-grp">能力</div>
+    <div class="nav" data-pg="integrate"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.5.5l3-3a5 5 0 00-7-7l-1.5 1.5"/><path d="M14 11a5 5 0 00-7.5-.5l-3 3a5 5 0 007 7l1.5-1.5"/></svg>接入管理</div>
+    <div class="nav" data-pg="govern"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>治理与策略<span class="badge">L1</span></div>
+    <div class="nav" data-pg="audit"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>审计中心</div>
+    <div class="nav-grp">知识运维</div>
+    <div class="nav" data-pg="knowledge"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>知识与覆盖</div>
+    <div class="side-foot">构建 <span class="num">v1.4.2</span><br>实例 <span class="num">ip-10-0-3-21</span><br>审计链 <span style="color:var(--ok)">✓ 完整</span></div>
+  </aside>
+
+  <main class="main" id="main">
+    <!-- ========== 概览 ========== -->
+    <div class="pg" id="pg-overview">
+      <div class="ph"><div><h1>平台概览</h1><p>全部指标取自 /admin/state 与审计行 · 采样口径见 OPS §9 · 2 秒轮询</p></div><div class="spacer"></div>
+        <button class="btn">导出快照</button><button class="btn" id="forceDeg">手动降级</button></div>
+
+      <div class="kpis">
+        <div class="kpi"><div class="k">总请求 <span class="nd" style="background:var(--accent)"></span></div><div class="v">12,847</div><div class="d up">▲ 328 / 5min</div></div>
+        <div class="kpi"><div class="k">LLM 调用</div><div class="v">9,412</div><div class="d up">▲ 241 / 5min</div></div>
+        <div class="kpi"><div class="k">缓存命中率</div><div class="v">68.3<span style="font-size:13px">%</span></div><div class="d up">▲ 2.1%</div></div>
+        <div class="kpi"><div class="k">P95 TTFT</div><div class="v">642<span style="font-size:13px">ms</span></div><div class="d" style="color:var(--muted)">SLO ≤ 800ms</div></div>
+        <div class="kpi"><div class="k">拒答率</div><div class="v">3.7<span style="font-size:13px">%</span></div><div class="d" style="color:var(--muted)">安全信号</div></div>
+        <div class="kpi"><div class="k">降级切换</div><div class="v">2</div><div class="d" style="color:var(--muted)">今日</div></div>
+      </div>
+
+      <div class="grid g-2">
+        <div class="panel">
+          <div class="phd"><b>请求到达率</b><span class="tag">5 分钟窗口 · 本地持久化</span><div class="spacer"></div><span class="tag">峰值 92 /min</span></div>
+          <div class="pbd"><div class="chart" id="chart"></div><div class="chart-lbl"><span>14:13</span><span>14:15</span><span>14:17</span><span>现在</span></div></div>
+        </div>
+        <div class="panel">
+          <div class="phd"><b>依赖健康</b><span class="tag">5s TTL</span></div>
+          <div class="pbd">
+            <div class="dep"><span class="n"><span class="nd" style="background:var(--ok)"></span>PostgreSQL</span><span class="s" style="color:#56d364">UP · SELECT 1</span></div>
+            <div class="dep"><span class="n"><span class="nd" style="background:var(--ok)"></span>Redis</span><span class="s" style="color:#56d364">UP</span></div>
+            <div class="dep"><span class="n"><span class="nd" style="background:var(--ok)"></span>Elasticsearch</span><span class="s" style="color:#56d364">UP</span></div>
+            <div class="dep"><span class="n"><span class="nd" style="background:var(--ok)"></span>Qdrant</span><span class="s" style="color:#56d364">UP</span></div>
+            <div class="dep"><span class="n"><span class="nd" style="background:var(--warn)"></span>LLM 后端</span><span class="s" style="color:#e3b341">MOCK · 未配置 Key</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid g-3">
+        <div class="panel">
+          <div class="phd"><b>降级状态机</b><span class="tag" id="degTag">L0 正常</span></div>
+          <div class="pbd">
+            <div class="degsteps"><div class="degstep on">L0 全链路</div><div class="degstep">L1 纯 ES</div><div class="degstep">L2 SOP</div></div>
+            <div style="font-size:10.5px;color:var(--muted);line-height:1.7">触发阈值：inflight ≥ 40 · LLM 失败 ≥ 3。<br>冷却 60s 后半开自愈。</div>
+            <div class="meter"><div class="cap"><span>当日配额</span><span class="num">1,248 / 5,000</span></div><div class="track"><i style="width:25%"></i></div></div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="phd"><b>排障成果流</b><span class="tag">最近 5 笔 · 取自审计行</span></div>
+          <div class="pbd" style="padding:4px 13px">
+            <table><tbody>
+              <tr><td><code>50041_PAY_…</code></td><td><span class="tagx ok">完成</span></td><td>86ms</td><td>3 引用</td></tr>
+              <tr><td><code>50012_DB_…</code></td><td><span class="tagx info">L1命中</span></td><td>12ms</td><td>2 引用</td></tr>
+              <tr><td><code>怎么重启</code></td><td><span class="tagx warn">澄清</span></td><td>—</td><td>0 引用</td></tr>
+              <tr><td><code>502 排查</code></td><td><span class="tagx ok">完成</span></td><td>104ms</td><td>4 引用</td></tr>
+            </tbody></table>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="phd"><b>累计计数</b><span class="tag">本次轮询增量</span></div>
+          <div class="pbd" style="padding:4px 13px">
+            <table><tbody>
+              <tr><td>L1 缓存命中</td><td class="num">4,102 <span style="color:#56d364">+38</span></td></tr>
+              <tr><td>L2 语义命中</td><td class="num">1,884 <span style="color:#56d364">+12</span></td></tr>
+              <tr><td>风暴收敛</td><td class="num">327</td></tr>
+              <tr><td>逐字拦截</td><td class="num">41</td></tr>
+              <tr><td>LLM 429</td><td class="num">8</td></tr>
+            </tbody></table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== 排障能力（复用 A 的简化视图） ========== -->
+    <div class="pg" id="pg-sre" hidden>
+      <div class="ph"><div><h1>排障能力 · Copilot 工作台</h1><p>与值班工作台共用同一编排链路 · 此处供平台方自测与演示</p></div></div>
+      <div class="panel" style="max-width:900px">
+        <div class="phd"><b>诊断请求</b><span class="tag">POST /api/v1/copilot/chat/stream</span></div>
+        <div class="pbd">
+          <div class="fld"><label>问题（贴错误码或现象）</label><input class="keybox" style="width:100%;background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:9px 11px;color:var(--txt)" value="支付网关 502 批量报错 排查"></div>
+          <div style="display:flex;gap:8px;margin-bottom:14px"><span class="chip" style="font-size:10.5px;padding:4px 9px;background:var(--surface-2);border:1px solid var(--line);border-radius:6px">source: manual</span><span class="chip" style="font-size:10.5px;padding:4px 9px;background:var(--surface-2);border:1px solid var(--line);border-radius:6px">service: payment-service</span></div>
+          <button class="btn pri">▶ 发起诊断（SSE）</button>
+          <div style="margin-top:14px;background:var(--bg);border:1px solid var(--line-soft);border-radius:8px;padding:12px;font-size:11.5px;color:var(--muted);line-height:1.8">
+            SSE 帧契约：<code style="color:#a5d6ff">meta</code>（fingerprint / cache_hit / degradation_level / gate）→ <code style="color:#a5d6ff">delta</code>（token）→ <code style="color:#a5d6ff">done</code>（refs / actions / near_miss / ttft_ms）
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== 接入管理 ========== -->
+    <div class="pg" id="pg-integrate" hidden>
+      <div class="ph"><div><h1>接入管理</h1><p>Web 之外，第三方系统可通过 OpenAI 兼容接口调用同一编排链路</p></div><div class="spacer"></div><button class="btn">轮换 API Key</button></div>
+
+      <div class="grid g-2">
+        <div class="panel">
+          <div class="phd"><b>凭证</b><span class="tag">API Key 即 OpsPilot JWT</span></div>
+          <div class="pbd">
+            <div class="fld"><label>当前 Key（24h 有效）</label>
+              <div class="keybox"><input value="eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzcmUtZnVsbCIsInRlbmFudF9pZCI6ImRlZmF1bHQiLCJhdXRoX2xldmVsIjo0fQ.7f2c9a1e8b4d…" readonly><button class="btn" id="copyKey">复制</button></div>
+            </div>
+            <div class="warnbox">这是凭证，等同于你的身份与密级。不要提交到代码仓库或暴露在前端日志中。</div>
+            <div style="margin-top:14px;font-size:11px;color:var(--txt-2);line-height:1.8">
+              <b style="color:var(--txt)">可用接入面</b><br>
+              · Web SSE：<code style="color:#a5d6ff">POST /api/v1/copilot/chat/stream</code><br>
+              · OpenAI 兼容：<code style="color:#a5d6ff">POST /v1/chat/completions</code>（需 stream=true）<br>
+              · 模型列表：<code style="color:#a5d6ff">GET /v1/models</code>
+            </div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="phd"><b>快速接入</b><span class="tag">curl 示例</span></div>
+          <div class="pbd">
+            <div class="code"><span class="cm"># 用 JWT 作为 Bearer Key</span>
+curl https://opspilot.internal/v1/chat/completions \
+  -H <span class="cm">"Authorization: Bearer $OPSPILOT_KEY"</span> \
+  -H <span class="cm">"Content-Type: application/json"</span> \
+  -d '{ "model":"opspilot",
+        "stream":true,
+        "messages":[{"role":"user",
+          "content":"支付网关502怎么排查"}] }'
+<button class="cp" id="copyCurl">复制</button></div>
+            <div style="margin-top:12px;font-size:10.5px;color:var(--muted);line-height:1.7">OpenAI 兼容面把 refs / actions 以 Markdown 注入正文末尾；Web SSE 面则给出结构化 meta / done 帧。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== 治理与策略 ========== -->
+    <div class="pg" id="pg-govern" hidden>
+      <div class="ph"><div><h1>治理与策略</h1><p>受控动作与环境策略 · 所有变更落审计</p></div><div class="spacer"></div><span class="tagx warn">需 platform 角色 + 密级 ≥ 3</span></div>
+
+      <div class="grid g-2">
+        <div class="panel">
+          <div class="phd"><b>L1 受控恢复动作</b><span class="tag">默认关闭</span></div>
+          <div class="pbd">
+            <div class="govrow"><div class="info"><b>受控动作总开关</b><span>OPSPILOT_L1_ENABLED · 当前 false</span></div><div class="sw" id="swL1"></div></div>
+            <div class="govrow"><div class="info"><b>目标白名单</b><span>当前为空 · fail-closed（全拒）</span></div><button class="btn">配置</button></div>
+            <div class="govrow"><div class="info"><b>派发 Webhook</b><span>未配置 · 动作停留在 confirmed</span></div><button class="btn">配置</button></div>
+            <div class="warnbox">L1 允许写操作（如 kubectl rollout restart）。开启前必须配置：非私网 Webhook、目标白名单、执行侧 HMAC 签名校验，并确认双人流程可用。当前为演示环境，建议保持关闭。</div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="phd"><b>权限模型</b><span class="tag">三维断言 · 非标准 RBAC</span></div>
+          <div class="pbd">
+            <table><tbody>
+              <tr><td><b style="color:var(--txt)">tenant</b></td><td>租户硬隔离，检索/缓存/配额全分片</td></tr>
+              <tr><td><b style="color:var(--txt)">auth_level</b></td><td>1–9 密级，文档 level ≤ 用户 level 才可见</td></tr>
+              <tr><td><b style="color:var(--txt)">role</b></td><td>仅 platform + level≥3 可进管理面</td></tr>
+            </tbody></table>
+            <div class="warnbox" style="border-color:rgba(88,166,255,.25);background:rgba(88,166,255,.07);color:#79c0ff">密级高 ≠ 可信。auth_level=9 但 role≠platform 的账号仍无法访问本控制台。</div>
+            <div style="margin-top:12px"><button class="btn">用户管理（CLI 命令参考）</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== 审计中心 ========== -->
+    <div class="pg" id="pg-audit" hidden>
+      <div class="ph"><div><h1>审计中心</h1><p>哈希链防篡改 · 增量拉取 · 200 条进程内环形缓冲</p></div><div class="spacer"></div>
+        <button class="btn" id="verifyChain">✓ 校验哈希链</button><button class="btn">导出最近 50 条</button></div>
+      <div id="chainResult" hidden style="background:rgba(63,185,80,.08);border:1px solid rgba(63,185,80,.3);border-radius:8px;padding:10px 14px;margin-bottom:14px;color:#56d364;font-size:12px">✓ 校验通过 · 共 2,847 条事件，链完整，未检测到篡改。</div>
+      <div class="panel">
+        <div class="phd"><b>事件流</b><span class="tag">ev 七类全量 · 游标增量</span><div class="spacer"></div>
+          <span class="tag" style="color:#56d364">streaming</span></div>
+        <div style="padding:0 13px 8px"><table>
+          <thead><tr><th>时间</th><th>事件</th><th>主体</th><th>来源</th><th>缓存</th><th>档位</th><th>耗时</th><th>序号</th></tr></thead>
+          <tbody>
+            <tr><td class="num">14:18:04</td><td><span class="tagx info">chat</span></td><td class="num">sre-full</td><td>manual</td><td>L1</td><td>L0</td><td class="num">86ms</td><td class="num">#2847</td></tr>
+            <tr><td class="num">14:17:52</td><td><span class="tagx warn">feedback</span></td><td class="num">sre-full</td><td>web</td><td>—</td><td>—</td><td>—</td><td class="num">#2846</td></tr>
+            <tr><td class="num">14:17:31</td><td><span class="tagx info">chat</span></td><td class="num">sre-ltd</td><td>alert</td><td>none</td><td>L0</td><td class="num">412ms</td><td class="num">#2845</td></tr>
+            <tr><td class="num">14:16:58</td><td><span class="tagx err">invalid</span></td><td class="num">—</td><td>web</td><td>—</td><td>—</td><td>—</td><td class="num">#2844</td></tr>
+            <tr><td class="num">14:16:20</td><td><span class="tagx warn">degrade</span></td><td class="num">system</td><td>auto</td><td>—</td><td>L1→L0</td><td>—</td><td class="num">#2843</td></tr>
+            <tr><td class="num">14:15:47</td><td><span class="tagx info">action_propose</span></td><td class="num">sre-full</td><td>web</td><td>—</td><td>L0</td><td>—</td><td class="num">#2842</td></tr>
+          </tbody>
+        </table></div>
+      </div>
+    </div>
+
+    <!-- ========== 知识与覆盖 ========== -->
+    <div class="pg" id="pg-knowledge" hidden>
+      <div class="ph"><div><h1>知识与覆盖</h1><p>459 篇知识切片 · 重建于 11-20 06:00 · 身份过滤后可见 12 服务 / 48 错误码</p></div><div class="spacer"></div>
+        <button class="btn" id="reingestBtn">↻ 触发重灌</button><button class="btn">在线备份</button></div>
+      <div class="grid g-2">
+        <div class="panel"><div class="phd"><b>覆盖分面</b><span class="tag">服务 Top 8</span></div><div class="pbd" style="padding:4px 13px">
+          <table><tbody>
+            <tr><td><code>opspilot-gateway</code></td><td>119 chunks</td><td><div class="track" style="width:120px"><i style="width:100%"></i></div></td></tr>
+            <tr><td><code>order-service</code></td><td>65 chunks</td><td><div class="track" style="width:120px"><i style="width:55%"></i></div></td></tr>
+            <tr><td><code>payment-service</code></td><td>43 chunks</td><td><div class="track" style="width:120px"><i style="width:36%"></i></div></td></tr>
+            <tr><td><code>inventory-service</code></td><td>30 chunks</td><td><div class="track" style="width:120px"><i style="width:25%"></i></div></td></tr>
+          </tbody></table>
+        </div></div>
+        <div class="panel"><div class="phd"><b>知识运维</b></div><div class="pbd">
+          <div class="govrow"><div class="info"><b>Blue/Green 重灌</b><span>当前无进行中的重灌任务</span></div><button class="btn">详情</button></div>
+          <div class="govrow"><div class="info"><b>最近备份</b><span>2026-11-19 02:00 · sha256 已核验</span></div><button class="btn">备份</button></div>
+          <div class="govrow"><div class="info"><b>覆盖缺口</b><span>近 7 天 14 条反馈待回灌</span></div><button class="btn">查看</button></div>
+        </div></div>
+      </div>
+    </div>
+
+    <!-- 权限锁整页（状态演示） -->
+    <div id="lockPage" hidden><div class="lock">
+      <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#e3b341" stroke-width="2"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg></div>
+      <h2>当前身份无权访问管理控制台</h2>
+      <p>平台能力中心要求 <code>role = platform</code> 且 <code>auth_level ≥ 3</code>。</p>
+      <p>你的身份：<code>role = sre</code>，<code>auth_level = 4</code> —— 密级达标，但角色不满足（密级高 ≠ 可信）。</p>
+      <p>如需访问权限，请联系平台管理员。</p>
+    </div></div>
+  </main>
+</div>
+
+<div class="demo-bar">
+  <span class="lb">页面演示</span>
+  <button class="on" data-pg="overview">概览</button>
+  <button data-pg="integrate">接入管理</button>
+  <button data-pg="govern">治理策略</button>
+  <button data-pg="audit">审计中心</button>
+  <button data-pg="knowledge">知识运维</button>
+  <span class="sep"></span>
+  <span class="lb">业务状态</span>
+  <button data-state="pollerr">轮询中断</button>
+  <button data-state="lock">权限锁</button>
+  <button data-state="normal" class="on">正常</button>
+</div>
+
+<script>
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+function goto(pg){
+  $$('.pg').forEach(p=>p.hidden=true);
+  const t=$('#pg-'+pg); if(t)t.hidden=false;
+  $('#lockPage').hidden=true;
+  $$('.nav').forEach(n=>n.classList.toggle('on',n.dataset.pg===pg));
+  $$('.demo-bar button[data-pg]').forEach(b=>b.classList.toggle('on',b.dataset.pg===pg));
+  if(pg==='overview')drawChart();
+}
+$$('.nav').forEach(n=>n.onclick=()=>goto(n.dataset.pg));
+$$('.demo-bar button[data-pg]').forEach(b=>b.onclick=()=>goto(b.dataset.pg));
+
+function drawChart(){
+  const c=$('#chart');if(!c||c.childElementCount)return;
+  const data=[32,28,41,38,55,48,62,71,58,66,74,69,82,77,91,68,73,85,79,92,71,64,58,66,59,72,68,74,61,69];
+  data.forEach(v=>{const b=document.createElement('div');b.className='bar';b.style.height=(v/100*100)+'%';b.title=v+' /min';c.appendChild(b)});
+}
+drawChart();
+
+$$('.demo-bar button[data-state]').forEach(b=>b.onclick=()=>{
+  const st=b.dataset.state;
+  $$('.demo-bar button[data-state]').forEach(x=>x.classList.toggle('on',x===b));
+  if(st==='lock'){
+    $$('.pg').forEach(p=>p.hidden=true);$('#lockPage').hidden=false;
+    $$('.nav').forEach(n=>n.classList.remove('on'));
+  }else{
+    $('#lockPage').hidden=true;
+    const cur=$$('.demo-bar button[data-pg].on')[0];
+    goto(cur?cur.dataset.pg:'overview');
+    $('#pollItem').innerHTML = st==='pollerr'
+      ? '<span style="color:var(--err)">⚠ 数据连接中断 · 重试中</span>'
+      : '⟳ 2s 轮询 · 14:18:06';
+  }
+});
+
+$('#verifyChain').onclick=()=>{
+  $('#chainResult').hidden=false;
+  $('#verifyChain').textContent='✓ 已校验';
+};
+$('#copyKey').onclick=function(){const t=this.textContent;this.textContent='已复制';setTimeout(()=>this.textContent=t,1200)};
+$('#copyCurl').onclick=function(){const t=this.textContent;this.textContent='已复制';setTimeout(()=>this.textContent=t,1200)};
+$('#swL1').onclick=function(){
+  this.classList.toggle('on');
+  const on=this.classList.contains('on');
+  this.previousElementSibling.querySelector('span').textContent='OPSPILOT_L1_ENABLED · 当前 '+on;
+  alert(on?'演示：开启 L1 需同时配置白名单与 Webhook，否则 fail-closed 全拒。':'演示：已关闭 L1 受控动作。');
+};
+$('#forceDeg').onclick=()=>alert('演示：POST /api/v1/admin/degrade {level:"L1"} → 需二次确认 + 落审计');
+$('#reingestBtn').onclick=function(){const t=this.textContent;this.textContent='重灌中…';this.classList.add('pulse');setTimeout(()=>{this.textContent=t;this.classList.remove('pulse')},2000)};
+</script>
+</body>
+</html>

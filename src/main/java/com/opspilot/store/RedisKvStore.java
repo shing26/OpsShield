@@ -58,6 +58,16 @@ public class RedisKvStore implements KvStore {
         return redisson.getAtomicLong(key).get();
     }
 
+    /**
+     * Redisson 的 {@code remainTimeToLive}：毫秒；-1 = 无 TTL，-2 = 键不存在。
+     * 两者都归一成 0——见 {@link KvStore#ttlSeconds(String)} 的契约。
+     */
+    @Override
+    public long ttlSeconds(String key) {
+        long ms = redisson.getKeys().remainTimeToLive(key);
+        return ms <= 0 ? 0L : (ms + 999L) / 1000L;
+    }
+
     @Override
     public void delete(String key) {
         redisson.getKeys().delete(key);

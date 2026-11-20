@@ -4,266 +4,300 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" href="data:,">
-<title>OpsShield · 智能运维监控排障工作台</title>
+<title>OpsShield · 事件响应工作台</title>
 <!--
-  统一工作台（ADR-0021）：一个壳、两个视图，默认视图是排障台。
-    · 排障台视图 = 单次请求的协议面证据（实时读 SSE 帧：有 refs/actions/gate，无 max_level/stage_ms）。
-      定位与四条硬口径见 ADR-0020；行动清单的判据见 ADR-0017。
-    · 运行面板视图 = 审计视角（读 /admin/state 与 /admin/audit/recent，有 max_level/stage_ms，无 refs/actions）。
-      定位见 ADR-0009。两者是**互补的视角**，不是同一份数据的两种皮肤。
-  合并唯一不可替代的收益：**"点一次查询、右上角运行态抽屉的数字当场跳一下"只有在同一份页面状态里才成立**。
+  事件响应工作台（设计稿 A）：一个壳、两个视图。
+    · 排障台 = 事故单工作区：左栏是服务端事故单列表（同租户、多端一致），中栏是事故单的
+      诊断证据与处置记录，右栏是本轮上下文 + 平台运行态。事故单与诊断快照由网关持久化。
+    · 运行面板 = 审计视角：读 /admin/state 与 /admin/audit/recent，平台身份专属。
 
-  门禁（一字不动，不为这个页面新开非 admin 端点）：
-    · 排障台视图：任意有效 JWT——login 成功即身份确认，不做平台探针。
-    · 运行面板视图与健康抽屉：数据源仍要求 role=platform ∧ auth_level>=3（密级高≠可信，ADR-0008）。
-      非 platform 身份渲染**锁定态**，不静默降级成空数据。
+  门禁（一字不动，不为页面新开非 admin 端点）：
+    · 排障台：任意有效 JWT——login 成功即身份确认，不做平台探针。
+    · 运行面板 / 运行态抽屉：数据源要求 role=platform 且 auth_level>=3（密级高不等于可信）。
+      非 platform 身份渲染锁定态，不静默降级成空数据。
 
-  凭据（ADR-0021 决策 4）：页内用户名 + 口令换 token（口令只走请求体、用完即弃），
-  token 只存 sessionStorage——刷新不掉线、关标签页即失效。**这不是安全升级**：同源脚本照样读得到，
-  只是生命周期从 24h 收窄到"这一次标签页"。页面启动时主动清掉旧的 localStorage 粘贴 token 键；
-  脚本/探针/自动化仍走 scripts/console_token.sh，那条路径与页面无关。
+  凭据：页内用户名 + 口令换 token（口令只走请求体、用完即弃），token 只存 sessionStorage。
+  页面启动时主动清掉旧的 localStorage 粘贴 token 键。
 
-  视觉纪律（ADR-0009）：颜色只承载含义（状态绿/黄/红 + 分段耗时同一色相的明度阶梯），
-  无补间、无平滑、无假数据、无外部依赖。诚实性红线：不补间、不平滑、无插值、无假数据；
-  采样/聚合口径逐条写在 OPS §9。
+  视觉纪律：颜色只承载含义（状态绿/黄/红 + 分段耗时同一色相明度阶梯）。
+  不补间、不平滑、无插值、无假数据；没有真实字段的地方显示空态，不摆放示例数字。
 -->
 <style>
   :root{
-    color-scheme:dark;                 /* 原生控件/滚动条跟随暗色，不再出现白底 input（#21） */
-    --topbar-h:53px;                   /* 顶栏实际高度（JS 实测回写）：sticky 偏移/弹层/侧栏都用它，不再写死 53（#23） */
-    --bg:#0e1117; --surface:#161b22; --surface-2:#1c2129; --line:#262d38; --line-soft:#1f252e;
-    --txt:#e6edf3; --txt-2:#b6c2cf; --muted:#7d8894;
-    --ok:#3fb950; --warn:#d29922; --err:#f85149; --accent:#58a6ff;
-    --r:10px;
-    --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px;
+    color-scheme:dark;
+    --top-h:52px; --status-h:28px; --rail:288px; --drawer:360px;
+    --bg:#0d1016; --surface:#151a22; --surface-2:#1b212b; --surface-3:#222a36;
+    --line:#2a3341; --line-soft:#212935;
+    --txt:#e7edf4; --txt-2:#b3c0cf; --muted:#7d8b9b;
+    --ok:#3fb950; --warn:#d29922; --err:#f85149; --accent:#58a6ff; --purple:#a371f7;
+    --r:10px; --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px;
     --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif;
     --mono:ui-monospace,"Cascadia Mono",Consolas,"Liberation Mono",monospace;
   }
   *{box-sizing:border-box}
   html,body{margin:0;height:100%}
-  /* #23：60/30/10 三段式壳——顶栏与页脚定高，视图 flex:1 内部滚动。
-     这样顶栏永远不会盖住左栏（sticky 左栏在等高容器里粘不住的问题从结构上消掉）。 */
-  body{background:var(--bg);color:var(--txt);font:14px/1.55 var(--sans);
-       -webkit-font-smoothing:antialiased;display:flex;flex-direction:column;height:100%;overflow:hidden}
-  .num,.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  body{background:var(--bg);color:var(--txt);font:13.5px/1.55 var(--sans);
+       -webkit-font-smoothing:antialiased;display:flex;flex-direction:column;overflow:hidden}
+  .num,.mono,code,pre{font-family:var(--mono);font-variant-numeric:tabular-nums}
   input::placeholder,textarea::placeholder{color:var(--muted)}
   button{font:inherit;cursor:pointer}
   [hidden]{display:none !important}
   :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
   .muted{color:var(--muted)} .t2{color:var(--txt-2)}
   .ok{color:var(--ok)} .warn{color:var(--warn)} .err{color:var(--err)}
+  .spacer{flex:1;min-width:0}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--muted);flex:0 0 auto;display:inline-block}
+  .dot.on{background:var(--ok)} .dot.warn{background:var(--warn)} .dot.err{background:var(--err)}
 
-  /* ---------- 顶栏：会话级（我是谁 / 系统健不健康 / 有没有高级能力） ---------- */
-  .topbar{display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap;
-          padding:10px var(--s5);border-bottom:1px solid var(--line);background:var(--surface);
-          position:sticky;top:0;z-index:8}
-  .topbar .brand{display:flex;align-items:baseline;gap:10px}
-  .topbar .brand b{font-size:15px;font-weight:600}
-  .topbar .brand span{font-size:12px;color:var(--muted)}
-  .topbar .spacer{flex:1;min-width:0}
-  #fingerprint{font-size:12px;color:var(--muted)}
-  .tabs{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
-  .tabs button{background:var(--surface-2);border:0;color:var(--muted);font-size:12px;
-               padding:5px 14px;transition:color .12s,background .12s}
+  /* 顶栏 */
+  .top{flex:0 0 var(--top-h);display:flex;align-items:center;gap:10px;padding:0 16px;
+       border-bottom:1px solid var(--line);background:var(--surface);position:relative;z-index:20;min-width:0}
+  .brand{display:flex;align-items:baseline;gap:9px;white-space:nowrap;min-width:0}
+  .brand b{font-size:15px;font-weight:650;letter-spacing:.2px}
+  .brand b i{color:var(--accent);font-style:normal}
+  .brand span{font-size:11px;color:var(--muted);white-space:nowrap}
+  .topsep{width:1px;height:20px;background:var(--line);flex:0 0 auto}
+  .inc-id{font-size:11.5px;color:var(--muted);white-space:nowrap}
+  .inc-id b{color:var(--txt-2);font-family:var(--mono);font-weight:500}
+  .tabs{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden;flex:0 0 auto}
+  .tabs button{background:var(--surface-2);border:0;color:var(--muted);font-size:11.5px;padding:5px 11px}
   .tabs button:hover:not(.on){color:var(--txt-2);background:#232a34}
   .tabs button.on{background:var(--accent);color:#06121f;font-weight:600}
+  .health{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--txt-2);
+          border:1px solid var(--line);border-radius:999px;padding:4px 10px;white-space:nowrap}
   .pillbtn{background:var(--surface-2);border:1px solid var(--line);color:var(--txt-2);
-           border-radius:999px;padding:4px 12px;font-size:12px;display:inline-flex;align-items:center;
-           gap:6px;transition:border-color .12s,color .12s}
+           border-radius:999px;padding:4px 11px;font-size:11.5px;display:inline-flex;align-items:center;
+           gap:6px;white-space:nowrap;max-width:190px;overflow:hidden;text-overflow:ellipsis}
   .pillbtn:hover{border-color:var(--muted);color:var(--txt)}
-  .dot{width:7px;height:7px;border-radius:50%;background:var(--muted);flex:0 0 auto}
-  .dot.on{background:var(--ok)}
-  /* #28：弹层相对**视口**定位（此前 absolute 相对文档，滚动后整块跑到视口外） */
-  .pop{position:fixed;z-index:10;background:var(--surface);border:1px solid var(--line);
-       border-radius:8px;box-shadow:0 14px 40px rgba(0,0,0,.5);padding:14px;width:min(380px,92vw);
-       max-height:calc(100vh - var(--topbar-h) - 20px);overflow:auto}
-  #acctpop{top:calc(var(--topbar-h) + 6px);right:16px}
-  #advpop{top:calc(var(--topbar-h) + 6px);right:16px;width:min(430px,94vw)}
-  .pop-hd{font-size:12px;color:var(--muted);margin-bottom:10px}
-  .pop .note{font-size:11px;color:var(--muted);line-height:1.6;margin-top:10px}
+  .btn{border:1px solid var(--line);background:var(--surface-2);color:var(--txt-2);
+       border-radius:7px;padding:6px 11px;font-size:11.5px;white-space:nowrap}
+  .btn:hover:not(:disabled){border-color:var(--muted);color:var(--txt)}
+  .btn.pri{background:var(--accent);color:#06121f;border-color:transparent;font-weight:600}
+  .btn.pri:hover:not(:disabled){background:#79c0ff}
+  .btn.gho{background:none}
+  .btn:disabled{opacity:.42;cursor:not-allowed}
+  .btn.wide{width:100%;padding:9px 12px}
 
-  /* ---------- 健康抽屉：右滑入，数据面 = /admin/state（platform-only） ---------- */
-  .scrim{position:fixed;inset:0;background:rgba(8,11,16,.55);z-index:11}
-  .drawer{position:fixed;top:0;right:0;bottom:0;width:min(380px,94vw);z-index:12;
-          background:var(--surface);border-left:1px solid var(--line);display:flex;flex-direction:column}
-  .drawer-hd{display:flex;align-items:center;gap:var(--s2);padding:12px var(--s4);
-             border-bottom:1px solid var(--line)}
-  .drawer-hd b{font-size:13px}
-  .drawer-hd .x{margin-left:auto;background:none;border:0;color:var(--muted);font-size:15px;padding:0 4px}
-  .drawer-hd .x:hover{color:var(--txt)}
-  .drawer-bd{padding:var(--s4);overflow-y:auto;display:flex;flex-direction:column;gap:var(--s4)}
-  .drawer-sec{border:1px solid var(--line-soft);border-radius:8px;padding:var(--s3) var(--s3)}
-  .drawer-sec h3{margin:0 0 var(--s2);font-size:11px;font-weight:600;color:var(--muted)}
-  .drawer-nums{display:grid;gap:var(--s2);grid-template-columns:1fr 1fr}
-  .drawer-nums .n{background:var(--surface-2);border:1px solid var(--line-soft);border-radius:6px;padding:8px 10px}
-  .drawer-nums .n .v{font-family:var(--mono);font-size:16px}
-  .drawer-nums .n .k{font-size:11px;color:var(--muted)}
-  .drawer-nums .n .d{font-family:var(--mono);font-size:10px;color:var(--ok);min-height:12px}
-  .locked{border:1px solid var(--line-soft);border-left:3px solid var(--warn);border-radius:8px;
-          background:var(--surface-2);padding:14px;font-size:12px;color:var(--txt-2);line-height:1.7}
-  .locked b{color:var(--txt)}
+  /* 三栏壳 */
+  .shell{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:var(--rail) minmax(0,1fr) 0;overflow:hidden}
+  .shell.with-drawer{grid-template-columns:var(--rail) minmax(0,1fr) var(--drawer)}
+  .rail{background:var(--surface);border-right:1px solid var(--line);padding:14px 12px;
+        display:flex;flex-direction:column;gap:10px;overflow:auto;min-height:0}
+  .workspace{min-width:0;min-height:0;overflow:auto;background:var(--bg)}
+  .drawer{background:var(--surface);border-left:1px solid var(--line);display:flex;
+          flex-direction:column;min-height:0;overflow:hidden}
 
-  /* ---------- 视图容器 ---------- */
-  .view{flex:1 1 auto;min-height:0;overflow:auto}
-
-  /* ---------- 排障台视图：左栏（任务级）+ 右画布（证据） ---------- */
-  /* #23：桌面用「定高壳 + 两列各自滚动」而不是 sticky 左栏——
-     sticky 的容器高度等于左栏自身高度时它**粘不住**，滚动后左栏顶部会钻到 sticky 顶栏下面。 */
-  .ts-app{display:grid;grid-template-columns:300px 1fr;height:100%;min-height:0;overflow:hidden}
-  .ts-app aside{height:100%;overflow:auto;background:var(--surface);
-                border-right:1px solid var(--line);padding:16px;display:flex;flex-direction:column;gap:14px}
-  .ts-app main{padding:20px 26px 60px;min-width:0;height:100%;overflow:auto}
-  .canvas{display:grid;gap:16px;max-width:960px;margin:0 auto}
-  .canvas.compare{grid-template-columns:1fr 1fr;max-width:none}
-
-  .railhead{display:flex;flex-direction:column;gap:2px}
-  .railhead b{font-size:13px}
-  .railhead span{font-size:11px;color:var(--muted)}
-  .fld{display:flex;flex-direction:column;gap:4px}
-  .fld label,.fld .lbl{font-size:11px;color:var(--muted)}
-  .fld input,.fld textarea{background:var(--bg);color:var(--txt);border:1px solid var(--line);
-                           border-radius:6px;padding:8px 10px;font:inherit;font-size:13px;width:100%}
-  .fld textarea{resize:vertical;min-height:76px;line-height:1.6}
-  .fld input:focus,.fld textarea:focus{outline:none;border-color:var(--accent)}
-  .btn{background:var(--accent);color:#06121f;border:0;border-radius:6px;padding:9px 16px;
-       font-weight:600;font-size:13px}
-  .btn:hover{opacity:.88}
-  .btn:disabled{opacity:.4;cursor:not-allowed}
-  .btn.ghost{background:transparent;color:var(--txt-2);border:1px solid var(--line);font-weight:500}
-  .btn.ghost:hover{border-color:var(--muted);color:var(--txt)}
-  .btn.wide{width:100%;padding:11px}
-  .idbar{display:flex;align-items:center;gap:6px;background:var(--bg);border:1px solid var(--line);
-         border-radius:6px;padding:7px 10px;font-size:12px}
-  .idbar .who{font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .idbar .sw{margin-left:auto;font-size:11px;color:var(--muted);background:none;border:0;padding:0 2px}
-  .idbar .sw:hover{color:var(--accent)}
-  /* L1 确认区输入框：复用 .fld 的暗色观感（#21：此前裸 input 走 UA 白底） */
-  .l1in{background:var(--bg);color:var(--txt);border:1px solid var(--line);
-        border-radius:6px;padding:8px 10px;font:inherit;font-size:13px}
-  .chk{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--txt-2)}
-  .chips{display:flex;flex-wrap:wrap;gap:5px}
-  .chip{font-size:11px;color:var(--txt-2);background:var(--bg);border:1px solid var(--line);
-        border-radius:999px;padding:4px 9px}
-  .chip:hover{border-color:var(--accent);color:var(--accent)}
-  .errline{font-size:12px;color:var(--err);line-height:1.5}
-  .hintline{font-size:11px;color:var(--warn);line-height:1.5}
-  .msg{font-size:12px;color:var(--txt-2);min-height:16px}   /* L1 确认提示（此前无规则 → 与正文同色） */
-  /* ---------- 覆盖范围（提问前可见的知识库边界，ADR-0023 决策 5） ---------- */
-  .cov{border:1px solid var(--line-soft);border-radius:6px;padding:9px 10px;background:var(--bg)}
-  .cov-hd{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted)}
-  .cov-hd .sw{margin-left:auto;font-size:11px;color:var(--muted);background:none;border:0;padding:0 2px}
+  /* 左栏：事故单列表 */
+  .rail-hd{display:flex;align-items:center;justify-content:space-between;padding:0 3px}
+  .rail-hd b{font-size:13px}
+  .rail-hd .cnt{font-size:10.5px;color:var(--muted);font-family:var(--mono)}
+  .rail .seg{display:flex;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:3px;gap:2px}
+  .rail .seg button{flex:1;background:none;border:0;color:var(--muted);font-size:11px;padding:5px 4px;border-radius:6px}
+  .rail .seg button.on{background:var(--surface-3);color:var(--txt)}
+  .search{background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:6px 9px;
+          color:var(--muted);font-size:11.5px;display:flex;gap:7px;align-items:center}
+  .search input{background:none;border:0;outline:0;color:var(--txt);font:inherit;width:100%;min-width:0}
+  .newbtn{width:100%;background:var(--accent);color:#06121f;border:0;border-radius:8px;
+          padding:8px;font-size:12px;font-weight:600}
+  .newbtn:hover{background:#79c0ff}
+  .inc-list{display:flex;flex-direction:column;gap:2px;min-height:80px}
+  .li-hd{font-size:10px;color:var(--muted);letter-spacing:.35px;padding:8px 4px 2px}
+  .inc{display:block;width:100%;text-align:left;background:transparent;border:1px solid transparent;
+       border-radius:9px;padding:9px 10px;color:inherit;position:relative}
+  .inc:hover{background:var(--surface-2)}
+  .inc.on{background:var(--surface-2);border-color:var(--line)}
+  .inc.on::before{content:"";position:absolute;left:0;top:11px;bottom:11px;width:3px;border-radius:3px;background:var(--accent)}
+  .inc-x{display:flex;align-items:center;gap:6px;margin-bottom:3px;min-width:0}
+  .inc-x .t{font-size:12px;font-weight:600;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sev{font-size:9.5px;font-family:var(--mono);padding:1px 5px;border-radius:4px;font-weight:600;flex:0 0 auto}
+  .sev.p1{background:rgba(248,81,73,.14);color:#ff7b72}
+  .sev.p2{background:rgba(210,153,34,.14);color:#e3b341}
+  .sev.p3{background:rgba(88,166,255,.14);color:#79c0ff}
+  .sev.none{background:var(--surface-3);color:var(--muted)}
+  .inc .meta{font-size:10.5px;color:var(--muted);display:flex;align-items:center;gap:5px;
+             min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .inc .meta code{font-size:10px;color:var(--txt-2);background:none;padding:0}
+  .inc .foot{display:flex;align-items:center;gap:5px;margin-top:5px;font-size:10px;color:var(--muted);
+             white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .st{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+  .st .dot{width:6px;height:6px}
+  .st.open{color:#e3b341} .st.open .dot{background:var(--warn)}
+  .st.done{color:#56d364} .st.done .dot{background:var(--ok)}
+  .st.prog{color:#79c0ff} .st.prog .dot{background:var(--accent)}
+  .st.err{color:#ff7b72} .st.err .dot{background:var(--err)}
+  .rail-empty{border:1px dashed var(--line);border-radius:8px;padding:12px 10px;color:var(--muted);
+              font-size:11.5px;line-height:1.7}
+  .rail-foot{margin-top:auto;padding-top:10px;border-top:1px solid var(--line-soft);display:flex;
+             flex-direction:column;gap:8px}
+  .rail-foot .note{font-size:10.5px;color:var(--muted);line-height:1.6}
+  .cov{border:1px solid var(--line-soft);border-radius:7px;padding:8px 9px;background:var(--surface-2)}
+  .cov-hd{display:flex;align-items:center;gap:6px;font-size:10.5px;color:var(--muted)}
+  .cov-hd .sw{margin-left:auto;font-size:10.5px;color:var(--muted);background:none;border:0;padding:0 2px}
   .cov-hd .sw:hover{color:var(--accent)}
-  .cov-sub{font-size:11px;color:var(--txt-2);line-height:1.6;margin-top:4px}
+  .cov-sub{font-size:10.5px;color:var(--txt-2);line-height:1.6;margin-top:4px}
   .cov-sub b{font-family:var(--mono);color:var(--txt)}
-  .cov-list{margin-top:8px;max-height:240px;overflow:auto}
-  .cov-lab{font-size:10px;color:var(--muted);margin:6px 0 4px}
-  .cov-list .chip{padding:2px 7px;font-size:10px}
+  .cov-list{margin-top:6px;max-height:190px;overflow:auto}
+  .cov-lab{font-size:9.5px;color:var(--muted);margin:6px 0 3px}
+  .cov-list .chip{padding:2px 6px;font-size:9.5px}
   .cov-list .chip .num{color:var(--muted);margin-left:3px}
 
-  /* ---------- 报告卡 ---------- */
-  .card{border:1px solid var(--line);border-radius:8px;background:var(--surface);overflow:hidden;min-width:0}
-  .card-hd{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 14px;
-           border-bottom:1px solid var(--line-soft)}
-  .card-hd .who{font-family:var(--mono);font-size:12px}
-  .spacer{flex:1}
-  .pill{font-size:11px;padding:1px 7px;border-radius:999px;border:1px solid var(--line-soft);
-        color:var(--muted);white-space:nowrap}
-  .pill.ok{color:var(--ok);border-color:var(--ok)} .pill.warn{color:var(--warn);border-color:var(--warn)}
-  .pill.err{color:var(--err);border-color:var(--err)} .pill.acc{color:var(--accent);border-color:var(--accent)}
-  .body{padding:14px}
+  /* 工作区头 */
+  .wk-head{position:sticky;top:0;z-index:6;background:var(--bg);border-bottom:1px solid var(--line-soft);
+           padding:14px 24px 12px;display:flex;align-items:flex-start;gap:14px}
+  .wk-main{flex:1;min-width:0}
+  .crumb{font-size:10.5px;color:var(--muted);margin-bottom:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .crumb b{color:var(--accent);font-family:var(--mono);font-weight:500}
+  .wk-title{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+  .wk-title h1{font-size:19px;font-weight:650;margin:0;letter-spacing:.15px;line-height:1.3;word-break:break-word}
+  .wk-sub{font-size:11px;color:var(--txt-2);display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:5px}
+  .wk-sub .tag{font-family:var(--mono);font-size:10px;color:var(--txt-2);background:var(--surface-2);
+               border:1px solid var(--line);padding:1px 6px;border-radius:4px}
+  .wk-sub button.tag{cursor:pointer}
+  .wk-sub button.tag:hover{border-color:var(--accent);color:var(--txt)}
+  .assign-list{display:flex;flex-direction:column;gap:4px;max-height:280px;overflow:auto;margin-top:8px}
+  .assign-item{display:flex;align-items:center;gap:8px;width:100%;text-align:left;
+               background:var(--surface-2);border:1px solid var(--line);border-radius:7px;
+               padding:7px 9px;font-size:11.5px;color:var(--muted)}
+  .assign-item:hover{border-color:var(--muted);color:var(--txt)}
+  .assign-item.on{border-color:var(--accent)}
+  .assign-item .who{flex:1;color:var(--txt);font-family:var(--mono)}
+  .sel{background:var(--surface-2);color:var(--txt);border:1px solid var(--line);border-radius:6px;
+       padding:3px 6px;font:inherit;font-size:10.5px}
+  .queryline{display:flex;align-items:center;gap:7px;margin-top:8px;min-width:0;font-size:11px;color:var(--muted)}
+  .queryline .lbl{flex:0 0 auto}
+  .queryline code{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+                  background:var(--surface-2);border:1px solid var(--line-soft);border-radius:5px;
+                  padding:3px 7px;color:var(--txt-2);font-size:10.5px}
+  .warnline{font-size:10.5px;color:var(--warn);line-height:1.5;margin-top:6px}
+  .wk-actions{display:flex;gap:7px;align-items:center;flex-wrap:wrap;justify-content:flex-end;flex:0 0 auto}
 
-  .sect-t{font-size:11px;color:var(--muted);margin:0 0 6px;display:flex;align-items:center;gap:6px}
-  .contract{border:1px solid var(--line-soft);border-radius:6px;padding:12px 14px;margin-bottom:18px}
-  .act{margin:0 0 12px}
-  .act:last-child{margin-bottom:0}
-  .act .step{font-size:13px;margin-bottom:5px}
-  .act .step .no{font-family:var(--mono);color:var(--muted);margin-right:6px}
-  .cmdrow{display:flex;gap:6px;align-items:flex-start}
-  .cmd{flex:1;min-width:0;font-family:var(--mono);font-size:12px;line-height:1.65;color:var(--txt);
-       background:var(--bg);border:1px solid var(--line-soft);border-radius:6px;padding:8px 10px;
-       white-space:pre-wrap;word-break:break-all}
-  .copy{flex:0 0 auto;background:transparent;border:1px solid var(--line);color:var(--txt-2);
-        border-radius:6px;padding:6px 10px;font-size:11px}
-  .copy:hover{border-color:var(--accent);color:var(--accent)}
-  .crumb{font-size:11px;color:var(--muted);margin-top:4px;line-height:1.6}
-  .contract-empty{display:flex;align-items:center;gap:7px;height:34px;border:1px solid var(--line-soft);
-                  border-left:3px solid var(--line);border-radius:6px;background:var(--surface-2);
-                  padding:0 12px;font-size:12px;color:var(--txt-2);margin-bottom:18px}
-  .contract-empty .ic{color:var(--muted);flex:0 0 auto}
-  .contract-empty .txt{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  /* 画布与卡片 */
+  .canvas{padding:16px 24px 56px;display:grid;gap:14px;max-width:1040px;margin:0 auto;min-width:0}
+  .canvas.compare{grid-template-columns:minmax(0,1fr) minmax(0,1fr);max-width:none;align-items:start}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;min-width:0}
+  .card-hd{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:9px 14px;
+           border-bottom:1px solid var(--line-soft);background:var(--surface-2)}
+  .card-hd .k{font-size:11px;font-weight:600;color:var(--txt-2);letter-spacing:.3px}
+  .card-bd{padding:14px 16px}
+  .pill{font-size:10px;padding:2px 8px;border-radius:999px;font-family:var(--mono);
+        border:1px solid var(--line);color:var(--txt-2);white-space:nowrap}
+  .pill.ok{color:#56d364;border-color:rgba(63,185,80,.35);background:rgba(63,185,80,.08)}
+  .pill.warn{color:#e3b341;border-color:rgba(210,153,34,.35);background:rgba(210,153,34,.08)}
+  .pill.err{color:#ff7b72;border-color:rgba(248,81,73,.35);background:rgba(248,81,73,.08)}
+  .pill.acc{color:#79c0ff;border-color:rgba(88,166,255,.35);background:rgba(88,166,255,.08)}
+  .copy{font-size:10.5px;color:var(--accent);background:none;border:0;padding:2px 4px;white-space:nowrap}
+  .copy:hover{color:#79c0ff;text-decoration:underline}
+  .ghost{background:var(--surface-2);border:1px solid var(--line);color:var(--txt-2);
+         border-radius:6px;padding:3px 9px;font-size:10.5px}
+  .ghost:hover{border-color:var(--muted);color:var(--txt)}
+  .linkbtn{background:none;border:0;color:var(--muted);font-size:10.5px;padding:0;text-decoration:underline}
+  .linkbtn:hover{color:var(--txt-2)}
+  .empty{color:var(--muted);font-size:11.5px;padding:10px 0;line-height:1.7}
 
-  .md{font-size:13.5px;line-height:1.75;word-break:break-word}
-  .md .md-h{font-weight:600;font-size:14px;margin:14px 0 6px}
+  .verdict{border-left:3px solid var(--ok)}
+  .verdict.refuse,.verdict.err{border-left-color:var(--err)}
+  .verdict.clarify{border-left-color:var(--warn)}
+  .vline{font-size:15px;font-weight:600;line-height:1.55;margin:2px 0 12px;color:var(--txt);word-break:break-word}
+  .vkpi{display:flex;gap:18px;flex-wrap:wrap;padding:10px 0;border-top:1px solid var(--line-soft);
+        border-bottom:1px solid var(--line-soft);margin-bottom:10px}
+  .vkpi div{display:flex;flex-direction:column;gap:2px}
+  .vkpi .l{font-size:10px;color:var(--muted)}
+  .vkpi .v{font-size:13.5px;font-family:var(--mono);color:var(--txt)}
+  .vkpi .v.small{font-size:10.5px}
+  .vsub{font-size:11.5px;color:var(--muted);line-height:1.7}
+  .impact{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
+  .chip{font-size:10.5px;padding:3px 8px;border-radius:6px;background:var(--surface-2);
+        border:1px solid var(--line);color:var(--txt-2);font-family:var(--mono)}
+  .chip.hot{color:#ff7b72;border-color:rgba(248,81,73,.3)}
+  .chips{display:flex;gap:6px;flex-wrap:wrap}
+  .chips .chip:hover{border-color:var(--accent);color:var(--accent)}
+
+  /* 诊断分析 */
+  .md{font-size:13px;line-height:1.75;word-break:break-word;color:var(--txt-2)}
+  .md .md-h{font-weight:600;font-size:13px;color:var(--txt);margin:14px 0 6px}
   .md .md-h:first-child{margin-top:0}
   .md .md-li{padding-left:15px;text-indent:-15px}
   .md .md-oli{padding-left:0;text-indent:0}
   .md .md-no{font-family:var(--mono);color:var(--muted);margin-right:5px}
-  .md .md-quote{border-left:3px solid var(--line);padding:2px 10px;margin:6px 0;color:var(--txt-2)}
-  .md .md-t{border-collapse:collapse;margin:8px 0;font-size:12.5px;width:100%}
+  .md .md-quote{border-left:2px solid var(--purple);padding:3px 11px;margin:7px 0;color:var(--muted);font-size:12px}
+  .md .md-t{border-collapse:collapse;margin:8px 0;font-size:12px;width:100%}
   .md .md-t th,.md .md-t td{border:1px solid var(--line-soft);padding:5px 8px;text-align:left;vertical-align:top}
   .md .md-t th{background:var(--surface-2);color:var(--txt-2);font-weight:600}
   .md a{color:var(--accent);text-decoration:none} .md a:hover{text-decoration:underline}
-  .md .md-gap{height:8px}
-  .md code{font-family:var(--mono);font-size:12px;background:var(--surface-2);padding:1px 5px;border-radius:4px}
-  .md strong{font-weight:600}
-  /* 围栏代码块：模型确实会吐 ```sql 段（实测），原页面把反引号原样显示出来——
-     那是"简陋"感最刺眼的一处。整段按原文渲染（**不套 inline()**：代码里的 ** 和 [参考N] 都是字面量）。 */
-  .md-code{margin:8px 0;padding:10px 12px;background:var(--bg);border:1px solid var(--line-soft);
-           border-radius:6px;font-family:var(--mono);font-size:12px;line-height:1.65;
-           white-space:pre-wrap;word-break:break-all;overflow-x:auto;color:var(--txt)}
-  .ref-badge{font-size:10px;color:var(--accent);border:1px solid var(--accent);border-radius:999px;
-             padding:0 5px;margin:0 1px;cursor:default;white-space:nowrap}
-  .cursor{display:inline-block;width:2px;height:1em;background:var(--accent);vertical-align:text-bottom;
-          animation:blink 1s step-end infinite}
+  .md .md-gap{height:7px}
+  .md code{font-size:11.5px;background:var(--surface-3);padding:1px 5px;border-radius:4px;color:#a5d6ff}
+  .md strong{font-weight:600;color:var(--txt)}
+  .md-code{margin:8px 0;padding:9px 11px;background:var(--bg);border:1px solid var(--line-soft);
+           border-radius:6px;font-size:11.5px;line-height:1.65;white-space:pre-wrap;
+           word-break:break-all;overflow-x:auto;color:var(--txt)}
+  .ref-badge{font-size:10px;color:var(--purple);border:1px solid rgba(163,113,247,.45);
+             border-radius:999px;padding:0 5px;margin:0 1px;cursor:default;white-space:nowrap}
+  .cursor{display:inline-block;width:7px;height:13px;background:var(--accent);
+          vertical-align:-2px;margin-left:2px;animation:blink 1s step-end infinite}
   @keyframes blink{50%{opacity:0}}
-  .answer-err{color:var(--err);font-size:13px;margin-bottom:10px}
+  .answer-err{color:var(--err);font-size:12.5px;margin-bottom:9px;line-height:1.6}
 
+  /* 只读命令清单 */
+  .contract{padding:0}
+  .cmd{display:flex;gap:10px;align-items:flex-start;padding:11px 0;border-bottom:1px solid var(--line-soft)}
+  .cmd:first-child{padding-top:0}
+  .cmd:last-child{border-bottom:0;padding-bottom:0}
+  .cmd .n{width:20px;height:20px;border-radius:6px;background:var(--surface-3);display:grid;
+          place-items:center;font-family:var(--mono);font-size:10.5px;color:var(--txt-2);flex:0 0 auto}
+  .cmd .c-body{flex:1;min-width:0}
+  .cmd .step{font-size:12px;color:var(--txt);margin-bottom:5px;line-height:1.5}
+  .cmd pre{margin:0;font-size:11.5px;color:#a5d6ff;background:var(--bg);border:1px solid var(--line-soft);
+           border-radius:6px;padding:7px 10px;overflow-x:auto;white-space:pre-wrap;word-break:break-all}
+  .cmd .ref{font-size:10px;color:var(--muted);margin-top:5px;font-family:var(--mono)}
+  .note-ro{font-size:10.5px;color:var(--muted);padding:8px 14px;background:var(--surface-2);
+           border-top:1px solid var(--line-soft);line-height:1.6}
+  .contract-empty{display:flex;align-items:center;gap:7px;min-height:34px;border:1px solid var(--line-soft);
+                  border-left:3px solid var(--line);border-radius:6px;background:var(--surface-2);
+                  padding:7px 11px;font-size:11.5px;color:var(--txt-2);line-height:1.6}
+  .contract-empty .ic{color:var(--muted);flex:0 0 auto}
+  .contract-empty .txt{min-width:0}
+
+  /* 参考来源 */
   .reflist{display:flex;flex-direction:column;gap:5px}
-  .ref-item{display:flex;gap:7px;align-items:baseline;font-size:12px;color:var(--txt-2);
-            background:var(--surface-2);border:1px solid var(--line-soft);border-radius:6px;
-            padding:6px 10px;line-height:1.5}
-  .ref-item b{font-family:var(--mono);color:var(--muted);font-weight:500;flex:0 0 auto}
-  .ref-item .svc{color:var(--muted);font-size:11px;margin-left:auto;padding-left:8px;flex:0 0 auto}
-  .ref-item.hl{border-color:var(--accent);background:#16243a}
-  .empty{color:var(--muted);font-size:12px;padding:var(--s3) 0}
+  .refitem{display:flex;gap:9px;align-items:baseline;font-size:11.5px;color:var(--txt-2);
+           background:var(--surface-2);border:1px solid var(--line-soft);border-radius:6px;
+           padding:7px 10px;line-height:1.5}
+  .refitem b{font-family:var(--mono);color:var(--purple);font-weight:500;flex:0 0 auto}
+  .refitem .id{font-family:var(--mono);color:var(--txt-2);min-width:0;word-break:break-all}
+  .refitem .svc{font-family:var(--mono);font-size:10px;color:var(--muted);margin-left:auto;
+                padding-left:8px;flex:0 0 auto}
+  .refitem.hl{border-color:var(--accent);background:#16243a}
+  .near{margin-top:12px;padding-top:11px;border-top:1px solid var(--line-soft)}
+  .near .hint{font-size:11.5px;color:var(--txt-2);margin-bottom:8px}
 
-  /* ---------- 结论卡（产品化第一屏：先给结论，再给证据） ---------- */
-  .verdict{margin:0 0 16px;border:1px solid var(--line);border-left:3px solid var(--accent);
-           border-radius:8px;background:linear-gradient(180deg,var(--surface-2),var(--surface));
-           padding:13px 16px}
-  .verdict.ok{border-left-color:var(--ok)} .verdict.warn{border-left-color:var(--warn)}
-  .verdict.err{border-left-color:var(--err)}
-  .verdict-hd{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-  .verdict-hd .k{font-size:10.5px;letter-spacing:.10em;color:var(--muted)}
-  .verdict-hd .spacer{flex:1}
-  .verdict-line{margin:8px 0 0;font-size:14px;line-height:1.65;color:var(--txt);word-break:break-word}
-  .verdict-kpis{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
-  .vk{display:inline-flex;align-items:baseline;gap:6px;background:var(--bg);
-      border:1px solid var(--line-soft);border-radius:6px;padding:4px 9px;font-size:11px;color:var(--muted)}
-  .vk b{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--txt)}
-  .verdict-sub{margin-top:9px;font-size:11px;color:var(--muted);line-height:1.6}
+  /* 处置记录 */
+  .tl{padding:13px 16px}
+  .tl-row{display:flex;gap:11px;position:relative;padding-bottom:13px}
+  .tl-row:last-child{padding-bottom:0}
+  .tl-row::before{content:"";position:absolute;left:6px;top:14px;bottom:-2px;width:1px;background:var(--line)}
+  .tl-row:last-child::before{display:none}
+  .tl-dot{width:13px;height:13px;border-radius:50%;border:2px solid var(--line);background:var(--surface);
+          flex:0 0 auto;margin-top:2px;z-index:1}
+  .tl-dot.done{background:var(--ok);border-color:var(--ok)}
+  .tl-dot.now{background:var(--accent);border-color:var(--accent);box-shadow:0 0 0 3px rgba(88,166,255,.15)}
+  .tl-dot.err{background:var(--err);border-color:var(--err)}
+  .tl-dot.warn{background:var(--warn);border-color:var(--warn)}
+  .tl-c{min-width:0}
+  .tl-c .t{font-size:11.5px;color:var(--txt);line-height:1.5;word-break:break-word}
+  .tl-c .m{font-size:10px;color:var(--muted);font-family:var(--mono);margin-top:2px;word-break:break-all}
 
-  /* ---------- 空态引导（排障动线，替代一格灰字） ---------- */
-  .empty-hero{padding:14px 4px 6px;max-width:680px}
-  .empty-hero h2{margin:0 0 8px;font-size:17px;font-weight:600;letter-spacing:.01em}
-  .empty-hero>p{margin:0;color:var(--txt-2);font-size:12.5px;line-height:1.8}
-  .steps{display:grid;gap:8px;margin:16px 0 14px;grid-template-columns:repeat(3,1fr)}
-  .step-card{border:1px solid var(--line-soft);border-radius:8px;background:var(--surface-2);padding:10px 12px}
-  .step-card .no{font-family:var(--mono);font-size:11px;color:var(--accent)}
-  .step-card b{display:block;font-size:12.5px;margin-top:3px}
-  .step-card span{display:block;margin-top:2px;font-size:11px;color:var(--muted);line-height:1.6}
-  .empty-hero .chips{margin-top:6px}
-  .empty-hero .hint{margin-top:10px;font-size:11px;color:var(--muted);line-height:1.6}
-
-  /* ---------- 权限隔离演练：底部差集对照表 ---------- */
-  .diff{margin-top:20px;border:1px solid var(--line);border-radius:8px;background:var(--surface);overflow:hidden}
+  /* 双身份对照 */
+  .cmp-col{min-width:0;display:flex;flex-direction:column;gap:12px}
+  .cmp-hd{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--txt-2);padding:0 3px 2px}
+  .cmp-hd b{color:var(--txt)}
+  .cmp-hd code{font-size:10.5px;color:var(--muted)}
+  .diff{margin-top:18px;border:1px solid var(--line);border-radius:8px;background:var(--surface);overflow:hidden}
   .diff-hd{padding:11px 14px;border-bottom:1px solid var(--line-soft)}
-  .diff-hd b{font-size:13px}
-  .diff-hd .sub{font-size:11px;color:var(--muted);margin-top:2px;line-height:1.6}
-  table.diff-t{width:100%;border-collapse:collapse;font-size:12px}
-  table.diff-t th{text-align:left;padding:7px 12px;font-weight:500;color:var(--muted);
-                  background:var(--surface-2)}
-  table.diff-t th.k{width:120px}
+  .diff-hd b{font-size:12.5px}
+  .diff-hd .sub{font-size:10.5px;color:var(--muted);margin-top:2px;line-height:1.6}
+  table.diff-t{width:100%;border-collapse:collapse;font-size:11.5px}
+  table.diff-t th{text-align:left;padding:7px 12px;font-weight:500;color:var(--muted);background:var(--surface-2)}
+  table.diff-t th.k{width:110px}
   table.diff-t td{padding:7px 12px;border-top:1px solid var(--line-soft);vertical-align:top}
   table.diff-t td.k{color:var(--muted)}
   table.diff-t tr.same td{color:var(--muted)}
@@ -271,124 +305,144 @@
   table.diff-t tr.diff td.k{box-shadow:inset 3px 0 0 var(--warn)}
   table.diff-t .val{font-family:var(--mono);word-break:break-word}
 
-  /* ---------- 运行面板视图 · 成果视图（2026-10-27 产品化二期） ---------- */
-  .panel-main .pagehead{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;margin:0}
-  .panel-main .pagehead h1{margin:0;font-size:20px;font-weight:600;letter-spacing:.01em}
-  .panel-main .pagehead p{margin:4px 0 0;color:var(--muted);font-size:12px}
-  .panel-main .pagehead .win{margin-left:auto;font-size:11px;color:var(--muted);
-        border:1px solid var(--line-soft);border-radius:999px;padding:3px 11px;white-space:nowrap}
-  .panel-main .kpi .value{font-size:28px;letter-spacing:-.01em}
-  .panel-main .kpi .foot b{color:var(--txt-2)}
-  table.res{width:100%;border-collapse:collapse;font-size:12.5px}
-  table.res th{text-align:left;font-size:11px;color:var(--muted);font-weight:500;
-               padding:0 8px 8px;border-bottom:1px solid var(--line-soft);white-space:nowrap}
-  table.res td{padding:9px 8px;border-bottom:1px solid var(--line-soft);color:var(--txt-2);vertical-align:top}
-  table.res tr:last-child td{border-bottom:0}
-  table.res td.q{color:var(--txt);max-width:300px;line-height:1.5}
-  table.res td.num{font-family:var(--mono);text-align:right;white-space:nowrap}
-  table.res td.rl{color:var(--muted);font-family:var(--mono);white-space:nowrap}
-  .results-empty{padding:12px 2px;color:var(--muted);font-size:12px;line-height:1.7}
-  .results-empty code{font-family:var(--mono);font-size:11.5px;background:var(--surface-2);
-                      padding:1px 5px;border-radius:4px}
-  @media(min-width:1100px){ .panel-main .row.split{grid-template-columns:minmax(0,1.65fr) minmax(300px,1fr)} }
-  @media(max-width:600px){
-    .panel-main .pagehead h1{font-size:17px}
-    #results{overflow-x:auto}
-    table.res{min-width:0}
-    table.res td.q{max-width:none}
-    /* 手机只留「提问 / 状态 / 依据 / 耗时」：时间与动作两列在 390px 下会迫使整表横向滚动 */
-    table.res th:nth-child(1),table.res td:nth-child(1),
-    table.res th:nth-child(5),table.res td:nth-child(5){display:none}
-    .panel-main .legend,.panel-main .chain,.panel-main .tile .k,.panel-main .tile .delta,
-    .panel-main .caption,.panel-main .sub,.panel-main h2 .tag,.panel-main table.res th,
-    .panel-main table.res td,.panel-main .dep .k,.panel-main .pagehead .win,.panel-main .kpi .foot,
-    .panel-main .kpi .foot b,.panel-main .seg button,button.ghost{font-size:12px}
-  }
+  /* 空态 */
+  .hero h2{font-size:17px;font-weight:650;margin:0 0 7px;letter-spacing:.1px}
+  .hero p{margin:0;color:var(--txt-2);font-size:12px;line-height:1.8}
+  .hero-grid{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,.8fr);gap:24px;align-items:start}
+  .hero-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  .hero .hint{font-size:10.5px;color:var(--muted);line-height:1.6;margin-top:9px}
+  .steps3{display:grid;gap:8px}
+  .step-card{border:1px solid var(--line-soft);border-radius:8px;background:var(--surface-2);padding:10px 12px}
+  .step-card .no{font-family:var(--mono);font-size:10.5px;color:var(--accent)}
+  .step-card b{display:block;font-size:12px;margin-top:3px}
+  .step-card span{display:block;margin-top:2px;font-size:10.5px;color:var(--muted);line-height:1.6}
+  .empty-diag{padding:28px 18px;text-align:center}
+  .empty-diag .big{font-size:15px;font-weight:600;margin-bottom:6px}
+  .empty-diag .querybox{margin:13px auto;max-width:640px;background:var(--bg);border:1px solid var(--line-soft);
+                        border-radius:7px;padding:8px 11px;color:var(--txt-2);font-size:11.5px;
+                        text-align:left;word-break:break-word}
+  .empty-diag .actions{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
 
-  /* ---------- 运行面板视图 ---------- */
-  .panel-main{max-width:1560px;margin:0 auto;padding:var(--s4) var(--s5) var(--s5);
-              display:flex;flex-direction:column;gap:var(--s4)}
-  .row{display:grid;gap:var(--s4)}
-  @media(min-width:1100px){ .row.split{grid-template-columns:minmax(0,1fr) minmax(0,1.35fr)} }
-  section{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);
-          padding:var(--s4) 18px;min-width:0}
-  h2{margin:0 0 var(--s3);font-size:12px;font-weight:600;color:var(--muted);
-     display:flex;align-items:center;gap:var(--s2);flex-wrap:wrap}
-  h2 .tag{margin-left:auto;font-weight:400;font-size:11px}
-  .kpis{display:grid;gap:var(--s4);grid-template-columns:repeat(auto-fit,minmax(190px,1fr))}
-  .kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);
-       padding:var(--s4) 18px}
-  .kpi .label{font-size:12px;color:var(--muted);margin-bottom:var(--s1)}
-  .kpi .value{font-size:30px;font-weight:600;line-height:1.15}
-  .kpi .foot{margin-top:var(--s1);font-size:11px;color:var(--muted);min-height:16px}
-  .kpi .foot .up{color:var(--ok)}
-  .kpi.lead{border-left:2px solid var(--accent);padding-left:16px}
-  .deps{display:grid;gap:var(--s2) var(--s4);grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
-  .dep{display:flex;align-items:center;gap:var(--s2);padding:var(--s2) var(--s3);
-       background:var(--surface-2);border:1px solid var(--line-soft);border-radius:8px}
-  .dep .dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex:none}
-  .dot.UP{background:var(--ok)} .dot.DOWN{background:var(--err)} .dot.DEGRADED{background:var(--warn)}
-  .dep .k{font-size:12px;color:var(--txt-2)}
-  .dep .v{margin-left:auto;font-size:13px;color:var(--txt)}
-  .steps{display:flex;gap:6px}
-  .step{flex:1;text-align:center;padding:var(--s2) 0;border-radius:8px;font-size:12px;
-        background:var(--surface-2);border:1px solid var(--line-soft);color:var(--muted)}
-  .step.on{background:rgba(63,185,80,.12);border-color:var(--ok);color:var(--ok);font-weight:600}
-  .facts{display:flex;flex-wrap:wrap;gap:var(--s2) var(--s4);margin-top:var(--s3);font-size:12px;color:var(--txt-2)}
-  .facts b{font-family:var(--mono);font-variant-numeric:tabular-nums}
-  .badge{display:inline-block;padding:1px 8px;border-radius:999px;font-size:11px;font-weight:600;
+  /* 运行态 */
+  .drawer-hd{display:flex;align-items:center;gap:7px;padding:12px 14px;border-bottom:1px solid var(--line)}
+  .drawer-hd b{font-size:12.5px}
+  .drawer-hd .x{margin-left:auto;background:none;border:0;color:var(--muted);font-size:15px;padding:0 3px}
+  .drawer-hd .x:hover{color:var(--txt)}
+  .drawer-bd{padding:12px;overflow:auto;display:flex;flex-direction:column;gap:11px;min-height:0}
+  .dsec{border:1px solid var(--line-soft);border-radius:8px;padding:11px;background:var(--surface-2)}
+  .dsec h4{margin:0 0 8px;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.45px}
+  .dnums{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+  .dnums .n{background:var(--bg);border:1px solid var(--line-soft);border-radius:6px;padding:7px 9px}
+  .dnums .v{font-family:var(--mono);font-size:14px;color:var(--txt)}
+  .dnums .k{font-size:9.5px;color:var(--muted)}
+  .dnums .d{font-family:var(--mono);font-size:9px;color:var(--ok);min-height:11px}
+  .dnote{font-size:10.5px;color:var(--muted);line-height:1.65;margin-top:7px;word-break:break-word}
+  .dnote code{font-size:10px;color:var(--txt-2)}
+  .deps-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;
+            font-size:11px;border-bottom:1px solid var(--line-soft)}
+  .deps-row:last-child{border:0}
+  .deps-row .s{display:flex;align-items:center;gap:6px;color:var(--txt-2)}
+  .deg{display:flex;gap:4px}
+  .deg i{flex:1;height:5px;border-radius:3px;background:var(--surface-3)}
+  .deg i.on{background:var(--ok)}
+  .deg i.warn{background:var(--warn)}
+  .facts{display:flex;flex-wrap:wrap;gap:5px 12px;margin-top:8px;font-size:10.5px;color:var(--txt-2)}
+  .facts b{font-family:var(--mono)}
+  .badge{display:inline-block;padding:1px 7px;border-radius:999px;font-size:9.5px;font-weight:600;
          border:1px solid var(--warn);color:var(--warn)}
-  .meter{margin-top:var(--s3)}
-  .meter .cap{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:6px}
-  .track{height:8px;border-radius:999px;background:var(--surface-2);overflow:hidden;
-         border:1px solid var(--line-soft)}
+  .meter{margin-top:8px}
+  .meter .cap{display:flex;justify-content:space-between;font-size:10.5px;color:var(--muted);margin-bottom:5px}
+  .track{height:7px;border-radius:999px;background:var(--surface-3);overflow:hidden;border:1px solid var(--line-soft)}
   .track i{display:block;height:100%;background:var(--accent)}
-  .tracks{display:flex;flex-direction:column;gap:var(--s2)}
-  /* 轨迹卡用 .req 而非 .track：配额进度条已经占了 .track（见上），同名会让两组规则互相覆盖 */
-  .req{background:var(--surface-2);border:1px solid var(--line-soft);border-radius:8px;
-         padding:var(--s3);border-left:2px solid var(--line)}
-  .req.refused{border-left-color:var(--err)}
-  .req.cached{border-left-color:var(--ok)}
-  .req .q{font-size:13px;color:var(--txt);margin-bottom:6px;
-            display:flex;gap:var(--s3);align-items:baseline}
-  .req .q .txt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .req .q .ms{flex:none;color:var(--txt-2);font-size:12px}
-  .chain{display:flex;flex-wrap:wrap;gap:var(--s1) var(--s2);font-size:11px;color:var(--muted)}
-  .chain b{font-family:var(--mono);color:var(--txt-2);font-weight:500}
-  .chain .hit{color:var(--ok)} .chain .no{color:var(--txt-2)} .chain .rfs{color:var(--err)}
-  .bar{display:flex;height:8px;margin-top:var(--s2);border-radius:4px;overflow:hidden;
-       background:var(--line-soft)}
-  .bar i{display:block;height:100%;background:var(--accent)}   /* #20：此前无背景色 → 整条不可见 */
-  .legend{display:flex;flex-wrap:wrap;gap:var(--s1) var(--s3);margin-top:6px;font-size:10px;color:var(--muted)}
-  .legend span{display:inline-flex;align-items:center;gap:5px}
-  .legend i{width:8px;height:8px;border-radius:2px;display:inline-block}
-  .chart{display:flex;align-items:flex-end;gap:2px;height:104px;padding:10px var(--s3) var(--s1);
-         background:var(--surface-2);border:1px solid var(--line-soft);border-radius:8px;
-         position:relative}
-  .chart::after{content:"";position:absolute;left:var(--s3);right:var(--s3);bottom:var(--s1);
-                height:1px;background:var(--line)}
-  .chart .b{flex:1;min-width:2px;background:var(--accent);border-radius:2px 2px 0 0;opacity:.85}
-  .chart .b.zero{background:var(--line);opacity:1}
-  .chart .b.gap{background:repeating-linear-gradient(135deg,var(--line) 0 3px,transparent 3px 6px);opacity:.6}
-  .caption{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;
-           font-size:11px;color:var(--muted);margin-top:var(--s2)}
-  .seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden;
-       margin-left:10px;vertical-align:middle}
-  .seg button{background:var(--surface-2);border:0;color:var(--muted);font:inherit;font-size:11px;
-              padding:2px 10px;cursor:pointer;transition:color .12s,background .12s}
-  .seg button:hover:not(.on){color:var(--txt-2);background:#232a34}
-  .seg button.on{background:var(--accent);color:#06121f;font-weight:600}
-  .tiles{display:grid;gap:1px;background:var(--line-soft);border:1px solid var(--line-soft);
-         border-radius:8px;overflow:hidden;grid-template-columns:repeat(auto-fit,minmax(132px,1fr))}
-  .tile{background:var(--surface);padding:10px var(--s3)}
-  .tile .v{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:16px}
-  .tile .k{font-size:11px;color:var(--muted);margin-top:2px}
-  .tile .delta{font-family:var(--mono);font-size:10px;color:var(--ok);min-height:13px}
-  .sub{color:var(--muted);font-size:11px;margin-top:10px}
-  #events{max-height:40vh;overflow-y:auto;font-family:var(--mono);font-size:12px;
-          background:var(--surface-2);border:1px solid var(--line-soft);border-radius:8px}
-  #events .ev-empty{padding:10px 12px;font-size:12px;color:var(--muted)}
-  #events .ev{display:flex;gap:10px;padding:var(--s1) 10px;border-bottom:1px solid var(--line-soft);
+  .locked{border:1px solid var(--line-soft);border-left:3px solid var(--warn);border-radius:8px;
+          background:var(--surface-2);padding:12px;font-size:11px;color:var(--txt-2);line-height:1.7}
+  .locked b{color:var(--txt)}
+  .locked code{font-size:10.5px;color:#e3b341;background:var(--bg);padding:1px 4px;border-radius:4px}
+
+  /* 运行面板 */
+  #v-panel{flex:1 1 auto;min-height:0;overflow:auto}
+  .panel-main{max-width:1560px;margin:0 auto;padding:14px 24px 28px;display:flex;flex-direction:column;gap:14px}
+  .panel-main .pagehead{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;margin:0}
+  .panel-main .pagehead h1{margin:0;font-size:20px;font-weight:650;letter-spacing:.1px}
+  .panel-main .pagehead p{margin:4px 0 0;color:var(--muted);font-size:11.5px}
+  .panel-main .pagehead .win{margin-left:auto;font-size:10.5px;color:var(--muted);
+        border:1px solid var(--line-soft);border-radius:999px;padding:3px 10px;white-space:nowrap}
+  .panel-main .row{display:grid;gap:14px}
+  @media(min-width:1100px){ .panel-main .row.split{grid-template-columns:minmax(0,1.65fr) minmax(300px,1fr)} }
+  .panel-main section{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);
+          padding:14px 16px;min-width:0}
+  .panel-main h2{margin:0 0 11px;font-size:11.5px;font-weight:600;color:var(--muted);
+     display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .panel-main h2 .tag{margin-left:auto;font-weight:400;font-size:10.5px}
+  .panel-main .kpis{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(190px,1fr))}
+  .panel-main .kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:13px 16px}
+  .panel-main .kpi .label{font-size:11px;color:var(--muted);margin-bottom:3px}
+  .panel-main .kpi .value{font-size:27px;font-weight:600;line-height:1.15;letter-spacing:-.01em}
+  .panel-main .kpi .foot{margin-top:3px;font-size:10.5px;color:var(--muted);min-height:15px}
+  .panel-main .kpi .foot b{color:var(--txt-2)}
+  .panel-main .kpi.lead{border-left:2px solid var(--accent);padding-left:14px}
+  .panel-main .deps{display:grid;gap:7px 14px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+  .panel-main .dep{display:flex;align-items:center;gap:7px;padding:7px 10px;
+       background:var(--surface-2);border:1px solid var(--line-soft);border-radius:7px}
+  .panel-main .dep .k{font-size:11px;color:var(--txt-2)}
+  .panel-main .dep .v{margin-left:auto;font-size:12px;color:var(--txt)}
+  .dot.UP{background:var(--ok)} .dot.DOWN{background:var(--err)} .dot.DEGRADED{background:var(--warn)}
+  .panel-main .steps{display:flex;gap:6px}
+  .panel-main .step{flex:1;text-align:center;padding:7px 0;border-radius:7px;font-size:11px;
+        background:var(--surface-2);border:1px solid var(--line-soft);color:var(--muted)}
+  .panel-main .step.on{background:rgba(63,185,80,.12);border-color:var(--ok);color:var(--ok);font-weight:600}
+  .panel-main .facts{display:flex;flex-wrap:wrap;gap:7px 16px;margin-top:9px;font-size:11px;color:var(--txt-2)}
+  .panel-main .meter{margin-top:9px}
+  .panel-main .tracks{display:flex;flex-direction:column;gap:7px}
+  .panel-main .req{background:var(--surface-2);border:1px solid var(--line-soft);border-radius:7px;
+         padding:9px 11px;border-left:2px solid var(--line)}
+  .panel-main .req.refused{border-left-color:var(--err)}
+  .panel-main .req.cached{border-left-color:var(--ok)}
+  .panel-main .req .q{font-size:12px;color:var(--txt);margin-bottom:5px;display:flex;gap:12px;align-items:baseline}
+  .panel-main .req .q .txt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .panel-main .req .q .ms{flex:none;color:var(--txt-2);font-size:11px}
+  .panel-main .chain{display:flex;flex-wrap:wrap;gap:3px 9px;font-size:10.5px;color:var(--muted)}
+  .panel-main .chain b{font-family:var(--mono);color:var(--txt-2);font-weight:500}
+  .panel-main .chain .hit{color:var(--ok)} .panel-main .chain .no{color:var(--txt-2)} .panel-main .chain .rfs{color:var(--err)}
+  .panel-main .bar{display:flex;height:7px;margin-top:6px;border-radius:4px;overflow:hidden;background:var(--line-soft)}
+  .panel-main .bar i{display:block;height:100%;background:var(--accent)}
+  .panel-main .legend{display:flex;flex-wrap:wrap;gap:4px 11px;margin-top:5px;font-size:9.5px;color:var(--muted)}
+  .panel-main .legend span{display:inline-flex;align-items:center;gap:4px}
+  .panel-main .legend i{width:8px;height:8px;border-radius:2px;display:inline-block}
+  .panel-main .chart{display:flex;align-items:flex-end;gap:2px;height:100px;padding:9px 11px 4px;
+         background:var(--surface-2);border:1px solid var(--line-soft);border-radius:7px;position:relative}
+  .panel-main .chart::after{content:"";position:absolute;left:11px;right:11px;bottom:4px;height:1px;background:var(--line)}
+  .panel-main .chart .b{flex:1;min-width:2px;background:var(--accent);border-radius:2px 2px 0 0;opacity:.85}
+  .panel-main .chart .b.zero{background:var(--line);opacity:1}
+  .panel-main .chart .b.gap{background:repeating-linear-gradient(135deg,var(--line) 0 3px,transparent 3px 6px);opacity:.6}
+  .panel-main .caption{display:flex;justify-content:space-between;gap:9px;flex-wrap:wrap;
+           font-size:10.5px;color:var(--muted);margin-top:5px}
+  .panel-main .seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden;
+       margin-left:9px;vertical-align:middle}
+  .panel-main .seg button{background:var(--surface-2);border:0;color:var(--muted);font:inherit;font-size:10.5px;padding:2px 9px}
+  .panel-main .seg button:hover:not(.on){color:var(--txt-2);background:#232a34}
+  .panel-main .seg button.on{background:var(--accent);color:#06121f;font-weight:600}
+  .panel-main .tiles{display:grid;gap:1px;background:var(--line-soft);border:1px solid var(--line-soft);
+         border-radius:7px;overflow:hidden;grid-template-columns:repeat(auto-fit,minmax(126px,1fr))}
+  .panel-main .tile{background:var(--surface);padding:9px 11px}
+  .panel-main .tile .v{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:15px}
+  .panel-main .tile .k{font-size:10.5px;color:var(--muted);margin-top:2px}
+  .panel-main .tile .delta{font-family:var(--mono);font-size:9.5px;color:var(--ok);min-height:12px}
+  .panel-main .sub{color:var(--muted);font-size:10.5px;margin-top:9px}
+  .panel-main table.res{width:100%;border-collapse:collapse;font-size:12px}
+  .panel-main table.res th{text-align:left;font-size:10.5px;color:var(--muted);font-weight:500;
+               padding:0 7px 7px;border-bottom:1px solid var(--line-soft);white-space:nowrap}
+  .panel-main table.res td{padding:8px 7px;border-bottom:1px solid var(--line-soft);color:var(--txt-2);vertical-align:top}
+  .panel-main table.res tr:last-child td{border-bottom:0}
+  .panel-main table.res td.q{color:var(--txt);max-width:300px;line-height:1.5}
+  .panel-main table.res td.num{font-family:var(--mono);text-align:right;white-space:nowrap}
+  .panel-main table.res td.rl{color:var(--muted);font-family:var(--mono);white-space:nowrap}
+  .panel-main .results-empty{padding:10px 2px;color:var(--muted);font-size:11.5px;line-height:1.7}
+  .panel-main .results-empty code{font-size:10.5px;background:var(--surface-2);padding:1px 5px;border-radius:4px}
+  #events{max-height:40vh;overflow-y:auto;font-family:var(--mono);font-size:11.5px;
+          background:var(--surface-2);border:1px solid var(--line-soft);border-radius:7px}
+  #events .ev-empty{padding:10px 12px;font-size:11.5px;color:var(--muted)}
+  #events .ev{display:flex;gap:9px;padding:4px 10px;border-bottom:1px solid var(--line-soft);
               white-space:nowrap;overflow:hidden}
   #events .ev:last-child{border-bottom:0}
   #events .t{color:var(--muted);flex:none}
@@ -399,69 +453,121 @@
   .ev.degrade_transition .b{color:var(--warn)} .ev.badge-l1 .b{color:var(--ok)}
   .ev.mismatch{background:rgba(248,81,73,.14)} .ev.mismatch .d{color:var(--err);font-weight:600}
   .ev.lost{color:var(--warn);padding:6px 10px}
-  button.ghost{background:var(--surface-2);border:1px solid var(--line);color:var(--txt-2);
-               border-radius:6px;padding:var(--s1) 10px;font:inherit;font-size:11px;cursor:pointer;
-               transition:border-color .12s,color .12s}
-  button.ghost:hover{border-color:var(--muted);color:var(--txt)}
 
-  /* ---------- 凭证失效遮罩（只在 401/403 时出现） ---------- */
+  /* 弹层 / 对话框 / 遮罩 */
+  .pop{position:fixed;z-index:30;background:var(--surface);border:1px solid var(--line);
+       border-radius:9px;box-shadow:0 14px 40px rgba(0,0,0,.5);padding:13px;
+       width:min(390px,92vw);max-height:calc(100vh - var(--top-h) - 18px);overflow:auto;
+       top:calc(var(--top-h) + 6px);right:12px}
+  .pop-hd{font-size:11.5px;color:var(--muted);margin-bottom:9px}
+  .pop .note{font-size:10.5px;color:var(--muted);line-height:1.65;margin-top:9px}
+  .fld{display:flex;flex-direction:column;gap:4px;min-width:0}
+  .fld label,.fld .lbl{font-size:10.5px;color:var(--muted)}
+  .fld input,.fld textarea,.fld select{background:var(--bg);color:var(--txt);border:1px solid var(--line);
+       border-radius:6px;padding:7px 9px;font:inherit;font-size:12px;width:100%;min-width:0}
+  .fld textarea{resize:vertical;min-height:80px;line-height:1.6}
+  .fld input:focus,.fld textarea:focus,.fld select:focus{outline:none;border-color:var(--accent)}
+  .fld .hint{font-size:10px;color:var(--muted);line-height:1.5}
+  .idbar{display:flex;align-items:center;gap:6px;background:var(--bg);border:1px solid var(--line);
+         border-radius:6px;padding:6px 9px;font-size:11.5px;min-width:0}
+  .idbar .who{font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .idbar .sw{margin-left:auto;font-size:10.5px;color:var(--muted);background:none;border:0;padding:0 2px}
+  .idbar .sw:hover{color:var(--accent)}
+  .errline{font-size:11px;color:var(--err);line-height:1.5;min-height:15px}
+  .hintline{font-size:10.5px;color:var(--warn);line-height:1.5}
+  .scrim{position:fixed;inset:0;background:rgba(8,11,16,.55);z-index:24}
+  dialog.modal{padding:0;border:1px solid var(--line);border-radius:11px;background:var(--surface);
+       color:var(--txt);width:min(720px,94vw);max-height:88vh;overflow:auto;box-shadow:0 24px 80px rgba(0,0,0,.6)}
+  dialog.modal::backdrop{background:rgba(8,11,16,.72);backdrop-filter:blur(2px)}
+  .modal-hd{display:flex;align-items:center;gap:9px;padding:13px 16px;border-bottom:1px solid var(--line)}
+  .modal-hd b{font-size:14px}
+  .modal-hd .x{margin-left:auto;background:none;border:0;color:var(--muted);font-size:16px;padding:0 3px}
+  .modal-hd .x:hover{color:var(--txt)}
+  .modal-bd{padding:15px 16px;display:flex;flex-direction:column;gap:12px}
+  .modal-ft{display:flex;gap:8px;justify-content:flex-end;padding:12px 16px;border-top:1px solid var(--line)}
+  .fgrid{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+  .fgrid .span2{grid-column:1 / -1}
+  .chk{display:flex;align-items:flex-start;gap:7px;font-size:11.5px;color:var(--txt-2);line-height:1.55}
+  .chk input{margin-top:2px;accent-color:var(--accent)}
   #auth{position:fixed;inset:0;background:rgba(8,11,16,.82);display:none;place-items:center;
-        backdrop-filter:blur(3px);z-index:20}
-  #auth .card{width:min(520px,92vw);padding:26px 28px}
-  #auth .msg{color:var(--warn);font-size:12px;min-height:18px;margin-top:6px}
-  #auth p{color:var(--muted);font-size:11px;margin:12px 0 0;line-height:1.6}
-  /* #22：滤镜不能挂在 body 上——CSS filter 会为 fixed 后代创建包含块，等于把「凭证已失效」
-     遮罩改成相对整页定位（长页滚动后卡片跑到视口外）。只压暗内容层。 */
-  .sat .topbar,.sat .view,.sat footer{filter:saturate(.15) brightness(.7)}
+        backdrop-filter:blur(3px);z-index:40}
+  #auth .card{width:min(520px,92vw);padding:24px 26px}
+  #auth .msg{color:var(--warn);font-size:11.5px;min-height:18px;margin-top:5px}
+  #auth p{color:var(--muted);font-size:10.5px;margin:10px 0 0;line-height:1.65}
+  .sat .top,.sat .rail,.sat .workspace,.sat .drawer,.sat .statusbar,.sat #v-panel{filter:saturate(.15) brightness(.7)}
+  .toasts{position:fixed;left:50%;bottom:42px;transform:translateX(-50%);z-index:50;
+          display:flex;flex-direction:column;gap:6px;align-items:center;pointer-events:none}
+  .toast{background:var(--surface-3);border:1px solid var(--line);border-radius:8px;
+         padding:7px 12px;font-size:11.5px;color:var(--txt);box-shadow:0 10px 30px rgba(0,0,0,.45);
+         max-width:min(520px,92vw);transition:opacity .18s,transform .18s}
+  .toast.ok{border-color:rgba(63,185,80,.5)} .toast.warn{border-color:rgba(210,153,34,.5)}
+  .toast.err{border-color:rgba(248,81,73,.5)}
+  .toast.out{opacity:0;transform:translateY(4px)}
+  .statusbar{flex:0 0 var(--status-h);display:flex;align-items:center;gap:12px;padding:0 16px;
+             border-top:1px solid var(--line);background:var(--surface);font-size:10px;color:var(--muted);
+             white-space:nowrap;overflow:hidden}
+  .statusbar #fingerprint{overflow:hidden;text-overflow:ellipsis;max-width:46vw}
 
-  footer{flex:0 0 auto;border-top:1px solid var(--line);background:var(--surface);
-         padding:10px var(--s5);display:flex;justify-content:space-between;
-         font-size:11px;color:var(--muted)}
-
-  /* ---------- 窄屏（≤900px）：左栏改为顶栏堆叠 ----------
-     常驻左栏是桌面工作台的人体工学，窄屏照搬会把报告列压成 90px 宽的竖排字。 */
-  @media (max-width:900px){
-    body{height:auto;overflow:auto}
-    .view{flex:none;min-height:calc(100vh - var(--topbar-h) - 51px);overflow:visible}
-    .ts-app{grid-template-columns:1fr;height:auto;min-height:0;overflow:visible}
-    .ts-app aside{height:auto;overflow:visible;border-right:0;
-                  border-bottom:1px solid var(--line)}
-    .ts-app main{padding:16px 14px 40px;height:auto;overflow:visible}
+  /* 响应式 */
+  @media(max-width:1180px){
+    .shell,.shell.with-drawer{grid-template-columns:240px minmax(0,1fr) 0}
+    .drawer{position:fixed;top:var(--top-h);right:0;bottom:var(--status-h);width:min(390px,94vw);z-index:32;
+            box-shadow:-18px 0 40px rgba(0,0,0,.35)}
+    .shell.with-drawer .drawer{display:flex}
+    .wk-head{padding:13px 18px 11px}
+    .canvas{padding:14px 18px 46px}
+  }
+  @media(max-width:900px){
+    body{overflow:auto}
+    .shell{grid-template-columns:1fr;overflow:visible;min-height:0}
+    .shell.with-drawer{grid-template-columns:1fr}
+    .rail{max-height:42vh;border-right:0;border-bottom:1px solid var(--line)}
+    .workspace{overflow:visible}
     .canvas.compare{grid-template-columns:1fr}
-    .diff{overflow-x:auto}
-    .topbar{padding:10px 14px}
-    #acctpop,#advpop{right:10px;left:10px;width:auto}
+    .wk-head{position:static}
+    .hero-grid{grid-template-columns:1fr}
+    .brand span,.inc-id{display:none}
+    .top{gap:7px;padding:0 10px;flex-wrap:nowrap}
+    .health{display:none}
+    .wk-head{gap:9px}
+    .wk-actions{justify-content:flex-start}
+    .fgrid{grid-template-columns:1fr}
+    .fgrid .span2{grid-column:auto}
+    .statusbar #fingerprint{display:none}
   }
-
-  /* ---------- 窄屏补充（≤600px，#24） ----------
-     KPI 一列五屏在手机上不可用；去重键串在顶栏折行又占高度——窄屏只留 build 版本（细节看运行态抽屉）。 */
-  @media (max-width:600px){
-    .topbar{gap:var(--s2);padding:8px 12px}
-    .brand span{display:none}                    /* 副标题在窄屏省掉，让顶栏落回两行 */
-    .tabs button{padding:5px 10px}
-    .pillbtn{padding:3px 9px;font-size:11px}
-    .panel-main{padding:var(--s3) 12px var(--s4)}
-    .kpis{grid-template-columns:1fr 1fr;gap:var(--s2)}
-    .kpi{padding:12px}
-    .kpi .value{font-size:24px}
-    .kpi .foot{min-height:0}
+  @media(max-width:600px){
+    .brand b{font-size:14px}
+    .tabs button{padding:5px 8px;font-size:10.5px}
+    .pillbtn{max-width:130px}
+    #advbtn{display:none}
+    .wk-title h1{font-size:16px}
+    .canvas{padding:12px 12px 40px}
+    .wk-head{padding:11px 12px 10px}
+    .rail{padding:11px 10px;max-height:46vh}
+    .card-bd{padding:12px}
+    .vline{font-size:14.5px}
+    .vkpi{gap:12px}
+    .panel-main{padding:12px 12px 22px}
+    .panel-main .kpis{grid-template-columns:1fr 1fr;gap:8px}
+    .panel-main .kpi{padding:10px}
+    .panel-main .kpi .value{font-size:22px}
+    .panel-main .pagehead h1{font-size:17px}
+    .panel-main table.res th:nth-child(1),.panel-main table.res td:nth-child(1),
+    .panel-main table.res th:nth-child(5),.panel-main table.res td:nth-child(5){display:none}
+    .toasts{bottom:38px}
+    .statusbar{padding:0 10px;gap:8px}
   }
-
-  /* ---------- 移动端可读性下限（#36：图例/脚注 10px 在 390px 屏上过小） ---------- */
+  /* 移动端可读性下限（#36）：图例/脚注/标签不低于 12px */
   @media (max-width:600px){
-    .pill,.crumb,.cov-sub,.cov-lab,.cov-list .chip,.ref-item,.ref-item .svc,.sect-t,
-    .railhead span,.copy,.ref-badge,footer,footer span,button.ghost,
-    .fld label,.fld .lbl,.chip,.hintline,.msg,.cov-hd,.cov-hd .sw,.drawer-nums .k,
-    .drawer-nums .d,.verdict-hd .k,.verdict-sub,.vk,.topbar .brand span,#fingerprint,
-    .tabs button,.pillbtn{font-size:12px}
-    .verdict-line{font-size:15px}
-    .steps{grid-template-columns:1fr}
+    .pill,.copy,.vsub,.ref-badge,.cmd .ref,.card-hd .k,.vkpi .l,.statusbar{font-size:12px}
   }
 </style>
 </head>
 <body>
-<header class="topbar">
-  <div class="brand" title="统一工作台（ADR-0021）：一个壳、两个视图"><b>OpsShield</b><span>智能运维 · 监控排障</span></div>
+<header class="top">
+  <div class="brand" title="OpsShield 事件响应工作台"><b>Ops<i>Shield</i></b><span>OpsPilot · 事件响应工作台</span></div>
+  <div class="topsep"></div>
+  <div class="inc-id">事故单 <b id="topInc">—</b></div>
   <nav class="tabs" role="tablist" aria-label="视图">
     <button id="tab-trouble" class="on" data-view="trouble" role="tab" aria-selected="true"
             aria-controls="v-trouble" tabindex="0">排障台</button>
@@ -469,38 +575,55 @@
             aria-controls="v-panel" tabindex="-1">运行面板</button>
   </nav>
   <span class="spacer"></span>
-  <span id="fingerprint" class="num"></span>
-  <button class="pillbtn" id="acct" data-popbtn="acctpop" aria-haspopup="true" aria-expanded="false">
+  <span class="health" id="healthchip"><span class="dot" id="healthdot"></span><span id="healthtext">未接入</span></span>
+  <span class="pill warn" id="llmchip" hidden>LLM MOCK</span>
+  <button class="btn gho" id="healthbtn" data-act="opendrawer" aria-expanded="false" aria-controls="drawer">运行态</button>
+  <button class="btn gho" id="advbtn" data-popbtn="advpop" aria-haspopup="dialog" aria-expanded="false">高级</button>
+  <button class="pillbtn" id="acct" data-popbtn="acctpop" aria-haspopup="dialog" aria-expanded="false">
     <span class="dot"></span>未接入</button>
-  <button class="pillbtn" id="healthbtn" data-act="opendrawer">运行态</button>
-  <button class="pillbtn" id="advbtn" data-popbtn="advpop" aria-haspopup="true" aria-expanded="false">
-    高级 · 权限隔离演练</button>
 </header>
 
 <div class="pop" id="acctpop" data-pop role="dialog" aria-label="身份接入" hidden></div>
 <div class="pop" id="advpop" data-pop role="dialog" aria-label="高级 · 权限隔离演练" hidden></div>
-<div class="scrim" id="scrim" data-act="closedrawer" hidden></div>
-<div class="drawer" id="drawer" role="dialog" aria-modal="true" aria-label="运行态" hidden>
-  <div class="drawer-hd"><b>运行态</b>
-    <button class="x" data-act="closedrawer" title="关闭" aria-label="关闭运行态抽屉">✕</button></div>
-  <div class="drawer-bd" id="drawerbody"></div>
-</div>
+<div class="pop" id="assignpop" data-pop role="dialog" aria-label="分配负责人" hidden></div>
 
-<!-- ==================== 视图一：排障台（默认） ==================== -->
-<div id="v-trouble" class="view ts-app" role="tabpanel" aria-labelledby="tab-trouble">
-  <aside id="rail"></aside>
-  <main>
+<div id="v-trouble" class="shell" role="tabpanel" aria-labelledby="tab-trouble">
+  <aside class="rail" aria-label="事故单列表">
+    <div class="rail-hd"><b>我的事故单</b><span class="cnt" id="incCount">0 进行中</span></div>
+    <div class="seg" id="incFilter" role="group" aria-label="事故单筛选">
+      <button type="button" data-filter="open" class="on">进行中</button>
+      <button type="button" data-filter="closed">已结单</button>
+      <button type="button" data-filter="all">全部</button>
+    </div>
+    <div class="search">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+      <input id="incSearch" type="search" placeholder="搜索事故单 / 服务 / 错误码" aria-label="搜索事故单">
+    </div>
+    <button type="button" class="newbtn" data-act="newinc">＋ 新建事故单</button>
+    <div id="incList" class="inc-list"></div>
+    <div class="rail-foot">
+      <div id="covbox"></div>
+      <div class="note">事故单与诊断快照保存在网关（按租户隔离）；本页只记住当前选中的事故单。</div>
+    </div>
+  </aside>
+  <main class="workspace">
+    <div id="wsHead"></div>
     <div id="canvas" class="canvas"></div>
     <div id="diff"></div>
   </main>
+  <aside class="drawer" id="drawer" aria-label="运行态抽屉" hidden>
+    <div class="drawer-hd"><b>运行态</b><span class="pill" id="drawerMode">—</span>
+      <button type="button" class="x" data-act="closedrawer" aria-label="关闭运行态">✕</button></div>
+    <div class="drawer-bd" id="drawerbody"></div>
+  </aside>
 </div>
+<div class="scrim" id="scrim" data-act="closedrawer" hidden></div>
 
-<!-- ==================== 视图二：运行面板 ==================== -->
-<div id="v-panel" class="view" role="tabpanel" aria-labelledby="tab-panel" hidden>
+<div id="v-panel" role="tabpanel" aria-labelledby="tab-panel" hidden>
   <div id="panel-lock" hidden></div>
   <div class="panel-main" id="panel-main">
     <div class="pagehead">
-      <div><h1>运行面板</h1><p>把内部指标翻译成排障成果 · 数据源 /admin/state + 审计行 · 轮询刷新</p></div>
+      <div><h1>运行面板</h1><p>跨租户运行态 · 数据源 /admin/state 与审计行 · 仅平台身份可见</p></div>
       <span class="win">进程内累计</span>
     </div>
     <div class="kpis" id="kpis"></div>
@@ -529,8 +652,8 @@
         <h2>请求到达率
           <span class="tag">采样持久化在本地 · 刷新与重启不丢
             <span class="seg" id="windows">
-              <button data-win="300000" class="on">5 分钟</button
-              ><button data-win="3600000">1 小时</button>
+              <button type="button" data-win="300000" class="on">5 分钟</button
+              ><button type="button" data-win="3600000">1 小时</button>
             </span>
           </span>
         </h2>
@@ -542,7 +665,6 @@
         <div class="tiles" id="tiles"></div>
         <div class="sub" id="sfrow"></div>
       </section>
-
       <section id="l1sec" hidden>
         <h2>受控恢复动作 · L1
           <span class="tag">需不同确认人 · 一次性凭据 · 15 分钟窗口 · 命令逐字来自文档</span>
@@ -552,68 +674,121 @@
         <details style="margin-top:10px">
           <summary style="cursor:pointer;color:var(--txt-2)">粘贴 op_id 与一次性凭据确认（凭据来自提案人转交）</summary>
           <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
-            <input id="l1op" class="l1in" placeholder="op_id (act_…)" style="flex:1;min-width:140px">
-            <input id="l1tok" class="l1in" placeholder="一次性凭据（64 位十六进制）" style="flex:2;min-width:200px">
-            <button class="btn" id="l1confirm">确认执行</button>
+            <input id="l1op" placeholder="op_id (act_…)" style="flex:1;min-width:140px;background:var(--bg);color:var(--txt);border:1px solid var(--line);border-radius:6px;padding:7px 9px">
+            <input id="l1tok" placeholder="一次性凭据（64 位十六进制）" style="flex:2;min-width:200px;background:var(--bg);color:var(--txt);border:1px solid var(--line);border-radius:6px;padding:7px 9px">
+            <button type="button" class="btn pri" id="l1confirm">确认执行</button>
           </div>
-          <div class="msg" id="l1msg" style="margin-top:6px"></div>
+          <div class="sub" id="l1msg" style="margin-top:6px"></div>
         </details>
       </section>
-
     </div>
     <section>
       <h2>事件流 · AUDIT
         <span class="tag">ev 七类全量流水（含鉴权/非法/降级切换）· 游标增量 · 只读
-          <button class="ghost" id="copy">复制最近 50 条 JSON</button></span>
+          <button type="button" class="ghost" id="copy">复制最近 50 条 JSON</button></span>
       </h2>
       <div id="events"></div>
     </section>
   </div>
 </div>
 
-<footer><span id="pollstate">idle</span><span id="lastts" class="num"></span></footer>
+<footer class="statusbar">
+  <span id="pollstate">idle</span>
+  <span class="spacer"></span>
+  <span id="storestat" class="muted"></span>
+  <span id="fingerprint" class="num"></span>
+  <span id="lastts" class="num"></span>
+</footer>
+
+<dialog class="modal" id="incDialog" aria-labelledby="incDialogTitle">
+  <form id="incForm">
+    <header class="modal-hd"><b id="incDialogTitle">新建事故单</b>
+      <button type="button" class="x" data-close="incDialog" aria-label="关闭">✕</button></header>
+    <div class="modal-bd">
+      <div class="fgrid">
+        <div class="fld span2"><label for="ni-title">事故单标题 *</label>
+          <input id="ni-title" maxlength="80" placeholder="如：支付网关 502 批量报错" required></div>
+        <div class="fld span2"><label for="ni-query">排障输入 *</label>
+          <textarea id="ni-query" maxlength="8192" placeholder="粘贴错误码、异常堆栈，或一句现象描述"></textarea>
+          <div class="hint">一次只诊断一条输入；需要补充信息时系统会要求澄清，不会自行编造上下文。</div></div>
+        <div class="fld"><label for="ni-service">服务</label>
+          <input id="ni-service" maxlength="128" placeholder="如 payment-service"></div>
+        <div class="fld"><label for="ni-code">错误码</label>
+          <input id="ni-code" maxlength="64" placeholder="如 50041_PAY_GATEWAY_502"></div>
+        <div class="fld"><label for="ni-env">环境</label>
+          <input id="ni-env" maxlength="32" placeholder="prod / staging"></div>
+        <div class="fld"><label for="ni-priority">优先级（人工判定）</label>
+          <select id="ni-priority">
+            <option value="">未定</option><option value="P1">P1</option>
+            <option value="P2">P2</option><option value="P3">P3</option>
+          </select></div>
+        <div class="fld"><label for="ni-source">来源</label>
+          <select id="ni-source"><option value="manual">人工</option><option value="alert">告警</option></select></div>
+        <div class="fld"><label for="ni-alert">告警 ID</label>
+          <input id="ni-alert" maxlength="128" placeholder="8–128 位；来自告警深链"></div>
+      </div>
+      <div class="errline" id="ni-msg"></div>
+    </div>
+    <footer class="modal-ft">
+      <button type="button" class="btn gho" data-close="incDialog">取消</button>
+      <button type="button" class="btn gho" id="niOnly">仅创建</button>
+      <button type="submit" class="btn pri" id="niGo">创建并诊断</button>
+    </footer>
+  </form>
+</dialog>
+
+<dialog class="modal" id="closeDialog" aria-labelledby="closeTitle">
+  <form id="closeForm">
+    <header class="modal-hd"><b id="closeTitle">结单并记录处置</b>
+      <button type="button" class="x" data-close="closeDialog" aria-label="关闭">✕</button></header>
+    <div class="modal-bd">
+      <div class="vsub" id="closeSub"></div>
+      <div class="fld"><label for="closeNote">处置结论 *</label>
+        <textarea id="closeNote" maxlength="500" placeholder="做了什么、结果如何、是否需要后续跟进"></textarea></div>
+      <label class="chk"><input type="checkbox" id="closeFeedback">
+        <span id="closeFeedbackLab">将本轮结论标记为有效（feedback=up）</span></label>
+      <div class="errline" id="closeMsg"></div>
+    </div>
+    <footer class="modal-ft">
+      <button type="button" class="btn gho" data-close="closeDialog">取消</button>
+      <button type="submit" class="btn pri">确认结单</button>
+    </footer>
+  </form>
+</dialog>
 
 <div id="auth" role="dialog" aria-modal="true" aria-labelledby="authtitle"><div class="card">
   <b id="authtitle" style="font-size:15px">凭证已失效</b>
   <div class="msg" id="authmsg"></div>
-  <p>工作台不弹独立登录窗——右上角账号胶囊里填用户名与口令即可。此遮罩只在 token 失效（401）时出现。</p>
-  <p style="margin-top:14px"><button class="btn" id="authgo">去右上角重新接入</button></p>
+  <p>工作台不弹独立登录窗——右上角身份胶囊里填用户名与口令即可。此遮罩只在 token 失效（401）时出现。</p>
+  <p style="margin-top:12px"><button type="button" class="btn pri" id="authgo">去右上角重新接入</button></p>
 </div></div>
+
+<div class="toasts" id="toasts" aria-live="polite" aria-atomic="false"></div>
 
 <script>
 'use strict';
-
-/* ==================== 会话状态 ====================
-   只有"当前这一对"——不建历史（ADR-0020 第 5 条）：权威历史是 logs/audit.jsonl。 */
+/* ==================== 会话状态 ==================== */
 const $ = id => document.getElementById(id);
-const CAP = 200;                    // 审计游标每拉 200，DOM 保 60
+const CAP = 200;
 const SS = k => 'opspilot.session.jwt.' + k;
+const ACTIVE_KEY = 'opspilot.incidents.active';
 
-/* 合并后页面启动时主动清掉旧的粘贴 token 键（ADR-0021 决策 4：粘贴路径已退役）。 */
 try { localStorage.removeItem('opspilot.jwt'); } catch (e) { /* 非致命 */ }
 
 function side(user) {
-  // tokenUser = 当前 token 的真实主体（登录时记下）。展示身份一律用它而不是输入框里的 user，
-  // 否则改一下输入框就能把旧 token 的结果标成新用户名（#16/#3 的共同根因）。
-  return { user, pass: '', token: null, tokenUser: null, err: null, busy: false, open: true, r: null, ctl: null };
+  return { user, pass: '', token: null, tokenUser: null, err: null, busy: false,
+           open: true, r: null, ctl: null, stopped: false };
 }
 
 const S = {
-  view: 'trouble',      // 'trouble' | 'panel'
-  compare: false,       // 高级 · 权限隔离演练
-  q: '',
-  platform: null,       // null=尚未实测 / true=200 / false=403；不靠客户端解 token 猜
-  hint: '',
-  pendingAsk: false,    // 未接入时先填了输入/预设：接入成功后自动发起，省掉一次点击
-  asking: false,        // 一次 ask() 的进行中标记（覆盖 login await 窗口，防连点并发，#19）
-  coverage: null,       // 覆盖范围快照（GET /api/v1/copilot/coverage，按身份过滤）
-  covErr: null,
-  covOpen: false,
-  a: side('sre-full'),
-  b: side('sre-limited'),
+  view: 'trouble', compare: false, platform: null,
+  pendingAsk: null, asking: false,
+  coverage: null, covErr: null, covOpen: false,
+  a: side('sre-full'), b: side('sre-limited'),
+  incidents: [], activeId: null, filter: 'open', search: '',
+  quick: '', drawerOpen: false
 };
 
-/* 用户名只记 localStorage；token 只记 sessionStorage——刷新不掉线、关标签页即失效。 */
 try {
   S.a.user = localStorage.getItem('opspilot.userA') || S.a.user;
   S.b.user = localStorage.getItem('opspilot.userB') || S.b.user;
@@ -621,41 +796,35 @@ try {
     const t = sessionStorage.getItem(SS(k));
     if (t) { S[k].token = t; S[k].tokenUser = S[k].user; S[k].open = false; }
   }
-} catch (e) { /* 隐私模式下 storage 可能抛——非致命 */ }
+} catch (e) { /* 隐私模式下 storage 可能抛 */ }
 
 /* ==================== 工具 ==================== */
 const esc = s => String(s == null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
-/* 行内标记：粗体 / 行内码 / [参考N] 角标。**先转义再套标签**，绝不把模型文本当 HTML 吃进去。 */
 function inline(t) {
   return t
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/`([^`]+)`/g, '<code>$1</code>')
     .replace(/\[参考\s*(\d+)\]/g, '<span class="ref-badge" data-ref="$1">参考$1</span>')
-    // #26：链接只放行 http(s)——模型输出不可信，javascript:/data: 一律按原文显示
     .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
       '<a href="$2" target="_blank" rel="noopener noreferrer nofollow">$1</a>');
 }
 
-/* 极小 markdown 子集。答案由模型产出、以 markdown 形态落库，原页面把它当纯文本吐出
-   （`## 问题定位` / `**粗体**` 原样可见）——那是"简陋"感的主要来源，不是布局问题。 */
 function md(s) {
-  // #26：有序列表保留编号；补表格/引用块；围栏与行内标记规则不变（先 esc 再套标签）。
   const lines = esc(s).split('\n');
   const out = [];
   let inFence = false, buf = [];
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    if (/^\s*```/.test(line)) {                 // 围栏行本身不输出（语言标也丢，只留代码）
+    if (/^\s*```/.test(line)) {
       if (inFence) { out.push('<pre class="md-code">' + buf.join('\n') + '</pre>'); buf = []; }
       inFence = !inFence;
       continue;
     }
-    if (inFence) { buf.push(line); continue; }  // 围栏内一律原文，不做行内标记
+    if (inFence) { buf.push(line); continue; }
     let m;
-    // 表格：当前行是表头，且下一行是 |---|---| 分隔行（模型常用形态）
     if (/^\s*\|.*\|\s*$/.test(line) && i + 1 < lines.length
         && /^\s*\|[\s:|-]+\|\s*$/.test(lines[i + 1])) {
       const head = mdCells(line);
@@ -671,24 +840,257 @@ function md(s) {
       continue;
     }
     if ((m = line.match(/^\s*#{2,4}\s+(.+)$/))) out.push('<div class="md-h">' + inline(m[1]) + '</div>');
-    else if ((m = line.match(/^\s*&gt;\s?(.*)$/))) out.push('<div class="md-quote">' + inline(m[1]) + '</div>');   // esc() 后 > 已是 &gt;
+    else if ((m = line.match(/^\s*&gt;\s?(.*)$/))) out.push('<div class="md-quote">' + inline(m[1]) + '</div>');
     else if ((m = line.match(/^\s*[-*]\s+(.+)$/))) out.push('<div class="md-li">· ' + inline(m[1]) + '</div>');
     else if ((m = line.match(/^\s*(\d+)[.)]\s+(.+)$/))) out.push('<div class="md-li md-oli"><span class="md-no">' + m[1] + '.</span> ' + inline(m[2]) + '</div>');
     else if (!line.trim()) out.push('<div class="md-gap"></div>');
     else out.push('<div>' + inline(line) + '</div>');
   }
-  if (inFence) out.push('<pre class="md-code">' + buf.join('\n') + '</pre>');  // 流式中途未闭合
+  if (inFence) out.push('<pre class="md-code">' + buf.join('\n') + '</pre>');
   return out.join('');
 }
 
-/* 表格行 → 单元格（去掉首尾竖线后按 | 切；单元格内的 inline 标记仍走 inline()）。 */
 function mdCells(line) {
   return line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(x => x.trim());
 }
 
-/* ==================== 数据层 ====================
-   两个出口：login（换 token）与 stream（SSE）。**没有探针**——login 成功即身份确认。 */
+function pad(n) { return String(n).padStart(2, '0'); }
+function fmtHM(iso) { const d = new Date(iso); return pad(d.getHours()) + ':' + pad(d.getMinutes()); }
+function fmtDT(iso) { const d = new Date(iso); return (d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + fmtHM(iso); }
+function dayKey(d) { const x = d instanceof Date ? d : new Date(d); return x.getFullYear() + '-' + pad(x.getMonth() + 1) + '-' + pad(x.getDate()); }
+function dayLabel(k) {
+  const today = dayKey(new Date());
+  const yesterday = dayKey(new Date(Date.now() - 86400000));
+  if (k === today) return '今天';
+  if (k === yesterday) return '昨天';
+  return k;
+}
+function relTime(iso) {
+  return dayKey(new Date(iso)) === dayKey(new Date()) ? fmtHM(iso) : fmtDT(iso);
+}
+function shortFp(fp) {
+  if (!fp) return '—';
+  return fp.length > 14 ? fp.slice(0, 8) + '…' + fp.slice(-4) : fp;
+}
+function titleFromQuery(q) {
+  const one = String(q || '').replace(/\s+/g, ' ').trim();
+  return one.length > 46 ? one.slice(0, 46) + '…' : (one || '未命名事故单');
+}
 
+function toast(msg, tone) {
+  const box = $('toasts');
+  if (!box) return;
+  while (box.children.length >= 3) box.firstElementChild.remove();
+  const el = document.createElement('div');
+  el.className = 'toast ' + (tone || '');
+  el.textContent = String(msg || '');
+  box.appendChild(el);
+  setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 220); }, 2800);
+}
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch (e) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch (e2) { ok = false; }
+    ta.remove();
+    return ok;
+  }
+}
+
+/* ==================== 事故单存储（服务端） ==================== */
+let lastIncidentError = '';
+
+function waitText(sec) {
+  const s = Math.max(0, Math.round(sec));
+  if (s < 60) return s + ' 秒';
+  const m = Math.floor(s / 60), r = s % 60;
+  return m + ' 分' + (r ? ' ' + r + ' 秒' : '');
+}
+
+function retryAfterSeconds(resp) {
+  const raw = resp && resp.headers ? resp.headers.get('Retry-After') : null;
+  const n = parseInt(raw || '', 10);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+async function incidentApi(method, path, body) {
+  const resp = await fetch(path, {
+    method,
+    headers: Object.assign({ 'Content-Type': 'application/json' },
+      S.a.token ? { Authorization: 'Bearer ' + S.a.token } : {}),
+    body: body === undefined ? undefined : JSON.stringify(body)
+  });
+  if (resp.status === 401) {
+    dropToken('a', '401 · token 失效，重新接入');
+    showAuth('401 · token 失效，重新接入');
+    throw new Error('401 · token 失效');
+  }
+  if (!resp.ok) throw new Error(await httpErrText(resp));
+  return resp.status === 204 ? null : resp.json();
+}
+
+/** 登录后从服务端拉事故单；这是唯一的读取入口，浏览器不再保存业务数据。 */
+async function refreshIncidents() {
+  if (!S.a.token) { S.incidents = []; return false; }
+  const token = S.a.token;
+  try {
+    const data = await incidentApi('GET', '/api/v1/copilot/incidents');
+    // 登录/切换身份可能发生在这个请求飞行途中；旧身份的响应绝不能落进新身份的列表。
+    if (S.a.token !== token) return false;
+    const serverRows = (data.incidents || []).map(x => Object.assign({}, x, {
+      diagnosis: x.diagnosis || null,
+      timeline: Array.isArray(x.timeline) ? x.timeline : []
+    }));
+    // 刷新可能晚于"新建/诊断"：保留本地更新更晚的记录，避免旧响应把刚写的内容顶掉。
+    const merged = serverRows.map(row => {
+      const local = S.incidents.find(x => x && x.id === row.id);
+      const localAt = local ? Date.parse(local.updatedAt || '') : NaN;
+      const serverAt = Date.parse(row.updatedAt || '');
+      return Number.isFinite(localAt) && (!Number.isFinite(serverAt) || localAt > serverAt) ? local : row;
+    });
+    const localOnly = S.incidents.filter(x => x && x.id &&
+      !serverRows.some(y => y.id === x.id));
+    S.incidents = localOnly.concat(merged).slice(0, 60);
+    const keep = S.activeId && findIncident(S.activeId);
+    const inc = keep || S.incidents[0] || null;
+    S.activeId = inc ? inc.id : null;
+    if (inc && inc.status === 'closed' && S.filter === 'open') S.filter = 'closed';
+    S.a.r = inc ? (inc.diagnosis || null) : null;
+    if (inc) { try { localStorage.setItem(ACTIVE_KEY, inc.id); } catch (e) { /* 非致命 */ } }
+    return true;
+  } catch (e) {
+    toast('事故单列表加载失败：' + e.message, 'err');
+    return false;
+  }
+}
+
+/**
+ * 只把内容（诊断快照 + 时间线）写回服务端。状态/负责人/优先级走显式动作，
+ * 避免"顺手回传整行"把无权修改的字段一起发出去（会被 403，也会放大并发覆盖）。
+ */
+async function persistIncident(inc) {
+  if (!inc || !inc.id || !S.a.token) return false;
+  try {
+    await incidentApi('PATCH', '/api/v1/copilot/incidents/' + encodeURIComponent(inc.id), {
+      diagnosisJson: inc.diagnosis ? JSON.stringify(inc.diagnosis) : undefined,
+      timelineJson: JSON.stringify(inc.timeline || [])
+    });
+    return true;
+  } catch (e) {
+    toast('事故单保存失败：' + e.message + '（本页显示的是未落库状态）', 'err');
+    return false;
+  }
+}
+
+async function saveIncidents() {
+  const inc = activeIncident();
+  return inc ? persistIncident(inc) : false;
+}
+
+/**
+ * 显式动作（结单/重开/分配/优先级）：把状态字段与时间线放进同一个 PATCH，
+ * 服务端要么整条接受、要么整条拒绝——不会出现"状态变了但记录没写"的半截状态。
+ * 重开是例外：服务端要求 `{"status":"open"}` 单独提交，调用方用 `{content:false}` 剥离内容字段。
+ */
+async function patchIncident(inc, fields, timelineKind, timelineText, timelineMeta, opts) {
+  if (!inc || !inc.id || !S.a.token) return false;
+  const ev = timelineKind
+    ? { at: new Date().toISOString(), kind: timelineKind, text: timelineText || '', meta: timelineMeta || '' }
+    : null;
+  const timeline = ev ? (inc.timeline || []).concat([ev]) : (inc.timeline || []);
+  const content = !opts || opts.content !== false;
+  const body = Object.assign(content ? {
+    diagnosisJson: inc.diagnosis ? JSON.stringify(inc.diagnosis) : undefined,
+    timelineJson: JSON.stringify(timeline)
+  } : {}, fields);
+  try {
+    const saved = await incidentApi('PATCH', '/api/v1/copilot/incidents/' + encodeURIComponent(inc.id), body);
+    Object.assign(inc, saved);
+    inc.diagnosis = saved.diagnosis || null;
+    inc.timeline = Array.isArray(saved.timeline) ? saved.timeline : timeline;
+    renderAll();
+    return true;
+  } catch (e) {
+    lastIncidentError = e.message || String(e);
+    toast('事故单更新失败：' + e.message, 'err');
+    return false;
+  }
+}
+
+function addTimeline(inc, kind, text, meta) {
+  if (!inc) return;
+  inc.timeline = inc.timeline || [];
+  inc.timeline.push({ at: new Date().toISOString(), kind, text, meta: meta || '' });
+  if (inc.timeline.length > 80) inc.timeline = inc.timeline.slice(-80);
+}
+
+async function createIncident(data) {
+  if (!S.a.token) {
+    toast('先接入身份：事故单保存到服务端，换设备也能看到', 'warn');
+    openPop('acctpop');
+    return null;
+  }
+  const clientId = (window.crypto && crypto.randomUUID)
+    ? crypto.randomUUID()
+    : 'c-' + Date.now() + '-' + Math.random().toString(16).slice(2, 10);
+  let inc;
+  try {
+    inc = await incidentApi('POST', '/api/v1/copilot/incidents', Object.assign({}, data, { clientId }));
+  } catch (e) {
+    toast('事故单创建失败：' + e.message, 'err');
+    return null;
+  }
+  inc.diagnosis = inc.diagnosis || null;
+  inc.timeline = Array.isArray(inc.timeline) ? inc.timeline : [];
+  S.incidents.unshift(inc);
+  if (S.incidents.length > 60) S.incidents.length = 60;
+  S.activeId = inc.id;
+  try { localStorage.setItem(ACTIVE_KEY, inc.id); } catch (e) { /* 非致命 */ }
+  S.a.r = null;
+  S.b.r = null;
+  renderAll();
+  return inc;
+}
+
+function findIncident(id) {
+  return S.incidents.find(x => x.id === id) || null;
+}
+
+function activeIncident() {
+  return S.activeId ? findIncident(S.activeId) : null;
+}
+
+function selectIncident(id) {
+  const inc = findIncident(id);
+  if (!inc) return;
+  if (S.asking) { stopStream('a'); stopStream('b'); }
+  S.activeId = inc.id;
+  S.a.r = inc.diagnosis || null;
+  S.b.r = null;
+  try { localStorage.setItem(ACTIVE_KEY, inc.id); } catch (e) { /* 非致命 */ }
+  renderAll();
+}
+
+function incidentStatus(inc) {
+  if (inc.status === 'closed') return { label: '已结单', cls: 'done' };
+  if (S.asking && inc.id === S.activeId) return { label: '诊断中', cls: 'prog' };
+  if (!inc.diagnosis) return { label: '待诊断', cls: 'open' };
+  const r = inc.diagnosis;
+  if (r.state === 'error' || r.error) return { label: '链路异常', cls: 'err' };
+  const g = (r.meta && r.meta.gate) || 'none';
+  if (g === 'refuse' || (r.meta && r.meta.refused === true)) return { label: '待处置 · 拒答', cls: 'open' };
+  if (g === 'clarify') return { label: '待补充', cls: 'open' };
+  return { label: '待处置', cls: 'prog' };
+}
+
+/* ==================== 数据层 ==================== */
 async function login(k) {
   const s = S[k];
   if (!s.user.trim()) { s.err = '用户名不能为空'; renderAll(); return; }
@@ -700,93 +1102,115 @@ async function login(k) {
       body: JSON.stringify({ username: s.user.trim(), password: s.pass }),
     });
     if (r.status === 401) s.err = '401 · 口令错或账号不存在（两者对外不区分，防枚举）';
-    else if (r.status === 429) s.err = '429 · 该账号被锁 15 分钟（连续 5 次失败）——与 401 含义不同';
+    else if (r.status === 429) {
+      const ra = retryAfterSeconds(r);
+      s.err = '429 · 尝试过多，账号已临时锁定'
+        + (ra ? '，约 ' + waitText(ra) + '后可重试' : '，请稍后重试');
+    }
     else if (!r.ok) s.err = 'HTTP ' + r.status;
     else {
       s.token = (await r.json()).token;
-      s.tokenUser = s.user.trim();   // 身份标签以 token 主体为准（#16：切用例/改输入框不改归属）
-      s.r = null;             // 换身份后旧证据卡必须丢弃，不能挂在新用户名下（#3）
-      s.pass = '';            // 口令用完即弃：不留在内存状态里
-      s.open = false;         // 登录成功 → 折叠为一行胶囊条
+      s.tokenUser = s.user.trim();
+      s.r = null;
+      s.pass = '';
+      s.open = false;
       try { sessionStorage.setItem(SS(k), s.token); } catch (e) { /* 非致命 */ }
       try { localStorage.setItem('opspilot.user' + k.toUpperCase(), s.user.trim()); } catch (e) { /* 非致命 */ }
       if (k === 'a') {
-        S.platform = null;   // null=尚未实测，交给 poll 定夺
+        S.platform = null;
+        // 切换账号时先丢掉上一身份的事故单缓存（含 activeId），再由服务端按新 token 重新拉取。
+        S.incidents = []; S.activeId = null;
+        try { localStorage.removeItem(ACTIVE_KEY); } catch (e) { /* 非致命 */ }
+        await refreshIncidents();
         startPoll();
-        loadCoverage();      // 覆盖范围随身份变——换人就得重取
-        closePops();         // 顶栏胶囊已经写着"● <用户名>"，弹层再挂着只是挡画布
+        loadCoverage();
+        closePops();
       }
     }
   } catch (e) { s.err = '网关不可达：' + e.message; }
   s.busy = false; renderAll();
 }
 
-async function ask() {
-  // #19：重入守卫必须覆盖 login 的 await 窗口——s.busy 要到 stream() 内才置位，
-  // 连点预设/发起会在这段窗口里发出多路 SSE，同写一个 s.r（答案交错、refs 张冠李戴）。
-  if (S.asking) { S.hint = '上一条查询还在进行中，稍候…'; renderRail(); return; }
-  const q = S.q.trim();                // 一次 ask 只认一条 query：卡片与请求体用同一个值
-  if (!q) { S.hint = '先填排障输入'; renderRail(); return; }
-  if (!S.a.token) {
-    S.pendingAsk = true;               // 输入已在手：接入成功后自动发起（见 login 的调用点）
-    S.hint = '先接入身份';
-    renderRail(); openPop('acctpop'); return;
+async function ask(inc) {
+  inc = inc || activeIncident();
+  if (!inc) { toast('先新建或选择一条事故单', 'warn'); return; }
+  if (inc.status === 'closed') { toast('事故单已结单；重新打开后再诊断', 'warn'); return; }
+  if (S.asking) { toast('上一条查询还在进行中，稍候…', 'warn'); return; }
+  const q = String(inc.query || '').trim();
+  if (!q) { toast('排障输入不能为空', 'warn'); openIncidentDialog({ mode: 'edit', inc }); return; }
+  if (!S.a.token) { S.pendingAsk = inc.id; openPop('acctpop'); return; }
+  S.asking = true;
+  inc.updatedAt = new Date().toISOString();
+  addTimeline(inc, 'diagnosis-start', '发起诊断', q.slice(0, 120));
+  if (!await saveIncidents()) {
+    S.asking = false;
+    renderAll();
+    return;
   }
-  S.asking = true; S.hint = ''; renderRail();
+  renderAll();
   try {
     const sides = S.compare ? ['a', 'b'] : ['a'];
     await Promise.all(sides.map(async k => { if (!S[k].token) await login(k); }));
-    await Promise.all(sides.filter(k => S[k].token).map(k => stream(k, q)));
-    /* 查询已落审计 ⇒ 立刻取一次运行态：抽屉里的数字当场更新（这是合并唯一不可替代的收益） */
+    await Promise.all(sides.filter(k => S[k].token).map(k => stream(k, q, inc)));
     if (S.a.token) poll();
-  } finally { S.asking = false; renderRail(); }
+  } finally {
+    S.asking = false;
+    renderAll();
+  }
 }
 
-async function stream(k, q) {
+async function stream(k, q, inc) {
   const s = S[k];
-  // 同侧重复发起：先掐掉上一路（#19 的第二道闸；第一道是 ask() 的 S.asking）
   if (s.ctl) { try { s.ctl.abort(); } catch (e) { /* 非致命 */ } }
   const ctl = new AbortController();
   s.ctl = ctl;
-  /* 记下**这一张卡对应的那条问**：上报覆盖缺口时 note 要指向它，而不是指向此刻输入框里
-     可能已经被改过的内容。by = 这条证据属于哪个 token 主体（#16 归因）。 */
-  s.r = { q, by: s.tokenUser || s.user, answer: '', meta: null, refs: [], actions: [],
-          nearMiss: [], error: null, ttft: null, ms: null, state: 'streaming' };
-  s.busy = true; renderCanvas(); renderRail();
+  const r = { q, by: s.tokenUser || s.user, answer: '', meta: null, refs: [], actions: [],
+              nearMiss: [], error: null, ttft: null, ms: null, state: 'streaming',
+              at: new Date().toISOString() };
+  s.r = r;
+  s.busy = true;
+  renderAll();
   const t0 = performance.now();
-  // #37：SSE 生命周期。15s 首帧看门狗 + 150s 总时长；超时/用户取消都走 AbortController。
   let timedOut = false;
   const bomb = ms => setTimeout(() => { timedOut = true; try { ctl.abort(); } catch (e) { /* 非致命 */ } }, ms);
-  const firstByteTimer = bomb(15_000);
-  const totalTimer = bomb(150_000);
+  const firstByteTimer = bomb(15000);
+  const totalTimer = bomb(150000);
   let sawDone = false;
+  let persist = true;
   try {
+    const svc = String(inc && inc.service || '');
+    const envv = String(inc && inc.env || '');
+    const aid = String(inc && inc.alertId || '');
+    const src = inc && inc.source === 'alert' ? 'alert' : 'manual';
     const resp = await fetch('/api/v1/copilot/chat/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + s.token },
-      body: JSON.stringify({ query: q, source: 'manual' }),
+      body: JSON.stringify({ query: q, source: src, service: svc, env: envv, alertId: aid }),
       signal: ctl.signal,
     });
     if (resp.status === 401 || resp.status === 403) {
+      persist = false;
       dropToken(k, resp.status + ' · token 失效，重新接入');
-      // dropToken 已清 s.r：重建一张「链路异常」卡承载这条提示
       s.r = { q, by: null, answer: '', meta: null, refs: [], actions: [], nearMiss: [],
-              error: { message: s.err }, ttft: null, ms: null, state: 'error' };
+              error: { message: s.err }, ttft: null, ms: null, state: 'error',
+              at: new Date().toISOString() };
       showAuth(s.err); renderAll(); return;
     }
-    if (!resp.ok) {                       // #35：后端返回 {code,message}，别只显示状态码
-      s.r.state = 'error'; s.r.error = { message: await httpErrText(resp) };
+    if (!resp.ok) {
+      r.state = 'error';
+      r.error = { message: await httpErrText(resp) };
       return;
     }
-
-    const reader = resp.body.getReader(); const dec = new TextDecoder();
+    const reader = resp.body.getReader();
+    const dec = new TextDecoder();
     let buf = '';
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
-      clearTimeout(firstByteTimer);              // 首帧到达即撤首字节看门狗
+      clearTimeout(firstByteTimer);
       buf += dec.decode(value, { stream: true });
-      const parts = buf.split('\n\n'); buf = parts.pop();
+      const parts = buf.split('\n\n');
+      buf = parts.pop();
       for (const blk of parts) {
         let ev = 'message', data = '';
         for (const line of blk.split('\n')) {
@@ -795,69 +1219,99 @@ async function stream(k, q) {
         }
         if (!data) continue;
         let d; try { d = JSON.parse(data); } catch (e) { continue; }
-        if (ev === 'meta') { s.r.meta = d; renderCanvas(); }
-        else if (ev === 'delta') { s.r.answer += (d.token || ''); paintAnswer(k); }
-        else if (ev === 'done') {
+        if (ev === 'meta') {
+          r.meta = d;
+          if (s.r === r) renderAll();
+        } else if (ev === 'delta') {
+          r.answer += (d.token || '');
+          if (s.r === r) paintAnswer(k, r);
+        } else if (ev === 'done') {
           sawDone = true;
-          s.r.refs = d.refs || []; s.r.actions = d.actions || []; s.r.ttft = d.ttft_ms;
-          s.r.nearMiss = d.near_miss || [];   // ADR-0023：拒答导航只带 service + errorCodes
-          renderCanvas();
+          r.refs = d.refs || [];
+          r.actions = d.actions || [];
+          r.ttft = d.ttft_ms;
+          r.nearMiss = d.near_miss || [];
+          if (s.r === r) renderAll();
         } else if (ev === 'error') {
-          sawDone = true;   // error 是**终止帧**：流到此结束，不是"截断"
-          // error 帧**刻意带上了**异常前已到手的 refs/actions（后端注释：最需要行动清单时别给空手）——
-          // 原页面只取 message，把两者都丢了；这里必须渲染出来。
-          s.r.error = d; s.r.refs = d.refs || []; s.r.actions = d.actions || [];
-          s.r.state = 'error'; renderCanvas();
+          sawDone = true;
+          r.error = d;
+          r.refs = d.refs || [];
+          r.actions = d.actions || [];
+          r.state = 'error';
+          if (s.r === r) renderAll();
         }
       }
     }
-    // #37：没有 done/error 帧就断开 = 半截答案，不能标「完成」
-    if (s.r.state === 'streaming') {
-      if (sawDone) s.r.state = 'done';
-      else { s.r.state = 'error'; s.r.error = { message: '链路异常：流被截断（未收到 done 帧）' }; }
+    if (r.state === 'streaming') {
+      if (sawDone) r.state = 'done';
+      else { r.state = 'error'; r.error = { message: '链路异常：流被截断（未收到 done 帧）' }; }
     }
   } catch (e) {
     const aborted = e && e.name === 'AbortError';
-    s.r.state = 'error';
-    s.r.error = { message: aborted
+    r.state = 'error';
+    r.error = { message: aborted
         ? (s.stopped ? '已停止（用户取消）' : (timedOut ? '超时或无响应（已中止）' : '请求已中止'))
         : (e && e.message ? e.message : '网关不可达') };
   } finally {
-    clearTimeout(firstByteTimer); clearTimeout(totalTimer);
+    clearTimeout(firstByteTimer);
+    clearTimeout(totalTimer);
     if (s.ctl === ctl) s.ctl = null;
     s.stopped = false;
-    s.r.ms = Math.round(performance.now() - t0);
-    s.busy = false; renderCanvas(); renderRail();
+    r.ms = Math.round(performance.now() - t0);
+    r.at = r.at || new Date().toISOString();
+    s.busy = false;
+    if (persist && k === 'a' && inc) {
+      inc.diagnosis = r;
+      inc.updatedAt = new Date().toISOString();
+      const g = (r.meta && r.meta.gate) || 'none';
+      if (r.state === 'error' || r.error) {
+        addTimeline(inc, 'diagnosis-error', '诊断异常：' + ((r.error && r.error.message) || '链路异常'),
+          r.meta && r.meta.fingerprint ? '去重键 ' + r.meta.fingerprint.slice(0, 12) : '');
+      } else if (g === 'clarify') {
+        addTimeline(inc, 'diagnosis', '诊断需补充信息', '未检索 · 未调用 LLM');
+      } else if (g === 'refuse' || (r.meta && r.meta.refused === true)) {
+        addTimeline(inc, 'diagnosis', '诊断拒答：覆盖范围内无可靠依据',
+          (r.refs || []).length + ' 条引用 · ' + (r.actions || []).length + ' 条只读命令');
+      } else {
+        addTimeline(inc, 'diagnosis', '诊断完成',
+          '去重键 ' + shortFp(r.meta && r.meta.fingerprint) + ' · ' + (r.refs || []).length
+          + ' 条引用 · ' + (r.actions || []).length + ' 条只读命令 · ' + r.ms + 'ms');
+      }
+      await saveIncidents();
+    }
+    renderAll();
   }
 }
 
-/* 用户点「停止」：abort 在途 SSE，卡片落一条明确的"已停止"而不是继续转圈（#37）。 */
 function stopStream(k) {
   const s = S[k];
   s.stopped = true;
   if (s.ctl) { try { s.ctl.abort(); } catch (e) { /* 非致命 */ } }
 }
 
-/* 流式期间只改答案节点：整树重建会把左栏输入框的焦点冲掉。 */
-function paintAnswer(k) {
+function paintAnswer(k, r) {
   const el = document.getElementById('ans-' + k);
-  if (!el) { renderCanvas(); return; }
-  el.innerHTML = md(S[k].r.answer) + '<span class="cursor"></span>';
+  if (!el) { renderAll(); return; }
+  if (S[k].r !== r) return;
+  el.innerHTML = md(r.answer) + '<span class="cursor"></span>';
 }
 
 function dropToken(k, msg) {
   const s = S[k];
   if (s.ctl) { try { s.ctl.abort(); } catch (e) { /* 非致命 */ } s.ctl = null; }
   s.token = null; s.tokenUser = null; s.open = true; s.err = msg;
-  s.r = null;                         // 旧身份的答案不得挂到新身份下（#3）
+  s.r = null;
   try { sessionStorage.removeItem(SS(k)); } catch (e) { /* 非致命 */ }
-  if (k === 'a') { S.platform = null; S.coverage = null; S.covErr = null; stopPoll(); }
+  if (k === 'a') {
+    S.platform = null; S.coverage = null; S.covErr = null; S.asking = false;
+    S.incidents = []; S.activeId = null;
+    try { localStorage.removeItem(ACTIVE_KEY); } catch (e) { /* 非致命 */ }
+    stopPoll();
+    renderHeader(); renderRail(); renderWorkspace();
+  }
 }
 
 /* ==================== 渲染小件 ==================== */
-
-/* 状态徽标。**gate 直接读 meta 帧的键**（ADR-0021/ADR-0020）——判"澄清"与"拒答"是状态值，
-   不是耗时值：绝不从 retrieval_ms==0 反推（那是拿性能值当状态值）。 */
 function badge(r) {
   if (!r) return '';
   if (r.state === 'streaming') return '<span class="pill acc">生成中</span>';
@@ -868,36 +1322,29 @@ function badge(r) {
   return '<span class="pill ok">完成</span>';
 }
 
-/* 指标胶囊（细粒度：比只给一个总耗时更能说明时间花在哪） */
 function metrics(r) {
   const out = [];
   if (r.meta) {
     const c = r.meta.cache_hit || 'none';
-    out.push('<span class="pill' + (c === 'L1' || c === 'L2' ? ' ok' : '') + '" title="缓存命中：L1 精确命中（按去重键） / L2 语义相似 / none 未命中">cache ' + esc(c) + '</span>');
+    out.push('<span class="pill' + (c === 'L1' || c === 'L2' ? ' ok' : '') + '">cache ' + esc(c) + '</span>');
     const d = r.meta.degradation_level || 'L0';
-    out.push('<span class="pill' + (d === 'L0' ? ' ok' : ' warn') + '" title="降级档位：L0 正常 / L1 少一条检索腿 / L2 熔断直出静态 SOP">' + esc(d) + '</span>');
-    // #29：clarify 是零检索/零 LLM 分支，别拿 0ms 的「精排/检索/TTFT」冒充耗时
+    out.push('<span class="pill' + (d === 'L0' ? ' ok' : ' warn') + '">' + esc(d) + '</span>');
     if ((r.meta.gate || 'none') !== 'clarify') {
-      out.push('<span class="pill" title="快路径=高置信直接作答；精排=经过 rerank 重排">' + (r.meta.fast_path ? '快路径' : '精排') + '</span>');
+      out.push('<span class="pill">' + (r.meta.fast_path ? '快路径' : '精排') + '</span>');
       if (r.meta.deduplicated) out.push('<span class="pill">去重</span>');
-      out.push('<span class="pill" title="检索阶段耗时（ES 倒排 + 向量 + RRF 融合，不含生成）">检索 ' + (r.meta.retrieval_ms | 0) + 'ms</span>');
     }
   }
-  if (r.ttft != null && !(r.meta && r.meta.gate === 'clarify'))
-    out.push('<span class="pill">TTFT ' + (r.ttft | 0) + 'ms</span>');
+  if (r.ttft != null && !(r.meta && r.meta.gate === 'clarify')) out.push('<span class="pill">TTFT ' + (r.ttft | 0) + 'ms</span>');
   if (r.ms != null) out.push('<span class="pill">总耗时 ' + r.ms + 'ms</span>');
   return out.join('');
 }
 
-/* 第二层：只读命令清单。有 → 完整卡；无 → **单行紧凑 Callout**（固定 34px，不占 90px 空盒子）。
-   文案里不含裸 markdown 符号——空态走 DOM 标记，不吐 `**`；长解释挂 title，正文只留一句结论。 */
 const EMPTY_CONTRACT_TIP = '命令若在语料里，它住在「排查步骤 > 第N步」这类编号叶里，'
   + '本轮引用的三段不含它。见 OPS §12 登记的 top-3 产额软上限（ADR-0017）。';
 
 function contract(r) {
   const acts = r.actions || [];
   if (!acts.length) {
-    // #29：需澄清 / 拒答是本轮**没有检索**，不是「检索了但引用里没代码块」——文案必须区分
     const gate = r.meta && r.meta.gate;
     const txt = gate === 'clarify'
       ? '本条提问依赖上文、未做检索——因此没有命令清单（补上服务名/错误码后重问）'
@@ -905,51 +1352,27 @@ function contract(r) {
         ? '本轮未检索到可用文档（拒答）——因此没有命令清单'
         : '本次引用切片不含可执行代码围栏——<strong>属引用集物理性质，非链路故障</strong>');
     return '<div class="contract-empty" title="' + esc(gate === 'clarify' ? 'clarify：单轮系统无法据此检索' : EMPTY_CONTRACT_TIP) + '">'
-      + '<span class="ic">ℹ️</span>'
-      + '<span class="txt">' + txt + '</span></div>';
+      + '<span class="ic">ℹ️</span><span class="txt">' + txt + '</span></div>';
   }
   return '<div class="contract">' + acts.map(a =>
-    '<div class="act">'
-    + '<div class="step"><span class="no">' + esc(a.n) + '</span>' + esc(a.step || '') + '</div>'
-    + '<div class="cmdrow"><code class="cmd">' + esc(a.command || '') + '</code>'
-    + '<button class="copy" data-copy="' + esc(a.command || '') + '">复制</button></div>'
-    + (a.breadcrumb ? '<div class="crumb">↳ ' + esc(a.breadcrumb)
+    '<div class="cmd"><span class="n">' + esc(a.n) + '</span><div class="c-body">'
+    + '<div class="step">' + esc(a.step || '') + '</div>'
+    + '<pre>' + esc(a.command || '') + '</pre>'
+    + (a.breadcrumb ? '<div class="ref">来源：' + esc(a.breadcrumb)
         + (a.service ? ' · ' + esc(a.service) : '') + '</div>' : '')
-    + '</div>').join('') + '</div>';
+    + '</div><button type="button" class="copy" data-copy="' + esc(a.command || '') + '">复制</button></div>'
+  ).join('') + '</div>';
 }
 
-/* 第四层：带编号的参考来源——编号与正文 [参考N] **一一对应**（原页面两者无映射，
-   用户不知道"参考3"指的是下面哪一个） */
 function refs(r) {
   if (!r.refs || !r.refs.length) return '<div class="empty">本轮无引用</div>';
   return '<div class="reflist">' + r.refs.map((x, i) =>
-    '<div class="ref-item" data-ref-item="' + (i + 1) + '">'
-    + '<b>[' + (i + 1) + ']</b>'
-    + '<span>' + esc(x.chunkId || '?') + '</span>'
+    '<div class="refitem" data-ref-item="' + (i + 1) + '">'
+    + '<b>[' + (i + 1) + ']</b><span class="id">' + esc(x.chunkId || '?') + '</span>'
     + (x.service ? '<span class="svc">' + esc(x.service) + '</span>' : '')
     + '</div>').join('') + '</div>';
 }
 
-function answer(r, k) {
-  let html = '';
-  if (r.error) {
-    html += '<div class="answer-err">' + esc(r.error.message || '链路异常') + '</div>';
-    if (r.actions && r.actions.length) {
-      html += '<div class="sect-t">异常前已到手的只读命令清单</div>' + contract(r);
-    }
-  }
-  html += r.answer
-    ? '<div class="md" id="ans-' + k + '" aria-live="polite" aria-atomic="false"'
-      + (r.state === 'streaming' ? ' aria-busy="true"' : '') + '>' + md(r.answer)
-      + (r.state === 'streaming' ? '<span class="cursor"></span>' : '') + '</div>'
-    : '<div class="empty">等待首个 token…</div>';
-  return html;
-}
-
-/* ==================== 结论卡：先给结论，再给证据 ==================== */
-/* 产品化第一屏（2026-10-27）：证据链不变，但顺序改成"结论 → 影响面 → 依据/动作/耗时 → 证据"。
-   结论行只从答案里取"问题定位"后的第一行（模型输出不可信，不额外生成任何新断言）；
-   拒答/澄清/异常各走自己的文案——不把"没检索"伪装成"没找到"。 */
 function firstLine(r) {
   const raw = (r && r.answer || '').trim();
   if (!raw) return '';
@@ -963,18 +1386,15 @@ function firstLine(r) {
     .replace(/\s+/g, ' ').trim().slice(0, 180);
 }
 
-function vk(label, value) {
-  return '<span class="vk">' + esc(label) + '<b>' + esc(String(value)) + '</b></span>';
-}
-
-function verdict(r, k) {
+function verdict(r, k, inc) {
   if (!r) return '';
   const g = (r.meta && r.meta.gate) || 'none';
   const refused = g === 'refuse' || (r.meta && r.meta.refused === true);
   const clarify = g === 'clarify';
   const err = r.state === 'error' || !!r.error;
   const streaming = r.state === 'streaming';
-  const tone = err ? 'err' : (refused ? 'err' : (clarify ? 'warn' : 'ok'));
+  const closed = !!(inc && inc.status === 'closed');
+  const tone = err ? 'err' : (refused ? 'refuse' : (clarify ? 'clarify' : ''));
   const line = err ? ((r.error && r.error.message) || '链路异常，先看下方错误与已有命令')
     : clarify ? '这条提问缺少可检索的标识符——补上服务名或错误码后重问，才会有检索与结论。'
     : refused ? '覆盖范围内没有足够可靠的依据：系统选择拒答，而不是拼一个像答案的东西。'
@@ -982,148 +1402,171 @@ function verdict(r, k) {
   const refsN = (r.refs || []).length;
   const actsN = (r.actions || []).length;
   const total = r.ms != null ? r.ms + 'ms' : (streaming ? '…' : '—');
-  const ret = (r.meta && r.meta.retrieval_ms != null && g !== 'clarify')
+  const ret = (r.meta && r.meta.retrieval_ms != null && !clarify)
     ? (r.meta.retrieval_ms | 0) + 'ms' : '—';
   const sub = err
     ? '证据链与命令清单照常展示；错误分类与 request_id 见运行面板与审计。'
     : clarify
       ? '未做检索，因此没有引用与命令——这是状态值，不是失败。'
       : refused
-        ? '拒答是安全信号：下方给出"最接近的标识符"与上报入口，而不是低置信度正文。'
+        ? '拒答是安全信号：下方给出“最接近的标识符”与上报入口，而不是低置信度正文。'
         : '依据 ' + refsN + ' 条引用' + (actsN ? '、' + actsN + ' 条只读命令' : '')
-          + '；下方「命令清单 → 诊断分析 → 参考来源」可逐项核对。';
-  return '<section class="verdict ' + tone + '" aria-label="结论摘要">'
-    + '<div class="verdict-hd"><span class="k">结论</span>' + badge(r)
-    + (refused ? '<span class="pill warn">拒答</span>' : '')
+          + '；下方「诊断分析 → 只读命令清单 → 参考来源」可逐项核对。';
+  return '<section class="card verdict ' + tone + '" aria-label="诊断结论">'
+    + '<div class="card-hd"><span class="k">诊断结论</span>' + badge(r)
+    + (r.meta ? '<span class="pill">cache ' + esc(r.meta.cache_hit || 'none') + '</span>' : '')
+    + (r.meta ? '<span class="pill">' + esc(r.meta.degradation_level || 'L0') + '</span>' : '')
+    + (r.meta && !clarify ? '<span class="pill">检索 ' + ret + '</span>' : '')
     + '<span class="spacer"></span>'
-    + '<button class="copy" data-act="copymd" data-k="' + k + '">复制结论</button></div>'
-    + '<p class="verdict-line">' + esc(line) + '</p>'
-    + '<div class="verdict-kpis">' + vk('依据', refsN + ' 条')
-    + (actsN ? vk('只读命令', actsN + ' 条') : '')
-    + vk('总耗时', total) + vk('检索', ret) + '</div>'
-    + '<div class="verdict-sub">' + sub + '</div>'
-    + '</section>';
+    + (streaming ? '<button type="button" class="ghost" data-act="stop" data-k="' + k + '">停止</button>' : '')
+    + (!streaming ? '<button type="button" class="copy" data-act="copymd" data-k="' + k + '">⧉ 复制为工单</button>' : '')
+    + '</div><div class="card-bd">'
+    + '<div class="vline">' + esc(line) + '</div>'
+    + '<div class="vkpi">'
+    + '<div><span class="l">依据</span><span class="v">' + refsN + ' 条引用</span></div>'
+    + '<div><span class="l">只读命令</span><span class="v">' + actsN + ' 条</span></div>'
+    + '<div><span class="l">检索</span><span class="v">' + ret + '</span></div>'
+    + '<div><span class="l">总耗时</span><span class="v">' + total + '</span></div>'
+    + '<div><span class="l">去重键</span><span class="v small" title="'
+      + esc(r.meta && r.meta.fingerprint || '') + '">' + esc(shortFp(r.meta && r.meta.fingerprint)) + '</span></div>'
+    + '</div>'
+    + '<div class="vsub">' + sub + '</div>'
+    + '<div class="impact">'
+    + (inc && inc.service ? '<span class="chip hot">' + esc(inc.service) + '</span>' : '')
+    + (inc && inc.errorCode ? '<span class="chip">' + esc(inc.errorCode) + '</span>' : '')
+    + (inc && inc.env ? '<span class="chip">' + esc(inc.env) + '</span>' : '')
+    + (inc && inc.alertId ? '<span class="chip">告警 ' + esc(inc.alertId) + '</span>' : '')
+    + (g !== 'none' ? '<span class="chip">gate ' + esc(g) + '</span>' : '')
+    + '</div>'
+    + (refused ? nearMissBlock(r, k, closed) : '')
+    + (!closed && clarify ? '<div style="margin-top:12px"><button type="button" class="btn gho" data-act="editinc">补充标识符后重试</button></div>' : '')
+    + (!closed && err && !streaming ? '<div style="margin-top:12px"><button type="button" class="btn pri" data-act="diag">↻ 重试诊断</button></div>' : '')
+    + (!closed && !streaming && !err && !refused ? '<div style="margin-top:10px"><button type="button" class="linkbtn" data-act="reportdown" data-k="' + k + '">结论不可用？上报</button></div>' : '')
+    + '</div></section>';
 }
 
-/* 复制结论：把这一轮的可核对结论导出成 Markdown（演示/汇报/工单三处复用）。
-   只拼已存在的字段，不重新生成内容——复制出来的每个数字都能在页面上找到。 */
-async function copyVerdict(k, btn) {
-  const r = S[k] && S[k].r;
-  if (!r) return;
-  const g = (r.meta && r.meta.gate) || 'none';
-  const refused = g === 'refuse' || (r.meta && r.meta.refused === true);
-  const status = r.state === 'error' || r.error ? '链路异常'
-    : g === 'clarify' ? '需要补充信息' : refused ? '拒答（未命中可靠依据）' : '完成';
-  const lines = ['## 排障结论（OpsShield）', ''];
-  lines.push('- 提问：' + (r.q || S.q || ''));
-  lines.push('- 状态：' + status);
-  if (r.meta) {
-    lines.push('- 档位：' + (r.meta.degradation_level || 'L0')
-      + ' ｜ 缓存：' + (r.meta.cache_hit || 'none')
-      + ' ｜ 检索：' + ((r.meta.retrieval_ms | 0) + 'ms')
-      + ' ｜ TTFT：' + (r.ttft != null ? r.ttft + 'ms' : '—')
-      + ' ｜ 总耗时：' + (r.ms != null ? r.ms + 'ms' : '—'));
-  }
-  const concl = firstLine(r);
-  if (concl) { lines.push(''); lines.push('**结论**：' + concl); }
-  const acts = r.actions || [];
-  if (acts.length) {
-    lines.push(''); lines.push('### 只读命令（网关不执行）');
-    acts.forEach((a, i) => { lines.push((i + 1) + '. ' + (a.step || '')); lines.push('   ' + (a.command || '')); });
-  }
-  const refs = r.refs || [];
-  if (refs.length) {
-    lines.push(''); lines.push('### 参考来源');
-    refs.forEach((x, i) => { lines.push('[' + (i + 1) + '] ' + (x.chunkId || '?') + (x.service ? ' · ' + x.service : '')); });
-  }
-  if (refused) { lines.push(''); lines.push('> 拒答是安全信号：覆盖范围内无可靠依据，未输出低置信度正文。'); }
-  const text = lines.join('\n');
-  try { await navigator.clipboard.writeText(text); if (btn) btn.textContent = '已复制'; }
-  catch (e) {
-    /* 无 clipboard 权限（非 https/无焦点）时退回 textarea 选中复制 */
-    const ta = document.createElement('textarea');
-    ta.value = text; document.body.appendChild(ta); ta.select();
-    try { document.execCommand('copy'); if (btn) btn.textContent = '已复制'; } catch (e2) { if (btn) btn.textContent = '复制失败'; }
-    ta.remove();
-  }
-  setTimeout(() => { if (btn && btn.isConnected) btn.textContent = '复制结论'; }, 1400);
-}
-
-/* ==================== 报告卡（四层黄金视觉流） ==================== */
-/* 拒答导航（ADR-0023 决策 5）：`done` 帧的 `near_miss` 只带 service + errorCodes——给的是
-   "下一步该问什么"，不是"低置信度的答案"。把低置信度的 chunk 正文摆出来，用户就会拿它当答案用，
-   而那几段可能是**别的故障**的手册，等于作废"拒答"这个信号。
-   零召回时如实说"没有接近的标识符"，并给出上报缺口的入口（既有 /api/v1/copilot/feedback）。 */
-function nearMissBlock(r, k) {
+function nearMissBlock(r, k, closed) {
   if (!r.meta || r.meta.gate !== 'refuse') return '';
   const ids = [], seen = new Set();
   for (const n of (r.nearMiss || [])) {
     if (n.service && !seen.has(n.service)) { seen.add(n.service); ids.push(n.service); }
     for (const c of (n.errorCodes || [])) if (!seen.has(c)) { seen.add(c); ids.push(c); }
   }
-  let h = '<div class="sect-t" style="margin-top:18px">🧭 最接近的标识符</div>';
-  h += ids.length
-    ? '<div class="chips">' + ids.map(c => '<button class="chip" data-near="' + esc(c) + '">'
-        + esc(c) + '</button>').join('') + '</div>'
-      + '<div class="cov-sub">点一个填进输入框（会补上「排查」），再按「发起排障查询」重试。</div>'
-    : '<div class="cov-sub">覆盖范围内<strong>零召回</strong>——没有接近的标识符可导航。</div>';
-  if (r.meta.fingerprint) {
-    h += '<div style="margin-top:8px"><button class="btn ghost" data-act="reportgap" data-k="' + k + '">上报覆盖缺口</button>'
-      + '<span class="cov-sub" style="display:inline;margin-left:8px">把这次问不出来的问题归档，供复盘回灌</span></div>';
+  if (closed) {
+    return ids.length
+      ? '<div class="near"><div class="hint">已结单：最接近的标识符仅供阅读，重新打开后可继续导航。</div>'
+        + '<div class="vsub">' + ids.map(esc).join(' · ') + '</div></div>'
+      : '';
   }
-  return h;
+  let h = '<div class="near"><div class="hint">🧭 最接近的标识符（点击填回输入框，不会自动重发）：</div>';
+  h += ids.length
+    ? '<div class="chips">' + ids.map(c => '<button type="button" class="chip" data-near="' + esc(c) + '">' + esc(c) + '</button>').join('') + '</div>'
+    : '<div class="vsub">覆盖范围内<strong>零召回</strong>——没有接近的标识符可导航。</div>';
+  if (r.meta.fingerprint) {
+    h += '<div style="margin-top:9px"><button type="button" class="btn gho" data-act="reportgap" data-k="' + k + '">上报覆盖缺口</button>'
+      + '<span class="vsub" style="display:inline;margin-left:8px">把这次问不出来的问题归档，供复盘回灌</span></div>';
+  }
+  return h + '</div>';
 }
 
-/* 上报覆盖缺口：走**既有** POST /api/v1/copilot/feedback（不新增端点）。verdict=down 的语义
-   就是"这次没给出可用的答案"；fingerprint 已在 meta 帧下发，客户端天然能回传，服务端按
-   fingerprint 归档（标识"问题"而非"某次生成"），落审计 ev="feedback"。不占配额。 */
-async function reportGap(btn) {
-  const k = btn.dataset.k || 'a', s = S[k], r = s.r;
-  if (!r || !r.meta || !r.meta.fingerprint) return;
-  const label = btn.textContent;
-  btn.disabled = true; btn.textContent = '上报中…';
+async function reportFeedback(verdictV, note, btn) {
+  const s = S.a, r = s.r;
+  if (!r || !r.meta || !r.meta.fingerprint) { toast('本轮没有可上报的去重键', 'warn'); return false; }
+  const label = btn && btn.textContent;
+  if (btn) { btn.disabled = true; btn.textContent = '上报中…'; }
+  let ok = false;
   try {
     const resp = await fetch('/api/v1/copilot/feedback', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + s.token },
-      body: JSON.stringify({
-        fingerprint: r.meta.fingerprint,
-        verdict: 'down',
-        note: ('覆盖缺口：' + (r.q || '')).slice(0, 200),
-      }),
+      body: JSON.stringify({ fingerprint: r.meta.fingerprint, verdict: verdictV, note: String(note || '').slice(0, 200) }),
     });
-    btn.textContent = resp.ok ? '已上报 ✓' : '上报失败（HTTP ' + resp.status + '）';
-  } catch (e) { btn.textContent = '上报失败（网关不可达）'; }
-  setTimeout(() => { if (btn.isConnected) { btn.disabled = false; btn.textContent = label; } }, 2000);
+    ok = resp.ok;
+    toast(ok ? (verdictV === 'up' ? '已上报：结论有效' : '已上报：结论不可用')
+             : '上报失败（HTTP ' + resp.status + '）', ok ? 'ok' : 'err');
+  } catch (e) { toast('上报失败（网关不可达）', 'err'); }
+  if (btn) {
+    btn.disabled = false;
+    btn.textContent = label || (ok ? '已上报 ✓' : '上报失败');
+    setTimeout(() => { if (btn.isConnected && label) btn.textContent = label; }, 2000);
+  }
+  return ok;
 }
 
-function card(k) {
-  const s = S[k], r = s.r;
-  // 抬头用 token 主体而不是输入框里的用户名：改了输入框/切了对照用例也不会把旧 token 的结果
-  // 标成新身份（#16）；换身份时旧卡片已在 login/dropToken 里清掉（#3）。
-  const who = esc(s.tokenUser || s.user);
-  return '<article class="card">'
-    + '<header class="card-hd">'
-    +   '<span class="who">' + who + '</span>' + badge(r)
-    +   (r && r.state === 'streaming'
-          ? '<button class="ghost" data-act="stop" data-k="' + k + '">停止</button>' : '')
-    +   '<span class="spacer"></span>' + (r ? metrics(r) : '')
-    + '</header>'
-    + '<div class="body">'
-    +   (r
-        ? verdict(r, k)
-          + '<div class="sect-t">⚡ 只读命令清单 <span class="pill ok" title="命令从本轮引用原文逐字抽取，网关只读不执行">只读 · 网关不执行</span></div>'
-          + contract(r)
-          + '<div class="sect-t">📋 诊断分析</div>' + answer(r, k)
-          + nearMissBlock(r, k)
-          + '<div class="sect-t" style="margin-top:18px">🔗 参考来源</div>' + refs(r)
-        : '<div class="empty">还没有结果。</div>')
-    + '</div></article>';
+async function reportGap(btn) {
+  const inc = activeIncident();
+  const r = S.a.r;
+  const ok = await reportFeedback('down', '覆盖缺口：' + ((inc && inc.query) || (r && r.q) || ''));
+  if (inc) {
+    inc.updatedAt = new Date().toISOString();
+    addTimeline(inc, 'feedback', ok ? '上报覆盖缺口' : '上报覆盖缺口失败（未送达）',
+      ok ? 'feedback=down' : '');
+    saveIncidents();
+    renderAll();
+  }
 }
 
-/* ==================== 差集对照表 ==================== */
-/* 时间行按"抖动容差"判同：3ms 的 TTFT 差是模型抖动，不是分叉。
-   高亮它会把本表的核心论据说反——"性能两侧一致 ⇒ 分叉发生在检索引擎层"。 */
+function analysisCard(r, k) {
+  const g = (r.meta && r.meta.gate) || 'none';
+  if (g === 'clarify' || g === 'refuse') return '';
+  const at = r.at ? fmtHM(r.at) : '';
+  const body = r.answer
+    ? md(r.answer) + (r.state === 'streaming' ? '<span class="cursor"></span>' : '')
+    : '<div class="empty">' + (r.state === 'error' ? '异常前未生成正文。' : '等待首个 token…') + '</div>';
+  return '<section class="card"><div class="card-hd"><span class="k">诊断分析</span>'
+    + '<span class="spacer"></span>'
+    + (r.state === 'streaming' ? '<span class="pill acc">生成中</span>' : (at ? '<span class="pill">生成于 ' + esc(at) + '</span>' : ''))
+    + '</div><div class="card-bd md" id="ans-' + k + '" aria-live="polite" aria-atomic="false"'
+    + (r.state === 'streaming' ? ' aria-busy="true"' : '') + '>' + body + '</div></section>';
+}
+
+function commandsCard(r) {
+  const g = (r.meta && r.meta.gate) || 'none';
+  if (g === 'clarify' || g === 'refuse') return '';
+  return '<section class="card"><div class="card-hd"><span class="k">只读命令清单</span>'
+    + '<span class="pill acc">' + (r.actions || []).length + ' 条</span>'
+    + '<span class="spacer"></span><span class="pill">网关不执行</span></div>'
+    + '<div class="card-bd">' + contract(r) + '</div>'
+    + '<div class="note-ro">命令逐字摘自本轮引用；网关只读，不执行任何命令。需要写操作时由值班人核对后自行执行。</div></section>';
+}
+
+function evidenceCard(r) {
+  return '<section class="card"><div class="card-hd"><span class="k">参考来源</span>'
+    + '<span class="pill">' + (r.refs || []).length + '</span>'
+    + '<span class="spacer"></span><span class="vsub">编号与正文一一对应</span></div>'
+    + '<div class="card-bd">' + refs(r) + '</div></section>';
+}
+
+function diagnosisSections(r, k, inc) {
+  if (!r) return '';
+  const g = (r.meta && r.meta.gate) || 'none';
+  let h = verdict(r, k, inc);
+  if (g === 'clarify' || g === 'refuse' || (r.meta && r.meta.refused === true)) return h;
+  h += analysisCard(r, k);
+  h += commandsCard(r);
+  h += evidenceCard(r);
+  return h;
+}
+
+function timelineCard(inc) {
+  const evs = (inc.timeline || []).slice(-24);
+  if (!evs.length) return '';
+  return '<section class="card"><div class="card-hd"><span class="k">处置记录</span>'
+    + '<span class="spacer"></span><span class="pill">' + evs.length + ' 条</span></div>'
+    + '<div class="tl">' + evs.map((ev, i) => {
+      const last = i === evs.length - 1 && inc.status !== 'closed';
+      const cls = last ? 'now'
+        : ev.kind.includes('error') ? 'err'
+        : ev.kind === 'diagnosis' ? 'done'
+        : ev.kind === 'feedback' ? 'done'
+        : ev.kind === 'closed' ? 'done' : 'done';
+      return '<div class="tl-row"><span class="tl-dot ' + cls + '"></span><div class="tl-c">'
+        + '<div class="t">' + esc(ev.text) + '</div>'
+        + '<div class="m">' + esc(fmtDT(ev.at)) + (ev.meta ? ' · ' + esc(ev.meta) : '') + '</div>'
+        + '</div></div>';
+    }).join('') + '</div></section>';
+}
+
 function nearMs(x, y) {
   const a = parseFloat(x), b = parseFloat(y);
   if (!isFinite(a) || !isFinite(b)) return false;
@@ -1131,13 +1574,10 @@ function nearMs(x, y) {
 }
 
 function diffTable(ra, rb) {
-  // #25：任一侧未完成时，表里出现的任何数字都会被读成「测量值」（尤其 B=0 会读成“隔离生效”）。
-  // 缺一侧就只给说明，不给表。
   if (!ra || !rb) {
     const who = !ra && !rb ? '两侧均未发起' : (!ra ? '身份 A 未发起' : '身份 B 未发起');
     return '<div class="diff"><div class="diff-hd"><b>📊 双身份对照</b>'
-      + '<div class="sub">两侧都完成后才有对照——当前' + who
-      + '，本区不给出任何数字结论。</div></div></div>';
+      + '<div class="sub">两侧都完成后才有对照——当前' + who + '，本区不给出任何数字结论。</div></div></div>';
   }
   const ids = r => new Set(((r && r.refs) || []).map(x => x.chunkId));
   const A = ids(ra), B = ids(rb);
@@ -1164,18 +1604,63 @@ function diffTable(ra, rb) {
   ];
   return '<div class="diff"><div class="diff-hd"><b>📊 双身份对照</b>'
     + '<div class="sub">判据是<strong>引用集差集</strong>——低密级侧不该出现高密级 chunk。'
-    + '不是"两边措辞不同"：措辞随模型浮动，引用集才是权限维度的直接证据。'
+    + '不是“两边措辞不同”：措辞随模型浮动，引用集才是权限维度的直接证据。'
     + '性能行两侧一致 ⇒ 分叉发生在引擎层，不是模型发挥。</div></div>'
     + '<table class="diff-t"><thead><tr><th class="k">字段</th><th>身份 A</th><th>身份 B</th></tr></thead><tbody>'
     + rows.map(([kk, va, vb, jitter]) =>
         '<tr class="' + (va === vb || (jitter && nearMs(va, vb)) ? 'same' : 'diff') + '">'
-        + '<td class="k">' + esc(kk) + '</td>'
-        + '<td class="val">' + esc(va) + '</td>'
-        + '<td class="val">' + esc(vb) + '</td></tr>').join('')
+        + '<td class="k">' + esc(kk) + '</td><td class="val">' + esc(va) + '</td><td class="val">' + esc(vb) + '</td></tr>').join('')
     + '</tbody></table></div>';
 }
 
-/* ==================== 身份块（账号胶囊 / 高级演练共用） ==================== */
+async function copyVerdict(k, btn) {
+  const r = S[k] && S[k].r;
+  if (!r) return;
+  const inc = activeIncident();
+  const g = (r.meta && r.meta.gate) || 'none';
+  const refused = g === 'refuse' || (r.meta && r.meta.refused === true);
+  const status = r.state === 'error' || r.error ? '链路异常'
+    : g === 'clarify' ? '需要补充信息' : refused ? '拒答（未命中可靠依据）' : '完成';
+  const lines = ['## 排障结论（OpsShield）', ''];
+  if (inc) {
+    lines.push('- 事故单：' + inc.id + ' · ' + inc.title);
+    if (inc.priority) lines.push('- 优先级：' + inc.priority);
+    if (inc.service) lines.push('- 服务：' + inc.service);
+    if (inc.errorCode) lines.push('- 错误码：' + inc.errorCode);
+    if (inc.env) lines.push('- 环境：' + inc.env);
+    if (inc.alertId) lines.push('- 告警：' + inc.alertId);
+  }
+  lines.push('- 提问：' + (r.q || (inc && inc.query) || ''));
+  lines.push('- 状态：' + status);
+  if (r.meta) {
+    lines.push('- 档位：' + (r.meta.degradation_level || 'L0')
+      + ' ｜ 缓存：' + (r.meta.cache_hit || 'none')
+      + ' ｜ 检索：' + ((r.meta.retrieval_ms | 0) + 'ms')
+      + ' ｜ TTFT：' + (r.ttft != null ? r.ttft + 'ms' : '—')
+      + ' ｜ 总耗时：' + (r.ms != null ? r.ms + 'ms' : '—'));
+    if (r.meta.fingerprint) lines.push('- 去重键：' + r.meta.fingerprint);
+  }
+  const concl = firstLine(r);
+  if (concl) { lines.push(''); lines.push('**结论**：' + concl); }
+  const acts = r.actions || [];
+  if (acts.length) {
+    lines.push(''); lines.push('### 只读命令清单（网关不执行）');
+    acts.forEach((a, i) => { lines.push((i + 1) + '. ' + (a.step || '')); lines.push('   ' + (a.command || '')); });
+  }
+  const rf = r.refs || [];
+  if (rf.length) {
+    lines.push(''); lines.push('### 参考来源');
+    rf.forEach((x, i) => { lines.push('[' + (i + 1) + '] ' + (x.chunkId || '?') + (x.service ? ' · ' + x.service : '')); });
+  }
+  if (refused) { lines.push(''); lines.push('> 拒答是安全信号：覆盖范围内无可靠依据，未输出低置信度正文。'); }
+  const ok = await copyText(lines.join('\n'));
+  if (btn) {
+    btn.textContent = ok ? '已复制' : '复制失败';
+    setTimeout(() => { if (btn.isConnected) btn.textContent = '⧉ 复制为工单'; }, 1400);
+  }
+}
+
+/* ==================== 身份块 / 覆盖范围 ==================== */
 function idBlock(k, label) {
   const s = S[k];
   if (!s.open && s.token) {
@@ -1183,32 +1668,27 @@ function idBlock(k, label) {
       + '<div class="idbar"><span class="dot on"></span>'
       + '<span class="who">' + esc(s.tokenUser || s.user) + '</span>'
       + '<span class="pill ok">已接入</span>'
-      + '<button class="sw" data-act="reopen:' + k + '">切换</button></div></div>';
+      + '<button type="button" class="sw" data-act="reopen:' + k + '">切换</button></div></div>';
   }
   return '<div class="fld"><label for="' + k + '-user">' + label + '</label>'
     + '<div style="display:flex;gap:6px">'
-    + '<input id="' + k + '-user" data-bind="' + k + '.user" list="users" value="' + esc(s.user) + '" style="flex:1">'
+    + '<input id="' + k + '-user" data-bind="' + k + '.user" value="' + esc(s.user) + '" style="flex:1">'
     + '<input id="' + k + '-pass" data-bind="' + k + '.pass" type="password" placeholder="口令" aria-label="口令" value="" style="flex:1">'
-    + '</div>'
-    + '<div style="display:flex;gap:6px;align-items:center;margin-top:6px">'
-    + '<button class="btn ghost" data-act="login:' + k + '"' + (s.busy ? ' disabled' : '') + '>接入</button>'
+    + '</div><div style="display:flex;gap:6px;align-items:center;margin-top:6px">'
+    + '<button type="button" class="btn gho" data-act="login:' + k + '"' + (s.busy ? ' disabled' : '') + '>接入</button>'
     + (s.token ? '<span class="pill ok">已接入</span>' : '')
     + '</div>'
     + (s.err ? '<div class="errline" style="margin-top:6px">' + esc(s.err) + '</div>' : '')
     + '</div>';
 }
 
-/* ==================== 左栏：任务级（输入 / 预设 / 发起） ==================== */
-/* 覆盖范围（ADR-0023 决策 5）：**提问前可见**的知识库边界，服务端按身份现算。
-   不占配额、不落审计（只读元数据，与 /admin/state 同款口径）。 */
 async function loadCoverage() {
   if (!S.a.token) { S.coverage = null; S.covErr = null; renderRail(); return; }
   try {
-    const r = await fetch('/api/v1/copilot/coverage',
-      { headers: { Authorization: 'Bearer ' + S.a.token } });
+    const r = await fetch('/api/v1/copilot/coverage', { headers: { Authorization: 'Bearer ' + S.a.token } });
     if (r.status === 401 || r.status === 403) {
       const msg = r.status + ' · token 失效，请重新接入';
-      dropToken('a', msg); renderAll(); showAuth(msg); return;   // #22：与轮询/流式同一出口
+      dropToken('a', msg); renderAll(); showAuth(msg); return;
     }
     if (!r.ok) { S.coverage = null; S.covErr = 'HTTP ' + r.status; }
     else { S.coverage = await r.json(); S.covErr = null; }
@@ -1216,11 +1696,10 @@ async function loadCoverage() {
   renderRail();
 }
 
-/* 摘要是"边界"，展开是**可点的标识符**——点了直接填进输入框，省掉手敲服务名/错误码。 */
 function coverageBlock() {
   if (!S.a.token) return '';
   let h = '<div class="cov"><div class="cov-hd">覆盖范围';
-  if (S.coverage) h += '<button class="sw" data-act="covtoggle">' + (S.covOpen ? '收起' : '展开') + '</button>';
+  if (S.coverage) h += '<button type="button" class="sw" data-act="covtoggle">' + (S.covOpen ? '收起' : '展开') + '</button>';
   h += '</div>';
   if (S.covErr) return h + '<div class="errline">' + esc(S.covErr) + '</div></div>';
   if (!S.coverage) return h + '<div class="cov-sub">读取中…</div></div>';
@@ -1230,20 +1709,18 @@ function coverageBlock() {
     + '</b> 错误码 · <b>' + (c.chunks | 0) + '</b> 语义块</div>'
     + '<div class="cov-sub">重建于 ' + esc(when) + (c.facets_truncated ? ' · ⚠ 分面已截断' : '') + '</div>';
   if (S.covOpen) {
+    const svc = c.service_list || [], codes = c.error_code_list || [];
     h += '<div class="cov-list">'
-      + '<div class="cov-lab">服务（' + c.service_list.length + '）</div><div class="chips">'
-      + c.service_list.map(x => '<button class="chip" data-fill="' + esc(x.service) + '">'
-          + esc(x.service) + '<span class="num">' + x.chunks + '</span></button>').join('')
-      + '</div>'
-      + '<div class="cov-lab">错误码（' + c.error_code_list.length + '）</div><div class="chips">'
-      + c.error_code_list.map(x => '<button class="chip" data-fill="' + esc(x.code) + '">'
-          + esc(x.code) + '<span class="num">' + x.chunks + '</span></button>').join('')
-      + '</div></div>';
+      + '<div class="cov-lab">服务（' + svc.length + '）</div><div class="chips">'
+      + svc.map(x => '<button type="button" class="chip" data-fill="' + esc(x.service) + '">'
+          + esc(x.service) + '<span class="num">' + x.chunks + '</span></button>').join('') + '</div>'
+      + '<div class="cov-lab">错误码（' + codes.length + '）</div><div class="chips">'
+      + codes.map(x => '<button type="button" class="chip" data-fill="' + esc(x.code) + '">'
+          + esc(x.code) + '<span class="num">' + x.chunks + '</span></button>').join('') + '</div></div>';
   }
   return h + '</div>';
 }
 
-/* 预设都是**生产场景**：语料里真实存在的形状。**一律不改模式**——高级演练只从右上角进（ADR-0021 决策 5）。 */
 const PRESETS = [
   { label: 'MySQL 连接池耗尽', q: 'MySQL 连接池耗尽 HikariCP 超时 排查' },
   { label: '支付网关 502', q: '支付网关 502 50041_PAY_GATEWAY_502 排查' },
@@ -1251,133 +1728,252 @@ const PRESETS = [
   { label: '模糊追问', q: '刚才那个怎么办' },
 ];
 
-/* 高级演练专用：跨身份/跨租户的对照用例——它们**只在这里**，不进左栏。 */
 const CONTRAST_CASES = [
   { label: '支付网关 502（实测分叉）', q: '支付网关 502 50041_PAY_GATEWAY_502 排查', b: 'sre-limited' },
   { label: '跨租户验证', q: '50012_DB_TIMEOUT 排查', b: 'sre-acme' },
 ];
 
-function renderRail() {
-  const a = S.a;
-  let h = '<div class="railhead"><b>排障台</b><span>单次请求的协议面证据 · 证据来自 SSE 帧</span></div>';
-  h += '<div class="idbar"><span class="dot' + (a.token ? ' on' : '') + '"></span>'
-    + '<span class="who">' + esc(a.token ? (a.tokenUser || a.user) : '未接入') + '</span>'
-    + (a.token ? '<span class="pill ok">已接入</span>'
-               : '<button class="sw" data-act="openacct">接入</button>')
-    + (S.compare ? '<span class="pill acc">对照中</span>' : '')
-    + '</div>';
-  h += '<div class="fld"><label for="q">排障输入</label>'
-    + '<textarea id="q" data-bind="q" placeholder="粘贴报错堆栈或口语化描述">' + esc(S.q) + '</textarea></div>';
-  h += '<div class="chips">'
-    + PRESETS.map((p, i) => '<button class="chip" data-preset="' + i + '">' + esc(p.label) + '</button>').join('')
-    + '</div>';
-  h += coverageBlock();
-  if (S.hint) h += '<div class="hintline">' + esc(S.hint) + '</div>';
-  /* 未接入时这个按钮的职责是"接入"，不是"发起"——它直接开账号胶囊，不拿空口令去打一次注定 401 的请求 */
-  h += '<button class="btn wide" data-act="' + (a.token ? 'ask' : 'openacct') + '"'
-    + (a.busy || S.asking ? ' disabled' : '') + '>'
-    + (a.token ? (S.compare ? '双身份对照查询' : '发起排障查询') : '接入身份') + '</button>';
-  h += '<datalist id="users">'
-    + ['sre-full', 'sre-limited', 'sre-acme', 'sre-watcher'].map(u => '<option value="' + u + '">').join('')
-    + '</datalist>';
-  $('rail').innerHTML = h;
+/* ==================== 左栏渲染 ==================== */
+function incidentItem(inc) {
+  const st = incidentStatus(inc);
+  const pr = inc.priority
+    ? '<span class="sev ' + inc.priority.toLowerCase() + '">' + inc.priority + '</span>'
+    : '<span class="sev none">未定</span>';
+  return '<button type="button" class="inc ' + (inc.id === S.activeId ? 'on' : '') + '" data-inc="' + esc(inc.id) + '">'
+    + '<div class="inc-x">' + pr + '<span class="t">' + esc(inc.title) + '</span></div>'
+    + '<div class="meta"><code>' + esc(inc.service || '未填服务') + '</code>'
+    + (inc.errorCode ? '<span>·</span><code>' + esc(inc.errorCode) + '</code>' : '') + '</div>'
+    + '<div class="foot"><span class="st ' + st.cls + '"><span class="dot"></span>' + st.label + '</span>'
+    + '<span>·</span><span>' + esc(relTime(inc.updatedAt || inc.createdAt)) + '</span>'
+    + (inc.owner ? '<span>·</span><span>' + esc(inc.owner) + '</span>' : '') + '</div></button>';
 }
 
-/* ==================== 右画布：证据 ==================== */
-function renderCanvas() {
-  const compare = S.compare;
-  const ra = S.a.r, rb = S.b.r;
+function renderIncidentList() {
+  const box = $('incList');
+  if (!box) return;
+  const q = S.search.trim().toLowerCase();
+  let list = S.incidents.slice().sort((a, b) =>
+    String(b.updatedAt || b.createdAt).localeCompare(String(a.updatedAt || a.createdAt)));
+  if (S.filter === 'open') list = list.filter(x => x.status !== 'closed');
+  if (S.filter === 'closed') list = list.filter(x => x.status === 'closed');
+  if (q) {
+    list = list.filter(x => [x.title, x.query, x.service, x.errorCode, x.alertId]
+      .filter(Boolean).join(' ').toLowerCase().includes(q));
+  }
+  if (!list.length) {
+    const msg = S.incidents.length
+      ? '没有匹配的事故单。换个关键词，或切到「全部」。'
+      : (S.a.token
+          ? '本租户还没有事故单。发起一次诊断会自动建立事故单，或点上方「新建事故单」。'
+          : '接入身份后加载本租户事故单；事故单保存在服务端，换设备也能看到。');
+    box.innerHTML = '<div class="rail-empty">' + msg + '</div>';
+  } else {
+    let h = '', last = '';
+    for (const inc of list) {
+      const k = dayKey(inc.createdAt);
+      if (k !== last) { h += '<div class="li-hd">' + esc(dayLabel(k)) + '</div>'; last = k; }
+      h += incidentItem(inc);
+    }
+    box.innerHTML = h;
+  }
+  const open = S.incidents.filter(x => x.status !== 'closed').length;
+  $('incCount').textContent = open + ' 进行中';
+  document.querySelectorAll('#incFilter button').forEach(b =>
+    b.classList.toggle('on', b.dataset.filter === S.filter));
+}
+
+function renderRail() {
+  renderIncidentList();
+  const cov = $('covbox');
+  if (cov) cov.innerHTML = coverageBlock();
+}
+
+/* ==================== 工作区渲染 ==================== */
+function prioritySelect(inc) {
+  if (inc.status === 'closed') {
+    return '<span class="tag">' + esc(inc.priority || '未定') + '</span>';
+  }
+  return '<select id="incPriority" class="sel" aria-label="优先级">'
+    + ['', 'P1', 'P2', 'P3'].map(p =>
+        '<option value="' + p + '"' + (inc.priority === p ? ' selected' : '') + '>'
+        + (p || '未定') + '</option>').join('')
+    + '</select>';
+}
+
+function incidentHeader(inc) {
+  const st = incidentStatus(inc);
+  const closed = inc.status === 'closed';
+  const stale = inc.diagnosis && inc.diagnosis.q && inc.diagnosis.q !== inc.query;
+  return '<div class="wk-head"><div class="wk-main">'
+    + '<div class="crumb">事故单 / <b>' + esc(inc.id) + '</b> / 诊断与处置</div>'
+    + '<div class="wk-title"><h1>' + esc(inc.title) + '</h1>'
+    + '<span class="pill ' + (st.cls === 'done' ? 'ok' : st.cls === 'err' ? 'err' : st.cls === 'prog' ? 'acc' : 'warn') + '">'
+    + st.label + '</span></div>'
+    + '<div class="wk-sub">'
+    + '<span>优先级 ' + prioritySelect(inc) + '</span>'
+    + '<span class="tag">来源 ' + esc(inc.source) + '</span>'
+    + (inc.service ? '<span class="tag">' + esc(inc.service) + '</span>' : '')
+    + (inc.errorCode ? '<span class="tag">' + esc(inc.errorCode) + '</span>' : '')
+    + (inc.env ? '<span class="tag">' + esc(inc.env) + '</span>' : '')
+    + (inc.alertId ? '<span class="tag">告警 ' + esc(inc.alertId) + '</span>' : '')
+    + '<span class="muted">创建 ' + esc(fmtDT(inc.createdAt)) + '</span>'
+    + (closed
+        ? '<span class="tag">负责 ' + esc(inc.owner || '未分配') + '</span>'
+        : (inc.owner
+          ? '<button type="button" class="tag" data-act="assign" title="点击分配负责人">负责 ' + esc(inc.owner) + '</button>'
+          : '<button type="button" class="tag" data-act="assign" title="点击分配负责人">分配负责人</button>'))
+    + '</div>'
+    + '<div class="queryline"><span class="lbl">排障输入</span>'
+    + '<code title="' + esc(inc.query) + '">' + esc(inc.query) + '</code>'
+    + (closed ? '' : '<button type="button" class="copy" data-act="editinc">编辑</button>') + '</div>'
+    + (stale ? '<div class="warnline">当前输入已修改；下方结论仍对应旧输入，重新诊断后才会更新。</div>' : '')
+    + '</div><div class="wk-actions">'
+    + (inc.status === 'closed'
+        ? '<button type="button" class="btn gho" data-act="reopen">重新打开</button>'
+        : '<button type="button" class="btn gho" data-act="diag">' + (S.a.token ? '↻ 重新诊断' : '接入并诊断') + '</button>'
+          + '<button type="button" class="btn pri" data-act="closeinc">结单并记录处置</button>')
+    + '</div></div>';
+}
+
+function welcomeHeader() {
+  return '<div class="wk-head"><div class="wk-main">'
+    + '<div class="crumb">事件响应</div>'
+    + '<h1 style="font-size:19px;margin:0;letter-spacing:.15px">把一条报错变成可执行的处置</h1>'
+    + '<div class="wk-sub"><span>从告警、错误码或一句现象开始。先给结论，再给依据与只读命令。</span></div>'
+    + '</div><div class="wk-actions"><button type="button" class="btn pri" data-act="newinc">＋ 新建事故单</button></div></div>';
+}
+
+function welcomeCanvas() {
+  const examples = PRESETS.slice(0, 4).map((p, i) =>
+    '<button type="button" class="chip" data-preset="' + i + '">' + esc(p.label) + '</button>').join('');
+  return '<div class="card hero"><div class="card-bd"><div class="hero-grid"><div>'
+    + '<h2>先给结论，再给依据</h2>'
+    + '<p>贴错误码、异常堆栈或一句现象描述，得到「问题定位 + 可核对引用 + 只读命令」。'
+    + '每条结论都能回溯到引用切片；网关只读，不执行任何命令。</p>'
+    + '<div class="fld" style="margin-top:12px"><label for="quickq">快速诊断</label>'
+    + '<textarea id="quickq" maxlength="8192" placeholder="粘贴报错堆栈，或输入：支付网关 502 50041_PAY_GATEWAY_502 排查">' + esc(S.quick) + '</textarea></div>'
+    + '<div class="chips" style="margin-top:8px">' + examples + '</div>'
+    + '<div class="hero-actions"><button type="button" class="btn pri" data-act="quickask">发起诊断</button>'
+    + '<button type="button" class="btn gho" data-act="newinc">从告警新建事故单</button></div>'
+    + '<div class="hint">未接入时会先请你接入身份；事故单保存在服务端，同租户多端一致。</div>'
+    + '</div><div class="steps3">'
+    + '<div class="step-card"><span class="no">01</span><b>贴报错</b><span>错误码 / 堆栈 / 一句现象描述</span></div>'
+    + '<div class="step-card"><span class="no">02</span><b>看结论</b><span>一句话定位 + 依据与耗时</span></div>'
+    + '<div class="step-card"><span class="no">03</span><b>拿走动作</b><span>复制只读命令或整段工单</span></div>'
+    + '</div></div></div></div>';
+}
+
+function emptyDiagnosis(inc) {
+  const closed = inc.status === 'closed';
+  return '<section class="card"><div class="empty-diag">'
+    + '<div class="big">这条事故单还没有诊断记录</div>'
+    + '<div class="vsub">已带入事故单上下文' + (inc.service ? '：' + esc(inc.service) : '')
+    + (inc.errorCode ? ' · ' + esc(inc.errorCode) : '') + '</div>'
+    + '<div class="querybox">' + esc(inc.query) + '</div>'
+    + (closed
+      ? '<div class="note">事故单已结单；需要补充诊断时先重新打开。</div>'
+      : '<div class="actions"><button type="button" class="btn pri" data-act="diag">'
+        + (S.a.token ? '▶ 开始诊断' : '接入并诊断') + '</button>'
+        + '<button type="button" class="btn gho" data-act="editinc">编辑输入</button></div>')
+    + '</div></section>';
+}
+
+function renderWorkspace() {
+  const inc = activeIncident();
+  $('topInc').textContent = inc ? inc.id : '—';
+  $('wsHead').innerHTML = inc ? incidentHeader(inc) : welcomeHeader();
   const cv = $('canvas');
-  cv.className = 'canvas' + (compare ? ' compare' : '');
-  if (!ra && !(compare && rb)) {
-    /* 空态不挂用户名——"还没有结果"的卡上顶着一个身份名，会读成"这个人问过了" */
-    const examples = (typeof PRESETS !== 'undefined' ? PRESETS : []).slice(0, 3)
-      .map((p, i) => '<button class="chip" data-preset="' + i + '">' + esc(p.label) + '</button>').join('');
-    cv.innerHTML = '<div class="card"><div class="body"><div class="empty-hero">'
-      + '<h2>把一条报错贴进来，先给结论，再给依据</h2>'
-      + '<p>线上突发排障：贴错误码、异常堆栈或一句现象描述，得到「问题定位 + 可核对引用 + 只读命令」。'
-      + '每条结论都能回溯到引用切片；网关只读，不执行任何命令。</p>'
-      + '<div class="steps">'
-      +   '<div class="step-card"><span class="no">01</span><b>贴报错</b><span>错误码 / 堆栈 / 一句现象描述</span></div>'
-      +   '<div class="step-card"><span class="no">02</span><b>看结论</b><span>一句话定位 + 依据与耗时</span></div>'
-      +   '<div class="step-card"><span class="no">03</span><b>拿走动作</b><span>复制只读命令或整段结论</span></div>'
-      + '</div>'
-      + (examples ? '<div class="chips">' + examples + '</div>' : '')
-      + '<div class="hint">还没有结果——点一个示例，或直接在左栏输入。未接入时会先请你接入身份。</div>'
-      + '</div></div></div>';
+  if (!inc) {
+    cv.className = 'canvas';
+    cv.innerHTML = welcomeCanvas();
     $('diff').innerHTML = '';
     return;
   }
-  cv.innerHTML = card('a') + (compare ? card('b') : '');
-  $('diff').innerHTML = (compare && (ra || rb)) ? diffTable(ra, rb) : '';
+  if (S.compare) {
+    cv.className = 'canvas compare';
+    const col = k => '<div class="cmp-col"><div class="cmp-hd"><span class="dot ' + (S[k].token ? 'on' : '') + '"></span>'
+      + '<b>身份 ' + k.toUpperCase() + '</b><code>' + esc(S[k].tokenUser || S[k].user) + '</code>'
+      + (S[k].r ? badge(S[k].r) : '') + '</div>'
+      + (S[k].r ? diagnosisSections(S[k].r, k, inc)
+        : '<div class="card"><div class="card-bd"><div class="empty">该身份尚未发起。</div></div></div>') + '</div>';
+    cv.innerHTML = col('a') + col('b');
+    $('diff').innerHTML = (S.a.r || S.b.r) ? diffTable(S.a.r, S.b.r) : '';
+    return;
+  }
+  cv.className = 'canvas';
+  $('diff').innerHTML = '';
+  if (!S.a.r) { cv.innerHTML = emptyDiagnosis(inc) + timelineCard(inc); return; }
+  cv.innerHTML = diagnosisSections(S.a.r, 'a', inc) + timelineCard(inc);
 }
 
-/* ==================== 右上角弹层 ==================== */
-/* 顶栏是**会话级**信息（我是谁 / 系统健不健康）——它必须随登录态变，否则登录完顶栏还写着"未接入" */
-/* #23：sticky 偏移、弹层 top、左栏高度都读 --topbar-h。顶栏会因换行/去重键变长/缩放变高，
-   写死 53px 会让左栏顶部被盖住——这里实测回写，尺寸一变就同步。 */
+/* ==================== 顶栏 / 弹层 ==================== */
 function syncTopbarHeight() {
-  const tb = document.querySelector('.topbar');
+  const tb = document.querySelector('.top');
   if (!tb) return;
-  document.documentElement.style.setProperty('--topbar-h', Math.round(tb.getBoundingClientRect().height) + 'px');
+  document.documentElement.style.setProperty('--top-h', Math.round(tb.getBoundingClientRect().height) + 'px');
 }
 
 function renderHeader() {
   const a = S.a;
   $('acct').innerHTML = '<span class="dot' + (a.token ? ' on' : '') + '"></span>'
     + esc(a.token ? (a.tokenUser || a.user) : '未接入');
-  $('healthbtn').textContent = S.platform === false ? '运行态 · 锁定' : '运行态';
-  syncTopbarHeight();   // 胶囊文案/去重键变化会改变顶栏高度（#23）
+  let txt = '未接入', cls = '';
+  if (a.token) {
+    if (S.platform === false) { txt = '运行态 · 需平台权限'; cls = 'warn'; }
+    else if (S.platform === null) { txt = '运行态读取中'; }
+    else if (drawerState && drawerState.health) {
+      const h = drawerState.health;
+      txt = h.status === 'UP' ? '系统正常' : '依赖降级';
+      cls = h.status === 'UP' ? 'on' : 'warn';
+    } else { txt = '运行态'; }
+  }
+  $('healthtext').textContent = txt;
+  $('healthdot').className = 'dot ' + cls;
+  $('llmchip').hidden = !(S.platform === true && drawerState && drawerState.health && drawerState.health.live_mode === false);
+  $('healthbtn').setAttribute('aria-expanded', String(!$('drawer').hidden));
+  syncTopbarHeight();
 }
 
 function renderAcct() {
-  let h = '<div class="pop-hd">身份 A · 会话级</div>' + idBlock('a', '用户名 + 口令');
-  h += '<div class="note">token 存 sessionStorage：刷新不掉线，关掉这个标签页即失效。'
-    + '它<strong>不是安全升级</strong>——同源脚本照样读得到，只是生命周期从 24h 收窄到"这一次标签页"。</div>';
-  $('acctpop').innerHTML = h;
+  $('acctpop').innerHTML = '<div class="pop-hd">身份 A · 会话级</div>'
+    + idBlock('a', '用户名 + 口令')
+    + '<div class="note">token 存 sessionStorage：刷新不掉线，关掉这个标签页即失效。'
+    + '它<strong>不是安全升级</strong>——同源脚本照样读得到，只是生命周期从 24h 收窄到“这一次标签页”。</div>';
 }
 
 function renderAdv() {
   let h = '<div class="pop-hd">高级 · 权限隔离演练</div>'
     + '<label class="chk"><input type="checkbox" id="cmp"' + (S.compare ? ' checked' : '') + '>'
-    + '用两个身份各问一次，并排钉住两份结果</label>'
+    + '<span>用两个身份各问一次，并排钉住两份结果</span></label>'
     + '<div class="note">判据是<strong>引用集差集</strong>——低密级侧不该出现高密级 chunk。'
-    + '不是"两边措辞不同"：措辞随模型浮动，引用集才是权限维度的直接证据。</div>';
-  if (S.compare) h += idBlock('b', '身份 B') + '<div class="chips" style="margin-top:10px">'
-    + CONTRAST_CASES.map((c, i) => '<button class="chip" data-contrast="' + i + '">' + esc(c.label) + '</button>').join('')
-    + '</div>';
+    + '不是“两边措辞不同”：措辞随模型浮动，引用集才是权限维度的直接证据。</div>';
+  if (S.compare) {
+    h += idBlock('b', '身份 B') + '<div class="chips" style="margin-top:10px">'
+      + CONTRAST_CASES.map((c, i) => '<button type="button" class="chip" data-contrast="' + i + '">' + esc(c.label) + '</button>').join('')
+      + '</div>';
+  }
   $('advpop').innerHTML = h;
 }
 
-/* ==================== 焦点管理（#30）====================
-   浮层要能「键盘进得去、Esc 出得来、关掉回原位」，否则纯键盘用户打开抽屉后无法关闭
-   （打开按钮被 scrim 盖住），Tab 还会跑到遮罩后面的页面控件上。 */
+/* ==================== 焦点管理 ==================== */
 let focusReturn = null;
-
-function isVisible(el) {
-  return !!el && el.offsetParent !== null;
-}
-
+function isVisible(el) { return !!el && el.offsetParent !== null; }
 function focusables(box) {
   if (!box) return [];
   return [...box.querySelectorAll(
     'a[href],button:not([disabled]),input:not([disabled]),textarea:not([disabled]),select:not([disabled]),summary,[tabindex]:not([tabindex="-1"])'
   )].filter(isVisible);
 }
-
 function openDialogFocus(box) {
   if (!box) return;
   focusReturn = document.activeElement;
   const f = focusables(box)[0];
   if (f) f.focus();
 }
-
 function restoreFocus() {
   if (focusReturn && focusReturn.isConnected && isVisible(focusReturn)) focusReturn.focus();
   focusReturn = null;
 }
-
-/* Tab 焦点陷阱：只在当前浮层内循环 */
 function trapTab(e, box) {
   const f = focusables(box);
   if (!f.length) { e.preventDefault(); return; }
@@ -1386,34 +1982,33 @@ function trapTab(e, box) {
   if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
   else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
 }
-
-/* 当前处于最上层的浮层（Esc/陷阱的作用域） */
+function isNarrow() { return window.matchMedia && window.matchMedia('(max-width:1180px)').matches; }
 function currentModal() {
   if ($('auth').style.display === 'grid') return $('auth');
-  if (!$('drawer').hidden) return $('drawer');
+  if (!$('drawer').hidden && isNarrow()) return $('drawer');
   return document.querySelector('[data-pop]:not([hidden])');
 }
-
 function openDrawer() {
   closePops();
-  $('scrim').hidden = false;
   $('drawer').hidden = false;
+  $('v-trouble').classList.add('with-drawer');
+  $('scrim').hidden = !isNarrow();
   renderDrawer();
-  openDialogFocus($('drawer'));
+  $('healthbtn').setAttribute('aria-expanded', 'true');
+  if (isNarrow()) openDialogFocus($('drawer'));
 }
-
 function closeDrawer() {
-  $('scrim').hidden = true;
   $('drawer').hidden = true;
+  $('v-trouble').classList.remove('with-drawer');
+  $('scrim').hidden = true;
+  $('healthbtn').setAttribute('aria-expanded', 'false');
   restoreFocus();
 }
-
 function closeAuth() {
   $('auth').style.display = 'none';
   document.body.classList.remove('sat');
   restoreFocus();
 }
-
 function openPop(id) {
   const el = $(id);
   document.querySelectorAll('[data-pop]').forEach(p => { p.hidden = p.id !== id; });
@@ -1431,136 +2026,370 @@ function togglePop(id) {
   if (el.hidden) restoreFocus(); else openDialogFocus(el);
 }
 function closePops() {
-  const hadOpen = !!document.querySelector('[data-pop]:not([hidden])');
+  const had = !!document.querySelector('[data-pop]:not([hidden])');
   document.querySelectorAll('[data-pop]').forEach(p => { p.hidden = true; });
   $('acct').setAttribute('aria-expanded', 'false');
   $('advbtn').setAttribute('aria-expanded', 'false');
-  if (hadOpen) restoreFocus();
+  if (had) restoreFocus();
 }
 
-/* ==================== 健康抽屉 ==================== */
-/* metrics/prev 显式传入：抽屉要显示**当前轮**计数与相对上一轮的增量。
-   历史实现把 prevMetrics 既当当前值又当前值相减（差值恒 0、数字慢一拍，#27）。 */
-function renderDrawer(metrics, prev) {
+/* ==================== 负责人分配 ==================== */
+async function openAssignPop() {
+  const inc = activeIncident();
+  if (!inc) return;
+  if (!S.a.token) { openPop('acctpop'); return; }
+  const box = $('assignpop');
+  box.innerHTML = '<div class="pop-hd">分配负责人</div><div class="note">加载同租户用户…</div>';
+  openPop('assignpop');
+  let users = [];
+  try {
+    const data = await incidentApi('GET', '/api/v1/copilot/incidents/assignees');
+    users = data.users || [];
+  } catch (e) {
+    box.innerHTML = '<div class="pop-hd">分配负责人</div><div class="note">' + esc(e.message) + '</div>';
+    return;
+  }
+  box.innerHTML = '<div class="pop-hd">分配负责人 · ' + esc(inc.id) + '</div>'
+    + '<div class="assign-list">'
+    + users.map(u => '<button type="button" class="assign-item' + (u.sub === inc.owner ? ' on' : '')
+        + '" data-assign="' + esc(u.sub) + '">'
+        + '<span class="who">' + esc(u.sub) + '</span>'
+        + '<span class="muted">' + esc(u.role) + ' · L' + esc(u.authLevel) + '</span>'
+        + (u.sub === inc.owner ? '<span class="pill ok">当前</span>' : '') + '</button>').join('')
+    + (inc.owner ? '<button type="button" class="assign-item" data-assign="">取消分配</button>' : '')
+    + '</div>'
+    + '<div class="note">只能分配给同租户的启用用户；分配后其他会话刷新即可看到。</div>';
+}
+
+async function assignTo(sub) {
+  const inc = activeIncident();
+  if (!inc) return;
+  const prev = inc.owner;
+  inc.owner = sub || null;
+  const ok = await patchIncident(inc, { owner: sub || '' }, 'assign',
+    sub ? '负责人改为 ' + sub : '取消负责人');
+  if (!ok) inc.owner = prev;
+  closePops();
+  renderAll();
+  if (ok) toast(sub ? '负责人已改为 ' + sub : '已取消负责人', 'ok');
+}
+
+/* ==================== 运行态抽屉 ==================== */
+function gateLabel(r) {
+  if (!r) return '—';
+  if (r.state === 'error' || r.error) return '链路异常';
+  const g = (r.meta && r.meta.gate) || 'none';
+  if (g === 'clarify') return '需澄清';
+  if (g === 'refuse' || (r.meta && r.meta.refused === true)) return '拒答';
+  return '完成';
+}
+
+function renderDrawer(metricsArg, prev) {
   const box = $('drawerbody');
+  if (!box) return;
+  $('drawerMode').textContent = S.platform === true ? '平台视角' : (S.platform === false ? '锁定' : '—');
+  const inc = activeIncident();
+  const dnum = (label, value) =>
+    '<div class="n"><div class="v">' + esc(value) + '</div><div class="k">' + esc(label) + '</div></div>';
+  let h = '<div class="dsec"><h4>本次事故单上下文</h4>';
+  if (!inc) {
+    h += '<div class="dnote">未选择事故单。发起一次诊断后，这里显示本轮的真实字段。</div>';
+  } else if (!inc.diagnosis) {
+    h += '<div class="dnote">' + esc(inc.id) + ' 还没有诊断记录。</div>';
+  } else {
+    const r = inc.diagnosis;
+    h += '<div class="dnums">'
+      + dnum('状态', gateLabel(r))
+      + dnum('依据', (r.refs || []).length + ' 条')
+      + dnum('只读命令', (r.actions || []).length + ' 条')
+      + dnum('总耗时', r.ms != null ? r.ms + 'ms' : '—')
+      + '</div><div class="dnote">去重键 <code>' + esc(shortFp(r.meta && r.meta.fingerprint))
+      + '</code> · 检索 ' + (r.meta && r.meta.retrieval_ms != null ? (r.meta.retrieval_ms | 0) + 'ms' : '—')
+      + ' · cache ' + esc((r.meta && r.meta.cache_hit) || 'none') + '</div>';
+  }
+  h += '</div>';
   if (!S.a.token) {
-    box.innerHTML = '<div class="locked"><b>未接入</b><br>'
-      + '运行态读的是 <code>/api/v1/admin/state</code>——先在右上角账号胶囊里接入身份。</div>';
+    box.innerHTML = h + '<div class="locked"><b>未接入</b><br>运行态读的是 <code>/api/v1/admin/state</code>——先在右上角身份胶囊里接入身份。</div>';
     return;
   }
   if (S.platform === null) {
-    box.innerHTML = '<div class="locked" style="border-left-color:var(--line)">正在读取运行态…</div>';
+    box.innerHTML = h + '<div class="locked" style="border-left-color:var(--line)">正在读取运行态…</div>';
     return;
   }
   if (S.platform === false) {
-    box.innerHTML = '<div class="locked"><b>需要平台凭证</b><br>'
-      + '档位、命中率、配额水位都是<strong>跨租户聚合量</strong>，数据端点要求 <code>role=platform</code>。'
-      + '当前身份的 <code>/admin/state</code> 返回 403，所以这里显示锁定态而不是空数据。'
-      + '用 <code>sre-full</code> 接入即可看到运行态。<br><br>'
-      + '排障台视图不受影响：任意有效 JWT 都能发起查询。</div>';
+    box.innerHTML = h + '<div class="locked"><b>需要平台凭证</b><br>'
+      + '档位、命中率、配额水位都是<strong>跨租户聚合量</strong>，数据端点要求 <code>role=platform</code> 且 '
+      + '<code>auth_level&gt;=3</code>。当前身份的 <code>/api/v1/admin/state</code> 返回 403，'
+      + '所以这里显示锁定态而不是空数据。用 <code>sre-full</code> 接入即可看到运行态。<br><br>'
+      + '排障台不受影响：任意有效 JWT 都能发起查询。</div>';
     return;
   }
   if (!drawerState) {
-    box.innerHTML = '<div class="locked" style="border-left-color:var(--line)">正在读取运行态…</div>';
+    box.innerHTML = h + '<div class="locked" style="border-left-color:var(--line)">正在读取运行态…</div>';
     return;
   }
-  const m = metrics || (drawerState ? drawerState.metrics : null) || {};
+  const m = metricsArg || drawerState.metrics || {};
   const before = prev !== undefined ? prev : drawerPrev;
   const d = k => before ? (m[k] | 0) - (before[k] | 0) : 0;
   const hits = (m.l1_cache_hits | 0) + (m.l2_cache_hits | 0);
-  const deg = drawerState && drawerState.runtime ? drawerState.runtime.degradation : null;
-  const rt = drawerState && drawerState.runtime ? drawerState.runtime : null;
-  const q = rt && rt.quota ? rt.quota : null;
-  const num = (label, value, delta) =>
-    '<div class="n"><div class="v">' + value + '</div><div class="k">' + label + '</div>'
-    + '<div class="d">' + (delta > 0 ? '+' + delta : '') + '</div></div>';
-  let h = '<div class="drawer-sec"><h3>请求与收敛</h3><div class="drawer-nums">'
-    + num('请求总数', (m.total_requests | 0).toLocaleString(), d('total_requests'))
-    + num('风暴收敛请求', (m.dedup_aggregated | 0).toLocaleString(), d('dedup_aggregated'))
-    + num('缓存命中', hits.toLocaleString(), d('l1_cache_hits') + d('l2_cache_hits'))
-    + num('LLM 调用', (m.llm_calls | 0).toLocaleString(), d('llm_calls'))
-    + '</div></div>';
+  const rt = drawerState.runtime || {};
+  const deg = rt.degradation || null;
+  const q = rt.quota || null;
+  h += '<div class="dsec"><h4>请求与收敛</h4><div class="dnums">'
+    + dnum('请求总数', (m.total_requests | 0).toLocaleString())
+    + dnum('并发合并组', (rt.sf_groups | 0).toLocaleString())
+    + dnum('缓存命中', hits.toLocaleString())
+    + dnum('LLM 调用', (m.llm_calls | 0).toLocaleString())
+    + '</div><div class="dnote">本轮增量：请求 +' + d('total_requests') + ' · 缓存 +'
+    + (d('l1_cache_hits') + d('l2_cache_hits')) + ' · LLM +' + d('llm_calls') + '</div></div>';
   if (deg) {
-    h += '<div class="drawer-sec"><h3>降级档位</h3>'
-      + '<div class="steps">' + ['L0', 'L1', 'L2'].map(l =>
-          '<div class="step' + (deg.level === l ? ' on' : '') + '">' + l + '</div>').join('') + '</div>'
-      + '<div class="facts" style="margin-top:10px">'
-      + '<span>熔断 K/' + deg.llm_failure_threshold + ' = <b>' + deg.failures + '</b></span>'
-      + '<span>在途 <b>' + (rt ? rt.inflight : 0) + '</b> / ' + deg.inflight_threshold + '</span>'
+    h += '<div class="dsec"><h4>降级档位 · ' + esc(deg.level) + '</h4>'
+      + '<div class="deg">' + ['L0', 'L1', 'L2'].map(l =>
+          '<i class="' + (deg.level === l ? (l === 'L2' ? 'warn' : 'on') : '') + '"></i>').join('') + '</div>'
+      + '<div class="facts"><span>熔断 K/' + deg.llm_failure_threshold + ' = <b>' + deg.failures + '</b></span>'
+      + '<span>在途 <b>' + (rt.inflight | 0) + '</b> / ' + deg.inflight_threshold + '</span>'
       + (deg.cooldown_s > 0 ? '<span>冷却剩余 <b>' + deg.cooldown_s + '</b>s</span>' : '')
-      + (deg.manual ? '<span class="badge">MANUAL LOCK</span>' : '')
-      + '</div></div>';
+      + (deg.manual ? '<span class="badge">MANUAL LOCK</span>' : '') + '</div></div>';
+  }
+  if (drawerState.health) {
+    const hh = drawerState.health;
+    const row = (label, st, value) => '<div class="deps-row"><span class="s"><span class="dot '
+      + (st === 'UP' ? 'on' : st === 'DOWN' ? 'err' : 'warn') + '"></span>' + label + '</span>'
+      + '<span class="num ' + (st === 'UP' ? 'ok' : st === 'DOWN' ? 'err' : 'warn') + '">'
+      + esc(value == null ? st : value) + '</span></div>';
+    h += '<div class="dsec"><h4>依赖健康</h4>'
+      + row('Elasticsearch', hh.es.status, hh.es.value)
+      + row('Qdrant', hh.qdrant.status, hh.qdrant.value)
+      + row('Redis', hh.redis.status, null)
+      + row('LLM 后端', hh.live_mode ? 'UP' : 'DEGRADED', hh.live_mode ? 'live' : 'mock')
+      + '</div>';
   }
   if (q) {
-    h += '<div class="drawer-sec"><h3>当日配额 · ' + esc(q.sub) + '</h3>'
-      + '<div class="meter" style="margin-top:0">'
-      + '<div class="cap"><span class="num">' + q.used.toLocaleString() + ' / ' + q.limit.toLocaleString() + '</span></div>'
+    h += '<div class="dsec"><h4>当日配额 · ' + esc(q.sub) + '</h4>'
+      + '<div class="meter" style="margin-top:0"><div class="cap"><span class="num">'
+      + q.used.toLocaleString() + ' / ' + q.limit.toLocaleString() + '</span></div>'
       + '<div class="track"><i style="width:' + Math.min(100, q.used / q.limit * 100).toFixed(1) + '%"></i></div>'
       + '</div></div>';
   }
-  h += '<button class="btn ghost wide" data-view="panel">打开运行面板 →</button>';
+  if (rt.reingest) {
+    h += '<div class="dsec"><h4>索引重建</h4><div class="dnote">'
+      + 'busy <b>' + (rt.reingest.busy ? '是' : '否') + '</b> · last ' + esc(fmtTs(rt.reingest.last))
+      + '</div></div>';
+  }
+  h += '<button type="button" class="btn ghost wide" data-view="panel">打开运行面板 →</button>';
   box.innerHTML = h;
 }
 
 /* ==================== 视图装配 ==================== */
 function setView(v, opts) {
   S.view = v;
-  // #35：视图写进 hash（刷新/后退不丢）；silent 用于 hashchange 回填，避免来回改写历史
   if (!(opts && opts.silent) && location.hash !== '#' + v) history.replaceState(null, '', '#' + v);
   document.querySelectorAll('.tabs button').forEach(b => {
     const on = b.dataset.view === v;
     b.classList.toggle('on', on);
     b.setAttribute('aria-selected', String(on));
-    b.tabIndex = on ? 0 : -1;          // 键盘只在选中的 tab 上停一站（ARIA tabs 惯例）
+    b.tabIndex = on ? 0 : -1;
   });
   $('v-trouble').hidden = v !== 'trouble';
   $('v-panel').hidden = v !== 'panel';
+  $('healthbtn').hidden = v === 'panel';
+  if (v === 'panel') closeDrawer();
   renderPanelGate();
   closePops();
 }
 
-/* 运行面板视图按身份分级：platform 出数据，其他出锁定态（门禁一字不动） */
 function renderPanelGate() {
   const locked = !S.a.token || S.platform !== true;
   $('panel-main').hidden = locked;
   $('panel-lock').hidden = !locked;
   if (!locked) return;
   $('panel-lock').innerHTML = '<div class="panel-main"><div class="locked">'
-    + (S.platform === null
-        ? '<b>正在读取运行态…</b><br>已接入 <code>' + esc(S.a.user) + '</code>，'
+    + (!S.a.token
+        ? '<b>未接入</b><br>先在右上角身份胶囊里接入身份，再回到这个视图。'
+        : S.platform === null
+        ? '<b>正在读取运行态…</b><br>已接入 <code>' + esc(S.a.tokenUser || S.a.user) + '</code>，'
           + '正在用它的凭证请求 <code>/api/v1/admin/state</code>。'
-        : S.a.token
-        ? '<b>需要平台凭证</b><br>运行面板读的是 <code>/api/v1/admin/state</code> 与 '
+        : '<b>需要平台凭证</b><br>运行面板读的是 <code>/api/v1/admin/state</code> 与 '
           + '<code>/api/v1/admin/audit/recent</code>——档位、命中率、配额水位都是<strong>跨租户聚合量</strong>，'
-          + '端点要求 <code>role=platform</code>（密级高≠可信，ADR-0008）。当前身份的调用返回 403，'
-          + '所以这里显示锁定态而不是空数据。用 <code>sre-full</code> 接入即可。'
-        : '<b>未接入</b><br>先在右上角账号胶囊里接入身份，再回到这个视图。')
-    + '<br><br>排障台视图不受影响：任意有效 JWT 都能发起查询。</div></div>';
+          + '端点要求 <code>role=platform</code>（密级高不等于可信，ADR-0008）。当前身份的调用返回 403，'
+          + '所以这里显示锁定态而不是空数据。用 <code>sre-full</code> 接入即可。')
+    + '<br><br>排障台不受影响：任意有效 JWT 都能发起查询。</div></div>';
+}
+
+function renderStoreStat() {
+  const el = $('storestat');
+  if (!el) return;
+  const open = S.incidents.filter(x => x.status !== 'closed').length;
+  el.textContent = S.incidents.length ? ('事故单 ' + S.incidents.length + ' 条 · 进行中 ' + open) : '';
 }
 
 function renderAll() {
-  renderHeader(); renderAcct(); renderAdv(); renderRail(); renderCanvas(); renderDrawer(); renderPanelGate();
+  renderHeader();
+  renderAcct();
+  renderAdv();
+  renderRail();
+  renderWorkspace();
+  renderDrawer();
+  renderPanelGate();
+  renderStoreStat();
+}
+
+/* ==================== 事故单对话框 ==================== */
+function cleanAlertParams() {
+  const u = new URLSearchParams(location.search);
+  ['alert', 'source', 'title', 'q', 'query', 'service', 'errorCode', 'error_code', 'env', 'alertname'].forEach(k => u.delete(k));
+  const qs = u.toString();
+  history.replaceState(null, '', location.pathname + (qs ? '?' + qs : '') + location.hash);
+}
+
+function openIncidentDialog(opts) {
+  opts = opts || {};
+  if (opts.mode === 'edit' && opts.inc && opts.inc.status === 'closed') {
+    toast('事故单已结单；重新打开后再编辑', 'warn');
+    return;
+  }
+  const d = $('incDialog');
+  d.dataset.mode = opts.mode === 'edit' ? 'edit' : 'create';
+  d.dataset.id = opts.inc ? opts.inc.id : '';
+  const inc = opts.inc || null;
+  const p = opts.prefill || {};
+  $('incDialogTitle').textContent = inc ? '编辑事故单' : '新建事故单';
+  $('ni-title').value = inc ? inc.title : (p.title || '');
+  $('ni-query').value = inc ? inc.query : (p.query || p.title || '');
+  $('ni-service').value = inc ? inc.service : (p.service || '');
+  $('ni-code').value = inc ? inc.errorCode : (p.errorCode || '');
+  $('ni-env').value = inc ? inc.env : (p.env || '');
+  $('ni-alert').value = inc ? inc.alertId : (p.alertId || '');
+  $('ni-source').value = inc ? inc.source : (p.source || 'manual');
+  $('ni-priority').value = inc ? inc.priority : (p.priority || '');
+  $('ni-msg').textContent = '';
+  $('niOnly').hidden = !!inc;
+  $('niGo').textContent = inc ? '保存' : '创建并诊断';
+  if (d.open) d.close();
+  d.showModal();
+  setTimeout(() => { const t = $('ni-title'); if (t) t.focus(); }, 0);
+}
+
+async function submitIncident(autoDiag) {
+  const d = $('incDialog');
+  const mode = d.dataset.mode;
+  const id = d.dataset.id;
+  const title = $('ni-title').value.trim();
+  const query = $('ni-query').value.trim();
+  const alertId = $('ni-alert').value.trim();
+  const msg = $('ni-msg');
+  if (!title) { msg.textContent = '事故单标题必填'; $('ni-title').focus(); return; }
+  if (!query) { msg.textContent = '排障输入必填'; $('ni-query').focus(); return; }
+  if (alertId && !/^[A-Za-z0-9_.=|\\-]{8,128}$/.test(alertId)) {
+    msg.textContent = '告警 ID 须为 8–128 位 [A-Za-z0-9_.=|\\-]';
+    $('ni-alert').focus(); return;
+  }
+  const data = {
+    title, query,
+    service: $('ni-service').value.trim(),
+    errorCode: $('ni-code').value.trim(),
+    env: $('ni-env').value.trim(),
+    alertId,
+    source: $('ni-source').value,
+    priority: $('ni-priority').value
+  };
+  if (mode === 'edit') {
+    const inc = findIncident(id);
+    if (!inc) { d.close(); return; }
+    const oldQ = inc.query;
+    const fields = {
+      title, query,
+      service: data.service, errorCode: data.errorCode, env: data.env,
+      alertId: data.alertId, priority: data.priority
+    };
+    const ok = await patchIncident(inc, fields, oldQ !== query ? 'updated' : null,
+      '更新排障输入', query.slice(0, 120));
+    if (!ok) { msg.textContent = '保存失败：事故单未写入服务端'; return; }
+    d.close();
+    renderAll();
+    if (autoDiag) await ask(inc);
+    return;
+  }
+  const inc = await createIncident(data);
+  if (!inc) return;
+  d.close();
+  cleanAlertParams();
+  renderAll();
+  if (autoDiag) await ask(inc);
+}
+
+/* ==================== 结单对话框 ==================== */
+function openCloseDialog() {
+  const inc = activeIncident();
+  if (!inc) return;
+  $('closeSub').textContent = inc.id + ' · ' + inc.title;
+  $('closeNote').value = '';
+  $('closeMsg').textContent = '';
+  const r = inc.diagnosis;
+  const g = r && r.meta ? (r.meta.gate || 'none') : 'none';
+  const eligible = !!(r && r.meta && r.meta.fingerprint && r.state !== 'error'
+    && !r.error && g !== 'refuse' && g !== 'clarify');
+  $('closeFeedback').checked = eligible;
+  $('closeFeedback').disabled = !eligible;
+  $('closeFeedbackLab').textContent = eligible
+    ? '将本轮结论标记为有效（feedback=up）'
+    : '本轮没有可标记为有效的结论（拒答/异常/未诊断不自动上报）';
+  const d = $('closeDialog');
+  if (d.open) d.close();
+  d.showModal();
+  setTimeout(() => { const t = $('closeNote'); if (t) t.focus(); }, 0);
+}
+
+async function submitClose() {
+  const inc = activeIncident();
+  if (!inc) return;
+  const note = $('closeNote').value.trim();
+  if (!note) { $('closeMsg').textContent = '请填写处置结论'; $('closeNote').focus(); return; }
+  const r = inc.diagnosis;
+  const fp = r && r.meta && r.meta.fingerprint;
+  let fb = '未上报反馈';
+  if ($('closeFeedback').checked && fp) {
+    $('closeMsg').textContent = '正在上报反馈…';
+    let ok = false;
+    try {
+      const resp = await fetch('/api/v1/copilot/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + S.a.token },
+        body: JSON.stringify({ fingerprint: fp, verdict: 'up', note: ('结单处置：' + note).slice(0, 200) }),
+      });
+      ok = resp.ok;
+      fb = ok ? 'feedback=up 已上报' : 'feedback=up 上报失败（HTTP ' + resp.status + '）';
+    } catch (e) { fb = 'feedback=up 上报失败（网关不可达）'; }
+    if (!ok) toast('反馈上报失败，事故单仍会结单并在处置记录中标注', 'warn');
+  }
+  const saved = await patchIncident(inc, { status: 'closed', closeNote: note }, 'closed', '结单：' + note, fb);
+  if (!saved) {
+    $('closeMsg').textContent = '结单失败：' + (lastIncidentError || '事故单未保存到服务端，请重试');
+    return;
+  }
+  $('closeDialog').close();
+  toast('事故单已结单', 'ok');
 }
 
 /* ==================== 运行面板：轮询与渲染 ==================== */
 let cursor = 0, prevMetrics = null, pollTimer = null, pollPeriod = 0, alive = false,
     lastPollFailed = false, drawerState = null, drawerPrev = null, pollInFlight = false, tracks = [];
 
-/* #35：非 2xx 一律丢弃响应体 → 配额 429 / query 超长 400 的具体文案到不了页面。
-   后端本来就返回 {code,message}（GlobalExceptionHandler / ErrorBodies），这里只负责读出来。 */
 async function httpErrText(r) {
   const base = 'HTTP ' + r.status;
+  const ra = retryAfterSeconds(r);
+  const wait = ra ? '约 ' + waitText(ra) + '后重试' : '';
   try {
     const j = await r.json();
     const m = j && (j.message || j.error);
-    if (m) return base + ' · ' + m;
-  } catch (e) { /* 非 JSON 响应：保留状态码 */ }
-  return base;
+    if (m) return base + ' · ' + m + (wait ? '（' + wait + '）' : '');
+  } catch (e) { /* 非 JSON */ }
+  return base + (wait ? ' · ' + wait : '');
 }
 
 async function api(path) {
   const r = await fetch(path, { headers: S.a.token ? { Authorization: 'Bearer ' + S.a.token } : {} });
-  if (r.status === 401 || r.status === 403) { throw { auth: r.status }; }
+  if (r.status === 401 || r.status === 403) throw { auth: r.status };
   if (!r.ok) throw { err: await httpErrText(r) };
   return r.json();
 }
@@ -1568,7 +2397,7 @@ function stopPoll() { if (pollTimer) clearInterval(pollTimer); pollTimer = null;
 function startPoll() { stopPoll(); poll(); resyncInterval(); }
 function cadence() {
   if (document.visibilityState !== 'visible') return 30000;
-  return lastPollFailed ? 30000 : 2000;   // 失败真降频（QA P3：文案与行为一致）
+  return lastPollFailed ? 30000 : 2000;
 }
 function resyncInterval() {
   const c = cadence();
@@ -1579,82 +2408,79 @@ document.addEventListener('visibilitychange', () => { if (pollTimer && alive) re
 
 async function poll() {
   if (!S.a.token) return;
-  // 并发合并：定时 poll 与 ask() 收尾的 poll 若重叠，两轮快照会背靠背渲染——
-  // 第一轮显示 +N、第二轮立刻抹成 0，增量在屏上只闪几十毫秒（#27 残留的不可见问题）。
   if (pollInFlight) return;
   pollInFlight = true;
   try {
-  let s, a;
-  try { s = await api('/api/v1/admin/state'); }
-  catch (e) {
-    if (e.auth === 401) {
-      const msg = '401 · token 已过期或无效，请重新接入';
-      dropToken('a', msg);
-      $('pollstate').textContent = '凭证失效 · 已停止轮询';
-      $('pollstate').style.color = 'var(--warn)';
-      renderAll();
-      showAuth(msg);   // #22：后台轮询失效也要弹遮罩，不能只改页脚一行
-      return;
+    let s, a;
+    try { s = await api('/api/v1/admin/state'); }
+    catch (e) {
+      if (e.auth === 401) {
+        const msg = '401 · token 已过期或无效，请重新接入';
+        dropToken('a', msg);
+        $('pollstate').textContent = '凭证失效 · 已停止轮询';
+        $('pollstate').style.color = 'var(--warn)';
+        renderAll(); showAuth(msg);
+        return;
+      }
+      if (e.auth === 403) {
+        S.platform = false; alive = false; stopPoll();
+        $('pollstate').textContent = '非平台身份 · 运行态锁定（排障台可用）';
+        $('pollstate').style.color = 'var(--warn)';
+        renderHeader(); renderDrawer(); renderPanelGate(); return;
+      }
+      lastPollFailed = true;
+      $('pollstate').textContent = '网关不可达：' + (e.err || e) + ' · 30s 重试';
+      $('pollstate').style.color = 'var(--err)'; resyncInterval(); return;
     }
-    if (e.auth === 403) {
-      /* 非 platform：门禁一字不动，渲染锁定态并停轮询（不拿 403 反复打端点） */
-      S.platform = false; alive = false; stopPoll();
-      $('pollstate').textContent = '非平台身份 · 运行态锁定（排障台可用）';
-      $('pollstate').style.color = 'var(--warn)';
-      renderHeader(); renderDrawer(); renderPanelGate(); return;
-    }
-    lastPollFailed = true;
-    $('pollstate').textContent = '网关不可达：' + (e.err || e) + ' · 30s 重试';
-    $('pollstate').style.color = 'var(--err)'; resyncInterval(); return;
-  }
-  try { a = await api('/api/v1/admin/audit/recent?since=' + cursor + '&limit=' + CAP); }
-  catch (e) { if (e.auth) { return; } a = null; }
-  if (lastPollFailed) { lastPollFailed = false; resyncInterval(); }   // #35：文案与真实 interval 一致
-  alive = true; S.platform = true;
-  renderHeader(); renderPanelGate();   // 抽屉由 renderState 用**本轮** metrics 渲染（#27）
-  $('pollstate').textContent = '轮询中 · ' + (cadence() / 1000) + 's'; $('pollstate').style.color = '';
-  renderState(s); if (a) renderEvents(a);
-  refreshActions();
+    try { a = await api('/api/v1/admin/audit/recent?since=' + cursor + '&limit=' + CAP); }
+    catch (e) { if (e.auth) return; a = null; }
+    if (lastPollFailed) { lastPollFailed = false; resyncInterval(); }
+    alive = true; S.platform = true;
+    renderHeader(); renderPanelGate();
+    $('pollstate').textContent = '轮询中 · ' + (cadence() / 1000) + 's'; $('pollstate').style.color = '';
+    renderState(s); if (a) renderEvents(a);
+    refreshActions();
   } finally { pollInFlight = false; }
 }
 
-/* ---------- L1 受控恢复动作（面板确认入口，ADR-0028 §0 裁决 1） ----------
-   服务端守卫：confirmer≠proposer / 租户匹配 / 密级足够 / token 哈希原子消费 / 窗口。
-   面板只做展示与提交——所有判定在网关，这里没有第二套规则。 */
+/* ---------- L1 受控恢复动作 ---------- */
 let l1Timer = null;
 const L1_STATE_LABEL = { proposed: '待确认', confirmed: '已确认·待派发', frozen: '已冻结（开关关闭）',
   dispatched: '已派发', executed: '执行成功', failed: '执行失败', expired: '已过期' };
 async function refreshActions() {
-  const sec = $('l1sec'); if (!sec) return;
-  sec.hidden = false;                    // platform 身份可见（panel 本身已门控）
+  const sec = $('l1sec');
+  if (!sec) return;
+  sec.hidden = false;
   try {
     const ops = await api('/api/v1/copilot/actions?state=proposed');
     renderActions(ops || []);
-  } catch (e) { /* 非致命：面板主数据不受影响 */ }
+  } catch (e) { /* 非致命 */ }
 }
 function renderActions(ops) {
   const box = $('l1pending'), hint = $('l1hint');
+  if (!box) return;
   clearInterval(l1Timer);
   if (!ops.length) { box.innerHTML = ''; hint.textContent = '当前无待确认的恢复动作。'; return; }
   hint.textContent = ops.length + ' 条待确认——确认前逐字核对命令与影响范围；窗口过期须重新提案。';
-  const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   const card = o =>
     '<div style="border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:8px">'
     + '<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline">'
-    + '<code style="font-size:12px;color:var(--txt-2)">' + esc(o.opId) + '</code>'
+    + '<code style="font-size:11.5px;color:var(--txt-2)">' + esc(o.opId) + '</code>'
     + '<span class="num" data-exp="' + esc(o.expiresAt || '') + '" style="color:var(--warn)"></span></div>'
-    + '<pre style="margin:6px 0;padding:8px;background:var(--bg);border:1px solid var(--line-soft);border-radius:6px;font-size:12px;overflow-x:auto">'
+    + '<pre style="margin:6px 0;padding:8px;background:var(--bg);border:1px solid var(--line-soft);border-radius:6px;font-size:11.5px;overflow-x:auto">'
     + esc(o.command) + '</pre>'
-    + '<div class="sub" style="font-size:12px">提案人 ' + esc(o.proposedBy)
+    + '<div class="sub" style="font-size:11px">提案人 ' + esc(o.proposedBy)
     + ' · 来源 ' + esc(o.ref) + ' · 状态 ' + esc(L1_STATE_LABEL[o.state] || o.state) + '</div></div>';
   box.innerHTML = ops.map(card).join('');
   const tick = () => box.querySelectorAll('[data-exp]').forEach(el => {
-    const exp = el.dataset.exp; if (!exp) { el.textContent = ''; return; }
+    const exp = el.dataset.exp;
+    if (!exp) { el.textContent = ''; return; }
     const s = Math.floor((new Date(exp) - Date.now()) / 1000);
     el.textContent = s > 0 ? '窗口剩 ' + Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0') : '已过期';
   });
   tick(); l1Timer = setInterval(tick, 1000);
 }
+
 document.addEventListener('click', async e => {
   if (e.target.id !== 'l1confirm') return;
   const op = $('l1op').value.trim(), tok = $('l1tok').value.trim(), msg = $('l1msg');
@@ -1668,8 +2494,6 @@ document.addEventListener('click', async e => {
       body: JSON.stringify({ opId: op, token: tok })
     });
     const body = await r.json();
-    // 走链记录缺口 2：confirmed（派发未启用，诚实挂起）与 failed（派发投递失败）是两个终态，
-    // 混成一句"派发由自动化系统执行"对 failed 是误导——确认动作本身成了，派发没出去。
     if (r.ok) {
       if (body.state === 'failed') {
         msg.textContent = '已确认，但派发失败（webhook 未送达）——状态停在 failed；'
@@ -1680,21 +2504,16 @@ document.addEventListener('click', async e => {
         msg.textContent = '已确认（' + body.state + '）——派发未启用，op 诚实挂起在该状态。';
       }
       $('l1tok').value = '';
-    }
-    else msg.textContent = '被拒（' + (body.stage || r.status) + '）：' + (body.message || '');
+    } else msg.textContent = '被拒（' + (body.stage || r.status) + '）：' + (body.message || '');
     refreshActions();
   } catch (err) { msg.textContent = '网络异常：' + err; }
 });
-/* 深链：?op=act_xxx 自动填入 op_id（URL 只定位不承载权限——§0 裁决 3） */
+
 const qp = new URLSearchParams(location.search).get('op');
 if (qp) { const el = $('l1op'); if (el) el.value = qp; }
 
-
 /* ---------- 运行态 ---------- */
-
-/* #24：窄屏顶栏折行会把去重键串撑成两三行——只留 build 版本，完整信息进 title / 运行态抽屉。 */
 function fingerprintText(b) {
-  // #35：commit 后端早已下发（本地为 unknown），顶栏此前从不展示——“现在跑的是哪一版”答不出来。
   const commit = b.commit && b.commit !== 'unknown' ? ' · commit ' + String(b.commit).slice(0, 7) : '';
   const full = 'build ' + b.version + commit + ' · jvm ' + b.jvm +
     ' · uptime ' + Math.floor(b.uptime_s / 3600) + 'h' + Math.floor(b.uptime_s % 3600 / 60) +
@@ -1703,8 +2522,6 @@ function fingerprintText(b) {
   return { full, shown: narrow ? 'build ' + b.version : full };
 }
 
-/* #24：后端 last 形如 "ok @ 2026-10-27T01:14:20.063598300 (trigger=…)"——纳秒对人是噪音。
-   只做显示层格式化（语义不变），不猜时区。 */
 function fmtTs(s) {
   if (s == null || s === '') return '—';
   return String(s).replace(/(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}:\d{2})(?:\.\d+)?/, '$1 $2');
@@ -1744,31 +2561,29 @@ function renderState(s) {
   $('quotaval').textContent = q.used.toLocaleString() + ' / ' + q.limit.toLocaleString();
   $('quotabar').style.width = Math.min(100, q.used / q.limit * 100).toFixed(1) + '%';
 
-  const prevPoll = prevMetrics;          // renderTiles 随后会把 prevMetrics 覆盖成本轮
+  const prevPoll = prevMetrics;
   renderKpis(s.metrics);
   renderResults();
-  renderDrawer(s.metrics, prevPoll);     // 抽屉：当前轮 vs 上一轮（#27）
-  drawerPrev = prevPoll;                 // 抽屉在两次 poll 之间被打开时，仍显示上一轮的增量
+  renderDrawer(s.metrics, prevPoll);
+  drawerPrev = prevPoll;
   renderTiles(s.metrics);
   pushRate(s.metrics, s.ts);
   const sfTop = s.runtime.sf_keys_top || [];
   $('sfrow').innerHTML = sfTop.length
     ? '在途合并组 ' + sfTop.map(k => '<span class="num">' + esc(maskKey(k)) + '</span>').join(' · ')
     : '无在途合并组';
+  renderHeader();
 }
 function maskKey(k) { const p = k.split(':'); return p.length > 2 ? p[0] + ':' + p[1].slice(0, 8) + ':' + p[2] : k; }
 
-/* 成果口径（2026-10-27）：只统计审计行里真实存在的字段——
-   refs/actions 是"本轮命中的引用条数 / 只读命令条数"（后端写入审计行），took_ms 是真实耗时。
-   **不引入"节省时间"等推断值**：那类数字无法从现有事实派生，放上面板就是把估算伪装成测量。 */
 function panelStats() {
   const items = tracks.filter(t => t.ev === 'chat' || t.ev === 'search');
   const done = items.filter(t => !t.refused && t.mode !== 'clarify').length;
-  const refs = items.reduce((n, t) => n + (t.refs | 0), 0);
+  const refsN = items.reduce((n, t) => n + (t.refs | 0), 0);
   const acts = items.reduce((n, t) => n + (t.actions | 0), 0);
   const took = items.map(t => t.took_ms | 0).filter(n => n >= 0).sort((a, b) => a - b);
   const pct = q => took.length ? took[Math.min(took.length - 1, Math.floor((took.length - 1) * q))] : null;
-  return { items, done, refs, acts, p50: pct(0.5), p95: pct(0.95) };
+  return { items, done, refs: refsN, acts, p50: pct(0.5), p95: pct(0.95) };
 }
 
 function renderKpis(m) {
@@ -1791,8 +2606,6 @@ function renderKpis(m) {
          st.p95 != null ? 'P95 <b>' + st.p95 + 'ms</b> · 最近 ' + n + ' 次' : '等待首次请求');
 }
 
-/* 排障成果流：逐条列"问了什么 / 状态 / 命中几条依据 / 能拿走几条命令 / 花了多久"。
-   数据全部来自审计行（q/refused/mode/refs/actions/took_ms），没有推断字段。 */
 function renderResults() {
   const box = $('results');
   if (!box) return;
@@ -1816,7 +2629,6 @@ function renderResults() {
       + '<td class="num">' + (t.took_ms | 0) + 'ms</td></tr>').join('')
     + '</tbody></table>';
 }
-function plus(n) { return n > 0 ? '<span class="up">+' + n + ' 本轮</span>' : ''; }
 
 function renderTiles(m) {
   // 契约面：这一组键名必须与 OpsMetrics 逐一对应（scripts/check_panel_contract.sh 层 2/3）
@@ -1833,10 +2645,6 @@ function renderTiles(m) {
   prevMetrics = m;
 }
 
-/* ---------- 请求处理轨迹 ----------
-   全部字段取自审计行本身（q / mode / cache_hit / degrade_level / refused /
-   max_level / took_ms / stage_ms），**没有任何推断或补算**。它回答的是
-   "这台机器刚才替我做了什么、花在哪儿"，这是计数器回答不了的。 */
 const STAGES = [
   ['es', 'ES 词法', 1.00], ['vector', 'Qdrant 向量', 0.72], ['rrf', 'RRF 融合', 0.52],
   ['rerank', '精排', 0.38], ['l2_store', 'L2 写入', 0.24], ['llm', 'LLM 生成', 0.86],
@@ -1875,11 +2683,16 @@ function renderTracks() {
       '<div class="bar">' + bar + '</div></div>';
   }).join('');
 }
-$('stagelegend').innerHTML = STAGES.map(([, label, op]) =>
-  '<span><i style="background:var(--accent);opacity:' + op + '"></i>' + label + '</span>').join('') +
-  '<span style="color:var(--txt-2)">段宽 = 该段真实耗时；未列出的零值段（如快路径不调精排）不占宽度</span>';
 
-/* ---------- 速率柱（口径见 OPS §9 三条诚实性纪律） ---------- */
+function initStageLegend() {
+  const el = $('stagelegend');
+  if (!el) return;
+  el.innerHTML = STAGES.map(([, label, op]) =>
+    '<span><i style="background:var(--accent);opacity:' + op + '"></i>' + label + '</span>').join('') +
+    '<span style="color:var(--txt-2)">段宽 = 该段真实耗时；未列出的零值段（如快路径不调精排）不占宽度</span>';
+}
+
+/* ---------- 速率柱 ---------- */
 const RATE_KEY = 'opspilot.rate.v1';
 const RATE_MAXAGE = 3600000;
 let rateWin = 300000;
@@ -1896,7 +2709,7 @@ function pushRate(m, ts) {
   const total = m.total_requests | 0;
   const last = rate.length ? rate[rate.length - 1] : null;
   let reset = false;
-  if (last && total < last.req) reset = true;      // 计数器归零 ⇒ 网关重启过
+  if (last && total < last.req) reset = true;
   if (reset) rate = [];
   rate.push({ t: ts, req: total, inc: last ? Math.max(0, total - last.req) : 0 });
   saveRate();
@@ -1911,10 +2724,11 @@ function drawRate(reset) {
     if (s.t < start) continue;
     const idx = Math.floor((s.t - start) / bw);
     if (idx < 0 || idx >= buckets) continue;
-    cells[idx].n += s.inc; cells[idx].gap = false;
+    cells[idx].n += s.inc;
+    cells[idx].gap = false;
   }
   const peakRaw = Math.max(0, ...cells.map(c => c.n));
-  const peak = Math.max(1, peakRaw);          // 只用于柱高比例，不再当作对外数字
+  const peak = Math.max(1, peakRaw);
   const totalReq = cells.reduce((a, c) => a + c.n, 0);
   const hasData = peakRaw > 0;
   const samples = rate.filter(r => r.t >= start).length;
@@ -1923,8 +2737,6 @@ function drawRate(reset) {
     return '<div class="' + cls + '" style="height:' + (c.n ? Math.max(8, c.n / peak * 100) : (c.gap ? 6 : 2)) + '%"></div>';
   }).join('');
   const secs = Math.round(bw / 1000);
-  // #25：没有采样就不写「合计 0 / 峰值 1」这种看起来像实测的组合；
-  // 只有基线那一格时也不给合计（那一次的请求落在基线里，标出来而不是算进去）。
   $('chartpeak').textContent = (reset ? '⚠ 网关重启，计数归零，旧序列已丢弃 · ' : '') +
     '合计 ' + (hasData ? totalReq + ' 次' : '—') +
     ' · 峰值 ' + (hasData ? peakRaw : '—') + ' 次/' + secs + 's' +
@@ -1933,9 +2745,7 @@ function drawRate(reset) {
 }
 
 /* ---------- 事件流 ---------- */
-
 function renderEvents(a) {
-  // #35：初始是一条空心细条——给一句空态；首条事件到达即移除。
   const evBox = $('events');
   const emptyHint = evBox.querySelector('.ev-empty');
   if (a.events.length && emptyHint) emptyHint.remove();
@@ -1956,8 +2766,7 @@ function renderEvents(a) {
       [ev.via, ev.cache_hit !== 'none' ? ev.cache_hit : '', ev.mode,
        ev.degrade_level || '', ev.q || ev.path || ev.msg || ''].filter(Boolean).join(' · ');
     const srcAlarm = ev.src_tenant && ev.src_tenant !== ev.tenant ? ' ⚡跨租户回放!' : '';
-    // G0-W0.1：ev.sub 来自 token 主体（账号名），与本函数其余字段同纪律——进 innerHTML 前必须 esc()，
-    // 否则一条伪造/被篡改的审计事件就能往面板注入 HTML（同类字段都走了 esc()，此处是漏点）。
+    // G0-W0.1：ev.sub 来自 token 主体（账号名），与本函数其余字段同纪律——进 innerHTML 前必须 esc()。
     const who = (ev.sub || ev.level != null) ? '[' + (ev.sub ? esc(ev.sub) : '?') + '/' + (ev.level ?? '-') + '] ' : '';
     prepend('<div class="ev ' + cls + '"><span class="t">' + new Date(ev.ts).toLocaleTimeString() +
       '</span><span class="b">' + ev.ev + '</span><span class="d">' + who + esc(detail) + srcAlarm +
@@ -1967,7 +2776,7 @@ function renderEvents(a) {
   renderTracks();
   renderResults();
   renderKpis(drawerState ? drawerState.metrics : null);
-  if (a.max_seq < cursor) cursor = a.max_seq;   // 服务端重启后游标对齐
+  if (a.max_seq < cursor) cursor = a.max_seq;
 }
 function prepend(html) {
   const box = $('events');
@@ -1975,21 +2784,40 @@ function prepend(html) {
   while (box.childElementCount > 60) box.lastElementChild.remove();
 }
 
-/* ==================== 事件（委托） ==================== */
+/* ==================== 交互 ==================== */
 document.addEventListener('input', e => {
+  const id = e.target.id;
+  if (id === 'incSearch') { S.search = e.target.value; renderIncidentList(); return; }
+  if (id === 'quickq') { S.quick = e.target.value; return; }
   const b = e.target.dataset && e.target.dataset.bind;
   if (!b) return;
-  if (b === 'q') S.q = e.target.value;
-  else { const parts = b.split('.'); S[parts[0]][parts[1]] = e.target.value; }
+  const parts = b.split('.');
+  S[parts[0]][parts[1]] = e.target.value;
 });
 
-document.addEventListener('change', e => {
-  if (e.target.id === 'cmp') { S.compare = e.target.checked; renderAdv(); renderRail(); renderCanvas(); }
+document.addEventListener('change', async e => {
+  if (e.target.id === 'cmp') { S.compare = e.target.checked; S.b.r = null; renderAdv(); renderRail(); renderWorkspace(); }
+  if (e.target.id === 'incPriority') {
+    const inc = activeIncident();
+    if (!inc) return;
+    const prev = inc.priority;
+    inc.priority = e.target.value;
+    const ok = await patchIncident(inc, { priority: inc.priority });
+    if (!ok) inc.priority = prev;
+    renderAll();
+    if (ok) toast(inc.priority ? '优先级设为 ' + inc.priority : '优先级改为未定', 'ok');
+  }
 });
 
 document.addEventListener('click', async e => {
-  const t = e.target;
-  if (!(t instanceof Element)) return;
+  const raw = e.target;
+  if (!(raw instanceof Element)) return;
+  // 列表项/按钮内部通常还有 span/code；动作必须从实际点击位置的最近 data-* 祖先解析。
+  const t = raw.closest('[data-act],[data-inc],[data-filter],[data-close],[data-view],'
+    + '[data-assign],[data-copy],[data-fill],[data-near],[data-preset],[data-contrast]') || raw;
+
+  const closeId = t.dataset.close;
+  if (closeId) { const d = $(closeId); if (d && d.open) d.close(); return; }
 
   const pb = t.closest('[data-popbtn]');
   if (pb) { togglePop(pb.dataset.popbtn); return; }
@@ -1998,81 +2826,166 @@ document.addEventListener('click', async e => {
   const view = t.dataset.view;
   if (view) { setView(view); return; }
 
+  const filter = t.dataset.filter;
+  if (filter) { S.filter = filter; renderIncidentList(); return; }
+
+  const incId = t.dataset.inc;
+  if (incId) { selectIncident(incId); return; }
+
   const act = t.dataset.act;
   if (act) {
     if (act === 'opendrawer') { openDrawer(); return; }
     if (act === 'closedrawer') { closeDrawer(); return; }
     if (act === 'openacct') { openPop('acctpop'); return; }
     if (act === 'covtoggle') { S.covOpen = !S.covOpen; renderRail(); return; }
+    if (act === 'newinc') { openIncidentDialog({ mode: 'create' }); return; }
+    if (act === 'editinc') { openIncidentDialog({ mode: 'edit', inc: activeIncident() }); return; }
+    if (act === 'assign') { await openAssignPop(); return; }
+    if (act === 'diag') { await ask(activeIncident()); return; }
+    if (act === 'closeinc') { openCloseDialog(); return; }
+    if (act === 'reopen') {
+      const inc = activeIncident();
+      if (!inc) return;
+      if (await patchIncident(inc, { status: 'open' }, null, null, null, { content: false })) {
+        addTimeline(inc, 'reopened', '重新打开事故单');
+        await persistIncident(inc);
+        toast('事故单已重新打开', 'ok');
+      }
+      return;
+    }
     if (act === 'stop') { stopStream(t.dataset.k || 'a'); return; }
     if (act === 'reportgap') { await reportGap(t); return; }
-    if (act === 'ask') { await ask(); return; }
+    if (act === 'reportdown') {
+      const inc = activeIncident();
+      const ok = await reportFeedback('down', '人工判定结论不可用：' + ((inc && inc.id) || ''), t);
+      if (ok && inc) {
+        inc.updatedAt = new Date().toISOString();
+        addTimeline(inc, 'feedback', '上报结论不可用', 'feedback=down');
+        saveIncidents(); renderAll();
+      }
+      return;
+    }
     if (act === 'copymd') { await copyVerdict(t.dataset.k || 'a', t); return; }
+    if (act === 'quickask') {
+      const q = S.quick.trim();
+      if (!q) { toast('先输入一条报错或现象', 'warn'); const el = $('quickq'); if (el) el.focus(); return; }
+      const inc = await createIncident({ title: titleFromQuery(q), query: q, source: 'manual' });
+      if (!inc) return;
+      S.quick = '';
+      await ask(inc);
+      return;
+    }
     if (act.startsWith('login:')) {
       const k = act.slice(6);
       await login(k);
-      /* 输入/预设是接入前填的：接入成功就把那一次发起补上，不让用户再点一遍 */
-      if (k === 'a' && S.pendingAsk && S.a.token) { S.pendingAsk = false; await ask(); }
+      if (k === 'a' && S.pendingAsk) {
+        const inc = findIncident(S.pendingAsk);
+        S.pendingAsk = null;
+        if (inc) await ask(inc);
+      }
       return;
     }
     if (act.startsWith('reopen:')) { S[act.slice(7)].open = true; renderAll(); return; }
     return;
   }
 
-  if (t.dataset.copy !== undefined) {
-    try { await navigator.clipboard.writeText(t.dataset.copy); t.textContent = '已复制'; }
-    catch (err) { t.textContent = '复制失败'; }
-    setTimeout(() => { t.textContent = '复制'; }, 1200);
+  const asg = t.closest('[data-assign]');
+  if (asg) {
+    await assignTo(asg.dataset.assign);
     return;
   }
 
-  /* 覆盖范围里的标识符：点一下即填入输入框（省掉手敲服务名/错误码）。**只填不发**——
-     这些是"边界里有什么"，用户可能只想拿它当一条查询的一部分，替他把查询发出去是越权。 */
-  const fill = t.dataset.fill;
-  if (fill !== undefined) {
-    S.q = fill; S.hint = '已填入「' + fill + '」，可补充后发起';
-    renderRail(); return;
+  if (t.dataset.copy !== undefined) {
+    const ok = await copyText(t.dataset.copy);
+    t.textContent = ok ? '已复制' : '复制失败';
+    setTimeout(() => { if (t.isConnected) t.textContent = '复制'; }, 1200);
+    return;
   }
 
-  /* 拒答导航：把最接近的标识符 + 「排查」填回去，让用户按一次按钮重试（不自动重发——
-     重发会再吃一次配额与审计，且"接近"不等于"命中"，值不值得再问由人定）。 */
+  const fill = t.dataset.fill;
+  if (fill !== undefined) {
+    const inc = activeIncident();
+    if (inc) {
+      if (await patchIncident(inc, { query: fill }, 'updated', '从覆盖范围填入排障输入', fill)) {
+        toast('已填入当前事故单的排障输入：' + fill, 'ok');
+      }
+    } else {
+      openIncidentDialog({ mode: 'create', prefill: { title: fill, query: fill } });
+    }
+    return;
+  }
+
   const near = t.dataset.near;
   if (near !== undefined) {
-    S.q = near + ' 排查'; S.hint = '已填入最接近的标识符，按「发起排障查询」重试';
-    renderRail(); return;
+    const inc = activeIncident();
+    if (inc) {
+      if (await patchIncident(inc, { query: near + ' 排查' }, 'updated',
+          '从拒答导航填入排障输入', near + ' 排查')) {
+        toast('已填入最接近的标识符，按「重新诊断」重试', 'ok');
+      }
+    }
+    return;
   }
 
   const p = t.dataset.preset;
   if (p !== undefined) {
-    S.q = PRESETS[+p].q; S.hint = '';   // 预设**不改模式**（ADR-0021 决策 5）
-    renderRail(); renderAdv();
-    await ask();                        // 未接入时 ask 会把输入挂起并开账号胶囊，接入后自动发起
+    const preset = PRESETS[+p];
+    if (!preset) return;
+    let inc = activeIncident();
+    if (inc) {
+      const ok = await patchIncident(inc, { query: preset.q }, 'updated',
+        '切换到预设：' + preset.label, preset.q);
+      if (!ok) return;
+    } else {
+      inc = await createIncident({ title: preset.label, query: preset.q, source: 'manual' });
+      if (!inc) return;
+    }
+    await ask(inc);
     return;
   }
 
   const c = t.dataset.contrast;
   if (c !== undefined) {
     const cfg = CONTRAST_CASES[+c];
-    S.q = cfg.q; S.compare = true; S.hint = '';
-    // #16：用例的 B 身份与手里 token 的主体不一致时，**先丢掉旧 token** 并要求重新接入——
-    // 否则会用 sre-limited 的 token 跑出一条抬头写 sre-acme 的结果（安全证据面归因反转）。
+    if (!cfg) return;
+    let inc = activeIncident();
+    if (inc) {
+      const ok = await patchIncident(inc, { query: cfg.q }, 'updated', '切换到对照用例', cfg.label);
+      if (!ok) return;
+    } else {
+      inc = await createIncident({ title: cfg.label, query: cfg.q, source: 'manual' });
+      if (!inc) return;
+    }
+    S.compare = true;
     const mismatch = S.b.token && S.b.tokenUser !== cfg.b;
     S.b.user = cfg.b;
     if (mismatch) {
       dropToken('b', '身份已切换为 ' + cfg.b + '：请为它重新接入后再发起对照');
       S.b.pass = '';
-      renderAdv(); renderRail(); renderCanvas(); openPop('advpop');
+      renderAdv(); renderRail(); renderWorkspace(); openPop('advpop');
       return;
     }
-    renderAdv(); renderRail();
-    if (S.a.token && S.b.token) await ask(); else openPop('advpop');
+    renderAdv(); renderRail(); renderWorkspace();
+    if (S.a.token && S.b.token) await ask(inc); else openPop('advpop');
     return;
   }
 });
 
-/* ==================== 键盘：Esc 关闭 / Tab 陷阱 / tabs 方向键（#30）==================== */
+/* 事故单对话框提交 */
+$('incForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  await submitIncident(true);
+});
+$('niOnly').addEventListener('click', async () => { await submitIncident(false); });
+$('closeForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  await submitClose();
+});
+
+/* ==================== 键盘 ==================== */
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
+    if (document.querySelector('dialog[open]')) return;
     if ($('auth').style.display === 'grid') { closeAuth(); return; }
     if (!$('drawer').hidden) { closeDrawer(); return; }
     if (document.querySelector('[data-pop]:not([hidden])')) { closePops(); return; }
@@ -2097,9 +3010,8 @@ document.querySelector('.tabs').addEventListener('keydown', e => {
   setView(tabs[next].dataset.view);
 });
 
-/* 正文 [参考N] ↔ 底部来源条的高亮联动 */
 function highlightRef(n, on) {
-  const el = document.querySelector('.ref-item[data-ref-item="' + n + '"]');
+  const el = document.querySelector('.refitem[data-ref-item="' + n + '"]');
   if (el) el.classList.toggle('hl', on);
 }
 document.addEventListener('mouseover', e => {
@@ -2116,16 +3028,17 @@ function showAuth(msg) {
   $('authmsg').textContent = msg || '';
   $('auth').style.display = 'grid';
   document.body.classList.add('sat');
-  openDialogFocus($('auth'));   // #30：键盘用户不用 Tab 遍整页才能到「重新接入」
+  openDialogFocus($('auth'));
 }
 $('authgo').onclick = () => {
   closeAuth();
   S.a.open = true; renderAll(); openPop('acctpop');
 };
 
-/* ==================== 面板内的两个小交互 ==================== */
+/* ==================== 面板内小交互 ==================== */
 $('windows').onclick = (e) => {
-  const b = e.target.closest('button[data-win]'); if (!b) return;
+  const b = e.target.closest('button[data-win]');
+  if (!b) return;
   rateWin = +b.dataset.win;
   $('windows').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
   drawRate(false);
@@ -2135,29 +3048,60 @@ $('copy').onclick = async () => {
   const restore = () => { btn.textContent = '复制最近 50 条 JSON'; };
   const a = await api('/api/v1/admin/audit/recent?since=' + Math.max(0, cursor - 50) + '&limit=50')
     .catch(() => null);
-  if (!a) { btn.textContent = '取审计失败'; setTimeout(restore, 1800); return; }   // #35：不再静默
-  try {
-    await navigator.clipboard.writeText(JSON.stringify(a.events, null, 2));
-    btn.textContent = '已复制 ✓';
-  } catch (e) {
-    btn.textContent = '复制失败（剪贴板不可用）';   // 非 https/无权限时 navigator.clipboard 会抛
-  }
+  if (!a) { btn.textContent = '取审计失败'; setTimeout(restore, 1800); return; }
+  const ok = await copyText(JSON.stringify(a.events, null, 2));
+  btn.textContent = ok ? '已复制 ✓' : '复制失败（剪贴板不可用）';
   setTimeout(restore, 1800);
 };
 
+/* ==================== 深链 ==================== */
+function handleDeepLink() {
+  const u = new URLSearchParams(location.search);
+  const incId = u.get('inc');
+  if (incId && findIncident(incId)) selectIncident(incId);
+  const alert = u.get('alert');
+  if (alert) {
+    const title = u.get('title') || u.get('alertname') || ('告警 ' + alert);
+    openIncidentDialog({
+      mode: 'create',
+      prefill: {
+        alertId: alert,
+        source: u.get('source') || 'alert',
+        title,
+        query: u.get('q') || u.get('query') || title,
+        service: u.get('service') || '',
+        errorCode: u.get('errorCode') || u.get('error_code') || '',
+        env: u.get('env') || ''
+      }
+    });
+  }
+}
+
 /* ==================== 启动 ==================== */
+try {
+  const savedActive = localStorage.getItem(ACTIVE_KEY);
+  if (savedActive) S.activeId = savedActive;
+} catch (e) { /* 非致命 */ }
+
 renderAll();
-setView(location.hash === '#panel' ? 'panel' : 'trouble');   // #35：刷新后回到同一视图
+initStageLegend();
+renderTracks();
+setView(location.hash === '#panel' ? 'panel' : 'trouble');
+handleDeepLink();
+syncTopbarHeight();
 window.addEventListener('hashchange', () => {
   setView(location.hash === '#panel' ? 'panel' : 'trouble', { silent: true });
 });
-syncTopbarHeight();
-window.addEventListener('resize', syncTopbarHeight);
-if (window.ResizeObserver) new ResizeObserver(syncTopbarHeight).observe(document.querySelector('.topbar'));
-renderTracks();
-/* 刷新不掉线：sessionStorage 里还有 token 就同时恢复运行态轮询与覆盖范围（两者都按身份算） */
-if (S.a.token) { startPoll(); loadCoverage(); }
+window.addEventListener('resize', () => {
+  syncTopbarHeight();
+  $('scrim').hidden = !(!$('drawer').hidden && isNarrow());
+});
+if (window.ResizeObserver) new ResizeObserver(syncTopbarHeight).observe(document.querySelector('.top'));
+if (S.a.token) {
+  startPoll();
+  loadCoverage();
+  refreshIncidents().then(() => renderAll());
+}
 </script>
 </body>
 </html>
-

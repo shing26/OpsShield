@@ -96,6 +96,18 @@ public class MemoryKvStore implements KvStore {
     }
 
     @Override
+    public long ttlSeconds(String key) {
+        Long deadline = expiries.get(key);
+        if (deadline == null) return 0L;
+        long leftMs = deadline - System.currentTimeMillis();
+        if (leftMs <= 0) {
+            purgeIfExpired(key);
+            return 0L;
+        }
+        return (leftMs + 999L) / 1000L;
+    }
+
+    @Override
     public void delete(String key) {
         removeKey(key);
         expiries.remove(key);

@@ -18,7 +18,15 @@ public class AuthService {
         public BadCredentialsException() { super("invalid username or password"); }
     }
     public static class LoginLockedException extends RuntimeException {
-        public LoginLockedException() { super("too many failed attempts"); }
+        private final long retryAfterSeconds;
+
+        /** @param retryAfterSeconds 失败计数键的真实剩余 TTL；0 表示存储未给 TTL（不编造等待时间） */
+        public LoginLockedException(long retryAfterSeconds) {
+            super("too many failed attempts");
+            this.retryAfterSeconds = Math.max(0L, retryAfterSeconds);
+        }
+
+        public long retryAfterSeconds() { return retryAfterSeconds; }
     }
 
     private static final int MAX_FAILURES = 5;
@@ -45,7 +53,7 @@ public class AuthService {
         String failKey = "auth:fail:" + sub;
         if (store.readLong(failKey) >= MAX_FAILURES) {
             audit.logAuthDenied(sub, "/api/v1/auth/login", "login_failed", "locked");
-            throw new LoginLockedException();
+            throw new LoginLockedException(store.ttlSeconds(failKey));
         }
 
         UserStore.Credential c = users.credential(sub);
@@ -55,7 +63,7 @@ public class AuthService {
             long n = store.increment(failKey, WINDOW);
             if (n >= MAX_FAILURES) {
                 audit.logAuthDenied(sub, "/api/v1/auth/login", "login_failed", "locked");
-                throw new LoginLockedException();
+                throw new LoginLockedException(store.ttlSeconds(failKey));
             }
             audit.logAuthDenied(sub, "/api/v1/auth/login", "login_failed", "bad_credentials");
             throw new BadCredentialsException(); // 不区分"无此人/错密码/已禁用"，防枚举（对外话术统一，审计内部可辨）

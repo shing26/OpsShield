@@ -66,6 +66,16 @@ class AuthServiceTest {
         verify(kv).delete("auth:fail:alice"); // 成功清零失败计数
     }
 
+    /** 429 的 Retry-After 不能写死 15 分钟：必须取失败计数键的真实剩余 TTL。 */
+    @Test
+    void lockedLoginCarriesRealRemainingTtl() {
+        seedUser(false);
+        when(kv.readLong("auth:fail:alice")).thenReturn(5L);
+        when(kv.ttlSeconds("auth:fail:alice")).thenReturn(742L);
+        var ex = assertThrows(AuthService.LoginLockedException.class, () -> auth.login("alice", "x"));
+        assertEquals(742L, ex.retryAfterSeconds());
+    }
+
     @Test
     void unknownUserAndWrongPasswordShareSameError() {
         when(kv.readLong(anyString())).thenReturn(0L);

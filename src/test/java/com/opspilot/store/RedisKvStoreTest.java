@@ -32,6 +32,18 @@ class RedisKvStoreTest {
         verify(keys).expire("sop:t1:steps", 604_800_000L, TimeUnit.MILLISECONDS);
     }
 
+    /** Retry-After 用：毫秒向上取整到秒；Redis 的 -1（无 TTL）/ -2（不存在）一律归一成 0。 */
+    @Test
+    void ttlSecondsNormalisesRedisSentinelValues() {
+        when(redisson.getKeys()).thenReturn(keys);
+        when(keys.remainTimeToLive("k")).thenReturn(1_500L);
+        assertEquals(2L, kv.ttlSeconds("k"));
+        when(keys.remainTimeToLive("none")).thenReturn(-2L);
+        assertEquals(0L, kv.ttlSeconds("none"));
+        when(keys.remainTimeToLive("forever")).thenReturn(-1L);
+        assertEquals(0L, kv.ttlSeconds("forever"));
+    }
+
     @Test
     void missingKeyReportsFalseWithoutCreatingIt() {
         when(redisson.getKeys()).thenReturn(keys);

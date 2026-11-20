@@ -71,6 +71,20 @@ def test_real_repo_registry_has_the_aliased_terms() -> None:
     assert "覆盖范围" not in reg
 
 
+def test_alias_may_contain_canonical_as_prefix(tmp_path: Path) -> None:
+    """「事故」→「事故单」：写别名必须放行，写裸 canonical 必须变红。
+
+    若匹配前不抹掉登记别名，任何"别名包含 canonical"的正常翻译都会恒红——门闩会逼人
+    改用未登记的词。这个用例把"放行别名、仍抓裸词"两侧都钉住。
+    """
+    root = _mirror(tmp_path)
+    assert cc.check(root) == 0, "真实页面全部使用「事故单」时应为绿"
+
+    page = root / "src/main/resources/static/index.html"
+    page.write_text(page.read_text(encoding="utf-8") + "\n<p>事故来了</p>\n", encoding="utf-8")
+    assert cc.check(root) == 1, "裸「事故」仍必须被抓"
+
+
 def test_parse_synthetic_context(tmp_path: Path) -> None:
     """两种条目形态都要认：名字独占一行 + 正文在下一行；以及单行条目。"""
     root = tmp_path / "r"

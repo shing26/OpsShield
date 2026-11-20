@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>版本 B · 企业知识助手 — 高保真草图</title>
+<style>
+:root{
+  color-scheme:dark;
+  --bg:#0f131a;--surface:#171d26;--surface-2:#1d2530;--surface-3:#242e3b;
+  --line:#2b3543;--line-soft:#222b37;
+  --txt:#e8eef5;--txt-2:#b6c3d1;--muted:#8593a3;
+  --ok:#4ac77a;--warn:#e0a93b;--err:#f4695f;--accent:#6aa9ff;--teal:#4fd1c5;--purple:#b28af7;
+  --r:14px;--s2:8px;--s3:12px;--s4:16px;--s5:24px;--s6:32px;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif;
+  --mono:ui-monospace,"Cascadia Mono",Consolas,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--txt);font:14px/1.65 var(--sans);-webkit-font-smoothing:antialiased;overflow:auto}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+[hidden]{display:none!important}
+button{font:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* 顶栏 */
+.top{height:58px;display:flex;align-items:center;gap:var(--s3);padding:0 var(--s5);
+     border-bottom:1px solid var(--line-soft);background:rgba(15,19,26,.9);position:sticky;top:0;z-index:20;backdrop-filter:blur(10px)}
+.brand{display:flex;align-items:center;gap:10px}
+.logo{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,#2f7cf6,#7b61ff);display:grid;place-items:center;color:#fff;font-weight:700;font-size:15px}
+.brand b{font-size:15px;font-weight:650}
+.brand span{font-size:11.5px;color:var(--muted);border-left:1px solid var(--line);padding-left:10px;margin-left:2px}
+.spacer{flex:1}
+.top link,.top a{font-size:12px;color:var(--txt-2);text-decoration:none;padding:6px 10px;border-radius:8px}
+.top a:hover{background:var(--surface-2)}
+.mini-search{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:6px 11px;width:230px;color:var(--muted)}
+.mini-search input{background:none;border:0;outline:0;color:var(--txt);font:inherit;width:100%;font-size:12.5px}
+.av{width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#2f7cf6,#8957e5);display:grid;place-items:center;font-size:11px;color:#fff;font-weight:600;border:2px solid var(--surface-3)}
+
+/* 布局：内容 + 右侧知识地图 */
+.layout{max-width:1180px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:var(--s6);padding:0 var(--s5) 80px}
+.main-col{min-width:0}
+
+/* 首屏 hero */
+.hero{padding:56px 0 30px;text-align:center}
+.hero .eyebrow{font-size:12px;color:var(--accent);letter-spacing:.5px;margin-bottom:10px}
+.hero h1{font-size:27px;font-weight:650;margin:0 0 8px;letter-spacing:.2px}
+.hero p{font-size:13px;color:var(--muted);margin:0 0 26px}
+
+/* 大搜索框 */
+.bigsearch{max-width:720px;margin:0 auto;position:relative}
+.bigsearch .box{display:flex;align-items:center;gap:12px;background:var(--surface);border:1.5px solid var(--line);border-radius:16px;padding:14px 16px;transition:border-color .15s,box-shadow .15s}
+.bigsearch .box:focus-within{border-color:var(--accent);box-shadow:0 0 0 4px rgba(106,169,255,.1)}
+.bigsearch .box svg{flex:0 0 auto;color:var(--muted)}
+.bigsearch input{flex:1;background:none;border:0;outline:0;color:var(--txt);font-size:15px;min-width:0}
+.bigsearch .send{background:var(--accent);color:#08131f;border:0;border-radius:10px;padding:9px 16px;font-size:13px;font-weight:600}
+.bigsearch .hintline{display:flex;justify-content:space-between;margin-top:10px;font-size:11px;color:var(--muted);padding:0 4px}
+.bigsearch .hintline b{color:var(--teal);font-weight:500}
+
+/* 覆盖提示 */
+.cover{display:inline-flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:6px 14px;font-size:11.5px;color:var(--txt-2);margin-top:18px}
+.cover .num-dot{width:6px;height:6px;border-radius:50%;background:var(--teal);display:inline-block}
+.cover b{color:var(--txt);font-family:var(--mono)}
+
+/* 示例问题 */
+.examples{max-width:720px;margin:26px auto 0;display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.ex{text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:12px 14px;color:var(--txt-2);font-size:12.5px;display:flex;align-items:center;gap:10px;transition:.15s}
+.ex:hover{border-color:var(--accent);background:var(--surface-2);color:var(--txt)}
+.ex .qi{width:26px;height:26px;border-radius:7px;background:var(--surface-3);display:grid;place-items:center;color:var(--accent);flex:0 0 auto;font-size:12px}
+.ex .ec{font-family:var(--mono);font-size:10.5px;color:var(--muted);margin-left:auto}
+
+/* 问答结果 */
+.qhead{padding:34px 0 16px;display:flex;align-items:flex-start;gap:12px;max-width:760px}
+.qhead .qav{width:28px;height:28px;border-radius:50%;background:var(--surface-3);display:grid;place-items:center;font-size:11px;flex:0 0 auto}
+.qhead .qt{font-size:15px;font-weight:550;line-height:1.5;flex:1}
+
+.answer{max-width:760px;display:grid;gap:14px}
+.acard{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.ainside{padding:18px 20px}
+.alabel{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted);margin-bottom:10px}
+.alabel .spark{color:var(--purple)}
+.aconcl{font-size:16px;font-weight:600;line-height:1.55;margin:0 0 14px}
+
+/* 命令块 */
+.cmdbox{background:var(--bg);border:1px solid var(--line-soft);border-radius:10px;overflow:hidden;margin:12px 0}
+.cmdbox .ch{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--surface-2);font-size:11px;color:var(--txt-2)}
+.cmdbox .ch .pill{font-size:10px;color:var(--teal);border:1px solid rgba(79,209,197,.3);border-radius:999px;padding:1px 7px}
+.cmdbox pre{margin:0;padding:12px;font-family:var(--mono);font-size:12px;color:#a5d6ff;overflow-x:auto}
+.cmdbox .cf{display:flex;align-items:center;justify-content:space-between;padding:7px 12px;border-top:1px solid var(--line-soft);font-size:10.5px;color:var(--muted)}
+
+/* 依据折叠 */
+details.evid{border-top:1px solid var(--line-soft)}
+details.evid summary{padding:12px 20px;font-size:12px;color:var(--accent);cursor:pointer;list-style:none;display:flex;align-items:center;gap:7px}
+details.evid summary::-webkit-details-marker{display:none}
+details.evid summary .arw{transition:transform .15s}
+details.evid[open] summary .arw{transform:rotate(90deg)}
+.evid-body{padding:0 20px 16px;display:grid;gap:8px}
+.evid-item{display:flex;gap:10px;font-size:11.5px;color:var(--txt-2);padding:8px 10px;background:var(--surface-2);border-radius:8px}
+.evid-item b{color:var(--purple);font-family:var(--mono)}
+.evid-item .svc{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--muted)}
+
+/* 反馈条 */
+.fb{display:flex;align-items:center;gap:8px;padding:10px 20px;border-top:1px solid var(--line-soft);background:var(--surface-2);flex-wrap:wrap}
+.fb .lbl{font-size:11px;color:var(--muted);margin-right:2px}
+.fb button{font-size:11.5px;background:var(--surface);border:1px solid var(--line);color:var(--txt-2);padding:6px 11px;border-radius:8px}
+.fb button:hover{border-color:var(--muted);color:var(--txt)}
+.fb button.act{color:var(--ok);border-color:rgba(74,199,122,.4)}
+.fb .spacer{flex:1}
+.fb button.gap{color:var(--warn);border-color:rgba(224,169,59,.35)}
+
+/* 拒答 / 错误 / 空 / 权限 */
+.soft{max-width:760px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:28px}
+.soft h3{margin:0 0 8px;font-size:16px}
+.soft p{color:var(--txt-2);font-size:13px;margin:6px 0}
+.soft .chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.soft .chips .chip{cursor:pointer;font-size:11.5px;padding:5px 11px;border-radius:8px;background:var(--surface-2);border:1px solid var(--line);color:var(--accent);font-family:var(--mono)}
+.lock{max-width:560px;margin:40px auto;background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--warn);border-radius:var(--r);padding:26px}
+.lock h2{margin:0 0 8px;font-size:16px}.lock p{color:var(--txt-2);font-size:12.5px;line-height:1.7}
+.lock code{font-family:var(--mono);color:var(--warn);background:var(--surface-2);padding:1px 5px;border-radius:4px}
+
+/* 右：知识地图 */
+.side{padding:40px 0 0;position:sticky;top:58px;align-self:start;max-height:calc(100vh - 58px);overflow:auto}
+.side::-webkit-scrollbar{width:6px}.side::-webkit-scrollbar-thumb{background:var(--surface-3);border-radius:6px}
+.sc{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}
+.sc h3{margin:0 0 4px;font-size:12.5px;font-weight:600}
+.sc .d{font-size:10.5px;color:var(--muted);margin-bottom:12px}
+.map-lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:12px 0 7px}
+.tags{display:flex;flex-wrap:wrap;gap:6px}
+.tag{font-size:10.5px;font-family:var(--mono);padding:4px 8px;border-radius:6px;background:var(--surface-2);border:1px solid var(--line);color:var(--txt-2);cursor:pointer}
+.tag:hover{border-color:var(--accent);color:var(--accent)}
+.tag.hot{color:#ff9d94;border-color:rgba(244,105,95,.3)}
+.rec{display:flex;gap:9px;padding:8px 0;border-bottom:1px solid var(--line-soft);font-size:11.5px;color:var(--txt-2);cursor:pointer}
+.rec:last-child{border:0}
+.rec .rn{color:var(--muted);font-family:var(--mono);font-size:10px}
+.gap-note{font-size:10.5px;color:var(--muted);line-height:1.6}
+
+/* 历史抽屉（atom） */
+.hist{font-size:11.5px}
+.hist .h{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--line-soft);gap:8px}
+.hist .h span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--txt-2)}
+.hist .h time{color:var(--muted);font-family:var(--mono);font-size:10px;flex:0 0 auto}
+
+/* 页脚真实性标注 */
+.footnote{max-width:760px;font-size:10.5px;color:var(--muted);margin-top:18px;padding:10px 14px;border:1px dashed var(--line);border-radius:10px}
+
+/* 状态演示条 */
+.demo-bar{position:fixed;left:50%;transform:translateX(-50%);bottom:14px;z-index:50;
+  background:rgba(23,29,38,.96);border:1px solid var(--line);border-radius:12px;padding:7px 9px;
+  display:flex;gap:5px;align-items:center;box-shadow:0 10px 40px rgba(0,0,0,.5);backdrop-filter:blur(8px);flex-wrap:wrap;justify-content:center;max-width:94vw}
+.demo-bar .lb{font-size:10px;color:var(--muted);padding:0 6px 0 4px}
+.demo-bar button{font-size:11px;background:transparent;border:1px solid var(--line);color:var(--txt-2);padding:5px 10px;border-radius:7px}
+.demo-bar button.on{background:var(--accent);color:#08131f;border-color:transparent;font-weight:600}
+.demo-bar .sep{width:1px;height:18px;background:var(--line);margin:0 3px}
+.cursor{display:inline-block;width:7px;height:15px;background:var(--accent);vertical-align:-2px;animation:bl 1s steps(2) infinite}
+@keyframes bl{50%{opacity:0}}
+.skel{height:11px;border-radius:5px;background:linear-gradient(90deg,var(--surface-2),var(--surface-3),var(--surface-2));background-size:200% 100%;animation:sh 1.4s linear infinite;margin:9px 0}
+@keyframes sh{to{background-position:-200% 0}}
+
+@media(max-width:900px){
+  .layout{grid-template-columns:1fr}
+  .side{position:static;max-height:none;padding-top:0}
+  .hero{padding:36px 0 20px}
+  .examples{grid-template-columns:1fr}
+  .top .mini-search,.brand span{display:none}
+  .bigsearch input{font-size:13px}
+}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="brand"><div class="logo">P</div><b>OpsPilot</b><span>企业知识助手</span></div>
+  <div class="spacer"></div>
+  <a href="#">知识地图</a><a href="#">我的提问</a><a href="#">上报的缺口</a>
+  <div class="mini-search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg><input placeholder="搜索知识…"></div>
+  <div class="av">SR</div>
+</div>
+
+<div class="layout">
+  <div class="main-col">
+    <!-- 首屏 -->
+    <div id="viewHome">
+      <div class="hero">
+        <div class="eyebrow">内部运维知识 · 随时可问</div>
+        <h1>遇到问题，问我就好</h1>
+        <p>覆盖订单、支付、库存等核心服务的排查手册与止损步骤，答案附来源，可一键复制命令。</p>
+        <div class="bigsearch">
+          <div class="box">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+            <input id="homeQ" placeholder="例如：支付网关 502 怎么排查？">
+            <button class="send" id="askBtn">提问 →</button>
+          </div>
+          <div class="hintline"><span>Enter 发送 · 支持错误码、服务名或现象描述</span><span><b>✓</b> 每条答案附来源</span></div>
+        </div>
+        <div class="cover"><span class="num-dot"></span>当前身份可见 <b>12</b> 个服务 · <b>48</b> 个错误码 · <b>459</b> 篇知识</div>
+        <div class="examples">
+          <button class="ex"><span class="qi">1</span>支付网关 502 批量报错怎么定位？<span class="ec">50041_PAY_GATEWAY_502</span></button>
+          <button class="ex"><span class="qi">2</span>订单创建超时，如何判断是不是慢 SQL？<span class="ec">50012_DB_TIMEOUT</span></button>
+          <button class="ex"><span class="qi">3</span>Redis 超时该怎么排查连接数？<span class="ec">50021_REDIS_TIMEOUT</span></button>
+          <button class="ex"><span class="qi">4</span>库存扣减失败的错误码含义？<span class="ec">40902_INVENTORY_INSUFFICIENT</span></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 答案视图 -->
+    <div id="viewAnswer" hidden>
+      <div class="qhead"><div class="qav">你</div><div class="qt">支付网关 502 批量报错怎么定位？</div></div>
+      <div class="answer">
+        <div class="acard">
+          <div class="ainside">
+            <div class="alabel"><span class="spark">✦</span> 结论 · 依据 3 篇知识生成</div>
+            <div class="aconcl" id="aconcl">支付网关上游连接池耗尽，导致请求在 3s 后返回 502。先确认连接数水位，再决定是否扩容。</div>
+            <div class="cmdbox">
+              <div class="ch"><span class="pill">只读 · 可直接复制</span> 建议先执行这条命令确认水位</div>
+              <pre>kubectl get pods -n payment -o wide</pre>
+              <div class="cf"><span>来源：payment-service · 连接池水位与扩容 SOP</span><button style="background:none;border:0;color:var(--accent);font-size:11px">⧉ 复制命令</button></div>
+            </div>
+            <details class="evid" open>
+              <summary><span class="arw">▸</span> 查看依据（3 篇）与完整排查步骤</summary>
+              <div class="evid-body">
+                <div class="evid-item"><b>[1]</b><span>payment-gateway::502 排查手册 — 上游连接池耗尽的表现与确认方法</span><span class="svc">opspilot-gateway</span></div>
+                <div class="evid-item"><b>[2]</b><span>payment-service::连接池水位与扩容 SOP — 如何查看水位与判断扩容</span><span class="svc">payment-service</span></div>
+                <div class="evid-item"><b>[3]</b><span>payment-service::滚动重启止损步骤 — 确认耗尽后的操作顺序</span><span class="svc">payment-service</span></div>
+              </div>
+            </details>
+          </div>
+          <div class="fb">
+            <span class="lbl">这条答案有帮助吗？</span>
+            <button data-fb="up">👍 有帮助</button>
+            <button data-fb="down">👎 没帮助</button>
+            <span class="spacer"></span>
+            <button>⧉ 复制答案</button>
+            <button class="gap">⚑ 上报缺口</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 拒答 -->
+      <div class="soft" id="softRefuse" hidden style="margin-top:16px">
+        <h3>这个问题我暂时答不了</h3>
+        <p>我的知识库目前没有足够可靠的依据。我不想给你一个可能误导你的答案。</p>
+        <p style="font-size:12px;color:var(--muted)">你可能想问的是：</p>
+        <div class="chips"><span class="chip">payment-service</span><span class="chip">50042_PAY_SIGN_INVALID</span><span class="chip">50041_PAY_GATEWAY_502</span></div>
+      </div>
+
+      <!-- 错误 -->
+      <div class="soft" id="softError" hidden style="margin-top:16px">
+        <h3>知识服务暂时不可用</h3>
+        <p>连接知识库时出了点问题，请稍后重试。你的问题已保留。</p>
+        <button class="send" style="background:var(--accent);color:#08131f;border:0;border-radius:9px;padding:8px 16px;margin-top:8px">↻ 重试</button>
+      </div>
+
+      <!-- 权限锁 -->
+      <div class="lock" id="softLock" hidden style="margin-top:16px">
+        <h2>你的权限范围内暂无这类知识</h2>
+        <p>当前身份密级 <code>auth_level=1</code>，该服务的文档要求 <code>auth_level≥3</code>。</p>
+        <p>如需访问，请联系管理员提升账号密级。</p>
+      </div>
+
+      <div class="footnote">答案由知识库检索生成，可能不完整。涉及线上操作时请结合实际情况判断——网关只提供只读命令，不会代为执行。</div>
+    </div>
+  </div>
+
+  <!-- 右侧知识地图 -->
+  <aside class="side">
+    <div class="sc">
+      <h3>知识地图</h3><div class="d">点选即可提问 · 按你的权限过滤</div>
+      <div class="map-lbl">热门服务</div>
+      <div class="tags">
+        <span class="tag hot">payment-service</span><span class="tag">order-service</span>
+        <span class="tag">opspilot-gateway</span><span class="tag">inventory-service</span>
+        <span class="tag">opspilot-redis</span><span class="tag">user-service</span>
+      </div>
+      <div class="map-lbl">高频错误码</div>
+      <div class="tags">
+        <span class="tag">50041_PAY_GATEWAY_502</span><span class="tag">50012_DB_TIMEOUT</span>
+        <span class="tag">50021_REDIS_TIMEOUT</span><span class="tag">50151_FEIGN_TIMEOUT</span>
+        <span class="tag">42901_RATE_LIMIT_EXCEEDED</span>
+      </div>
+    </div>
+    <div class="sc">
+      <h3>大家都在问</h3><div class="d">基于近期真实提问</div>
+      <div class="hist">
+        <div class="h"><span>支付网关 502 怎么定位</span><time>14:02</time></div>
+        <div class="h"><span>订单超时是不是慢 SQL</span><time>11:36</time></div>
+        <div class="h"><span>Redis 连接数怎么看</span><time>09:50</time></div>
+        <div class="h"><span>配置中心不可达原因</span><time>昨天</time></div>
+      </div>
+    </div>
+    <div class="sc">
+      <h3>最近提问</h3><div class="d">仅存于本机浏览器</div>
+      <div class="hist" id="myHist"><div style="font-size:11px;color:var(--muted)">还没有提问记录</div></div>
+    </div>
+    <div class="gap-note">找不到答案？点答案下方的「上报缺口」，我们会把问题归档给知识维护人。</div>
+  </aside>
+</div>
+
+<div class="demo-bar">
+  <span class="lb">业务状态演示</span>
+  <button class="on" data-state="answer">正常答案</button>
+  <button data-state="streaming">流式生成</button>
+  <button data-state="refuse">拒答</button>
+  <button data-state="error">服务不可用</button>
+  <button data-state="lock">权限受限</button>
+  <span class="sep"></span>
+  <button data-state="home">返回首页</button>
+</div>
+
+<script>
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+function show(view){
+  $('#viewHome').hidden=view!=='home';
+  $('#viewAnswer').hidden=view==='home';
+  ['softRefuse','softError','softLock'].forEach(id=>$('#'+id).hidden=true);
+  if(view!=='home'){
+    ['aconcl'].forEach(id=>{$('#'+id).hidden=false});
+  }
+}
+function setState(st){
+  if(st==='home'){show('home');setBar(st);return}
+  show('answer');setBar(st);
+  const normal=(st==='answer'||st==='streaming');
+  $('.acard').hidden=!normal;
+  if(st==='refuse')$('#softRefuse').hidden=false;
+  if(st==='error')$('#softError').hidden=false;
+  if(st==='lock')$('#softLock').hidden=false;
+  if(st==='streaming'){
+    $('#aconcl').innerHTML='支付网关上游连接池耗尽，导致请求在 3s 后返回 502<span class="cursor"></span>';
+    $('.evid-body').innerHTML='<div class="skel" style="width:90%"></div><div class="skel" style="width:75%"></div><div class="skel" style="width:82%"></div>';
+  }else{
+    $('#aconcl').textContent='支付网关上游连接池耗尽，导致请求在 3s 后返回 502。先确认连接数水位，再决定是否扩容。';
+    $('.evid-body').innerHTML='<div class="evid-item"><b>[1]</b><span>payment-gateway::502 排查手册 — 上游连接池耗尽的表现与确认方法</span><span class="svc">opspilot-gateway</span></div><div class="evid-item"><b>[2]</b><span>payment-service::连接池水位与扩容 SOP — 如何查看水位与判断扩容</span><span class="svc">payment-service</span></div><div class="evid-item"><b>[3]</b><span>payment-service::滚动重启止损步骤 — 确认耗尽后的操作顺序</span><span class="svc">payment-service</span></div>';
+  }
+}
+function setBar(st){$$('.demo-bar button').forEach(b=>b.classList.toggle('on',b.dataset.state===st))}
+$$('.demo-bar button').forEach(b=>b.onclick=()=>setState(b.dataset.state));
+function ask(q){
+  const t=(q||$('#homeQ').value).trim()||'支付网关 502 批量报错怎么定位？';
+  $('.qt').textContent=t;setState('streaming');
+  addHist(t);setTimeout(()=>setState('answer'),1800);
+}
+$('#askBtn').onclick=()=>ask();
+$('#homeQ').onkeydown=e=>{if(e.key==='Enter')ask()};
+$$('.ex').forEach(b=>b.onclick=()=>ask(b.childNodes[1].textContent.trim()));
+$$('.tag,.chip').forEach(b=>b.onclick=()=>ask(b.textContent.trim()+' 怎么排查？'));
+function addHist(t){
+  const el=$('#myHist');
+  if(el.querySelector('.empty')||el.textContent.includes('还没有'))el.innerHTML='';
+  const d=document.createElement('div');d.className='h';
+  const now=new Date().toTimeString().slice(0,5);
+  d.innerHTML='<span>'+t+'</span><time>'+now+'</time>';el.prepend(d);
+}
+$$('[data-fb]').forEach(b=>b.onclick=()=>{
+  $$('[data-fb]').forEach(x=>x.classList.remove('act'));b.classList.add('act');
+  const l=b.closest('.fb').querySelector('.lbl');l.textContent=b.dataset.fb==='up'?'感谢反馈 ✓':'已记录，我们会改进这类答案';
+});
+$('.fb .gap').onclick=function(){const t=this.textContent;this.textContent='已上报缺口 ✓';setTimeout(()=>this.textContent=t,1500)};
+</script>
+</body>
+</html>

@@ -79,6 +79,15 @@ public class UserStore {
     }
 
     /**
+     * 同租户、未禁用用户——事故"可分配"的候选集。
+     * 只按 tenant 过滤，不暴露其他租户的 sub（分配关系必须落在同一隔离域内）。
+     */
+    public List<User> listActiveByTenant(String tenant) {
+        return jdbc.query("SELECT sub, tenant, auth_level, role, disabled, token_ver FROM users "
+                + "WHERE tenant = ? AND disabled = FALSE ORDER BY sub", MAPPER, tenant);
+    }
+
+    /**
      * 在线热备份（DB 所有者网关执行）。BACKUP TO 是 H2 命令语句、文件名不支持参数绑定，
      * 故输入先经 H2BackupPath 白名单强校验（仅 backup/*.zip、拒绝引号/分号/穿越）再入字面量。
      */

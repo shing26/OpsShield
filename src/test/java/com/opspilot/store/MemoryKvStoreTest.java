@@ -25,6 +25,15 @@ class MemoryKvStoreTest {
 
     private final MemoryKvStore kv = new MemoryKvStore();
 
+    /** 登录 429 的 Retry-After 读它：必须给真实剩余秒数，缺失/无 TTL 时给 0（由调用方省略头）。 */
+    @Test
+    void ttlSecondsReportsRemainingAndZeroForMissingKey() {
+        kv.increment("auth:fail:alice", Duration.ofSeconds(2));
+        long ttl = kv.ttlSeconds("auth:fail:alice");
+        assertTrue(ttl >= 1 && ttl <= 2, "剩余 TTL 应为 1..2 秒，实际 " + ttl);
+        assertEquals(0L, kv.ttlSeconds("missing"), "无此键必须返回 0");
+    }
+
     @Test
     void stringsHonourTtl() throws Exception {
         kv.setString("k", "v", Duration.ofMillis(50));
