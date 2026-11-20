@@ -67,7 +67,11 @@ public class AuthController {
 
     /** 失败限流锁定（AuthService 侧计数）：429 同样是客户端错，形状与上面一致。 */
     @ExceptionHandler(AuthService.LoginLockedException.class)
-    public void locked(HttpServletResponse resp) throws IOException {
+    public void locked(AuthService.LoginLockedException e, HttpServletResponse resp) throws IOException {
+        // Retry-After 取失败计数键的真实剩余 TTL；0 表示存储未给 TTL，此时不写头（UI 只说"请稍后重试"）
+        if (e.retryAfterSeconds() > 0) {
+            resp.setHeader("Retry-After", String.valueOf(e.retryAfterSeconds()));
+        }
         ErrorBodies.writeApi(resp, SC_TOO_MANY_REQUESTS, "TOO_MANY_REQUESTS", "temporarily locked");
     }
 }

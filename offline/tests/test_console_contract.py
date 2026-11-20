@@ -4,6 +4,11 @@
 静态拦住大部分回退：色条没背景色、引用了未定义的 CSS 变量、空采样时编出一个峰值。
 
 判定刻意只看**单一事实源**（index.html 里的 CSS 规则与渲染表达式），不复制一份样式逻辑。
+
+2026-11-20 A 版（事件响应工作台）落地后，下列检查的**选择器**已按新结构重标
+（`.topbar`→`.top`、`--topbar-h`→`--top-h`、`.ts-app`→`.shell`、`#q`→`#quickq`），
+断言语义不变：滤镜仍不得挂 body、顶栏高度仍必须是实测变量、桌面壳仍必须是定高网格、
+label 仍必须关联控件、结论卡仍必须有可访问名称且排在命令清单之前。
 """
 from __future__ import annotations
 
@@ -59,16 +64,19 @@ def test_filter_is_not_applied_to_body() -> None:
     """#22：body 上的 filter 会为 fixed 后代创建包含块，把凭证遮罩改成相对整页定位。"""
     html = _html()
     assert "body.sat{filter" not in html, "滤镜不能挂在 body 上（#22）"
-    assert ".sat .topbar" in html, "滤镜应只作用于内容层（顶栏/视图/页脚）"
+    assert ".sat .top," in html, "滤镜应只作用于内容层（顶栏/视图/页脚）"
 
 
 def test_topbar_height_is_a_variable_not_a_magic_number() -> None:
     """#23：顶栏会换行，sticky 偏移/弹层 top 必须读实测变量。"""
     html = _html()
-    assert "--topbar-h" in html, "顶栏高度必须以 CSS 变量暴露（#23）"
+    assert "--top-h" in html, "顶栏高度必须以 CSS 变量暴露（#23）"
     assert "top:53px" not in html, "禁止再把顶栏高度写死成 53px"
-    assert ".ts-app{display:grid;grid-template-columns:300px 1fr;height:100%" in html, \
-        "桌面壳必须是定高两列（左栏/主区各自滚动，顶栏不再盖左栏；#23）"
+    shell = re.search(r"\.shell\{([^}]*)\}", html)
+    assert shell, "桌面壳样式缺失（#23）"
+    assert "display:grid" in shell.group(1) and "var(--rail)" in shell.group(1) \
+        and "minmax(0,1fr)" in shell.group(1) and "overflow:hidden" in shell.group(1), \
+        "桌面壳必须是定高网格（左栏/主区各自滚动，顶栏不再盖左栏；#23）"
 
 
 def test_mobile_kpis_are_two_columns() -> None:
@@ -117,7 +125,7 @@ def test_answer_region_announces_updates() -> None:
 def test_form_labels_are_associated() -> None:
     """#30：label 必须与控件关联，不能是孤儿 label。"""
     html = _html()
-    assert '<label for="q">' in html, "排障输入 label 需要 for=q"
+    assert '<label for="quickq">' in html, "排障输入 label 需要 for=quickq"
     assert "-user\" data-bind=" in html, "身份输入框需要 id（label for 才能工作）"
 
 
@@ -125,11 +133,11 @@ def test_verdict_card_precedes_evidence_and_derives_from_answer() -> None:
     """产品化（2026-10-27）：结论必须先于证据；结论行只从答案「问题定位」派生，不许另造文案。"""
     html = _html()
     assert "function verdict(" in html, "结论卡渲染缺失"
-    assert 'aria-label="结论摘要"' in html, "结论卡需要可访问名称"
+    assert 'aria-label="诊断结论"' in html, "结论卡需要可访问名称"
     assert "function firstLine(" in html and "问题定位" in html, "结论行必须从答案的问题定位段派生"
     assert 'data-act="copymd"' in html, "缺「复制结论」导出入口"
-    body_start = html.index("+ '<div class=\"body\">'")
-    assert html.index("verdict(r, k)", body_start) < html.index("只读命令清单", body_start), \
+    sections_start = html.index("function diagnosisSections(")
+    assert html.index("verdict(r, k, inc)", sections_start) < html.index("只读命令清单", sections_start), \
         "结论卡必须排在证据链（命令清单）之前"
 
 
@@ -139,6 +147,14 @@ def test_mobile_font_floor_for_small_labels() -> None:
     m = re.search(r"移动端可读性下限.*?@media \(max-width:600px\)\{(.*?)\n  \}", html, re.S)
     assert m, "缺移动端可读性下限块"
     block = m.group(1)
-    for sel in (".pill", ".copy", "footer", ".ref-badge"):
+    for sel in (".pill", ".copy", ".vsub", ".ref-badge", ".statusbar"):
         assert sel in block, f"移动端字号下限缺少 {sel}"
+    assert "font-size:12px" in block, "移动端字号下限必须是 12px"
     assert "grid-template-columns:1fr" in html, "窄屏步骤卡必须单列"
+
+
+def test_reopen_sends_status_only() -> None:
+    """结单后重开只能提交 status：夹带 timeline/diagnosis 会被服务端 409 拒绝。"""
+    html = _html()
+    assert "patchIncident(inc, { status: 'open' }, null, null, null, { content: false })" in html, \
+        "重开必须剥离内容字段，只发 {\"status\":\"open\"}"

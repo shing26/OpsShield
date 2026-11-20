@@ -219,6 +219,29 @@ public class AuditService {
     }
 
     /**
+     * 事故动作留痕：create / update / close / reopen / assign / denied。
+     *
+     * <p>为什么单独一族：事故是跨会话、跨设备的业务对象，权限判定（created_by/owner/platform）
+     * 与分配动作都必须可复核；把它塞进 admin 事件会让"谁改了事故"与"谁动了平台"混在一起。
+     *
+     * @param incidentId 事故 ID（服务端生成）
+     * @param action     {@code create|update|close|reopen|assign|denied}
+     * @param outcome    {@code ok|forbidden|invalid}
+     */
+    public void logIncident(UserContext user, String incidentId, String action, String outcome, String detail) {
+        Map<String, Object> ev = new LinkedHashMap<>();
+        ev.put("ts", System.currentTimeMillis());
+        ev.put("ev", "incident");
+        ev.put("sub", user == null ? "" : user.sub());
+        ev.put("tenant", user == null ? "" : user.tenantId());
+        ev.put("id", trunc(incidentId, 64));
+        ev.put("action", trunc(action, 32));
+        ev.put("outcome", trunc(outcome, 16));
+        if (detail != null && !detail.isBlank()) ev.put("detail", trunc(detail, 200));
+        writeEvent(ev);
+    }
+
+    /**
      * 降级档位转移留痕（2026-09-28，OP-A5）：给"降级发生了什么"一个可复核的事件序列。
      *
      * 为什么单独成事件而不只加 `degrade_level` 字段：字段答的是"**这次请求时**档位是几"——

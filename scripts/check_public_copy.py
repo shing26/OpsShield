@@ -159,12 +159,17 @@ def public_lines(root: Path) -> list[tuple[str, int, str]]:
 
 
 def violations(root: Path) -> list[str]:
-    """正向判据：对外面出现的每个 canonical 词都是一条违规。"""
+    """正向判据：对外面出现的每个 canonical 词都是一条违规。
+
+    匹配前先抹掉该词的**登记别名**：别名允许以 canonical 为前缀（如「事故」→「事故单」），
+    否则写别名反而会被判违规——门闩会逼着人改用未登记的怪词。抹掉别名后仍能抓到裸 canonical。
+    """
     reg = registry(root)
     hits: list[str] = []
     for rel, lineno, text in public_lines(root):
         for name in reg:
-            if name in text:
+            scrubbed = text.replace(reg[name], "") if reg[name] else text
+            if name in scrubbed:
                 hits.append(f"{rel}:{lineno} 出现 canonical「{name}」→ 对外应用「{reg[name]}」")
     return hits
 

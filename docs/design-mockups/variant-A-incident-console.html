@@ -1,0 +1,492 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>版本 A · 事件响应工作台 — 高保真草图</title>
+<style>
+:root{
+  color-scheme:dark;
+  --bg:#0d1016;--surface:#151a22;--surface-2:#1b212b;--surface-3:#222a36;
+  --line:#2a3341;--line-soft:#212935;
+  --txt:#e7edf4;--txt-2:#b3c0cf;--muted:#7d8b9b;
+  --ok:#3fb950;--warn:#d29922;--err:#f85149;--accent:#58a6ff;--purple:#a371f7;
+  --r:10px;--s1:4px;--s2:8px;--s3:12px;--s4:16px;--s5:24px;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif;
+  --mono:ui-monospace,"Cascadia Mono",Consolas,"Liberation Mono",monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--txt);font:13.5px/1.55 var(--sans);overflow:hidden;-webkit-font-smoothing:antialiased}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+[hidden]{display:none!important}
+button{font:inherit;cursor:pointer}
+.num-dot{width:7px;height:7px;border-radius:50%;display:inline-block;flex:0 0 auto}
+
+/* ===== 顶栏 ===== */
+.top{height:52px;display:flex;align-items:center;gap:var(--s3);padding:0 var(--s4);
+     border-bottom:1px solid var(--line);background:var(--surface);position:relative;z-index:20}
+.brand{display:flex;align-items:baseline;gap:9px;white-space:nowrap}
+.brand b{font-size:15px;font-weight:650;letter-spacing:.2px}
+.brand b i{color:var(--accent);font-style:normal}
+.brand span{font-size:11px;color:var(--muted)}
+.topsep{width:1px;height:20px;background:var(--line)}
+.inc-id{font-size:12px;color:var(--txt-2)}
+.inc-id b{color:var(--txt);font-family:var(--mono)}
+.spacer{flex:1}
+.health{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--txt-2);
+        border:1px solid var(--line);border-radius:999px;padding:4px 10px}
+.who{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--txt-2);
+     border:1px solid var(--line);border-radius:999px;padding:4px 10px 4px 8px}
+.who .av{width:20px;height:20px;border-radius:50%;background:linear-gradient(135deg,#1f6feb,#8957e5);
+         display:grid;place-items:center;font-size:10px;color:#fff;font-weight:600}
+
+/* ===== 三栏壳 ===== */
+.shell{display:grid;grid-template-columns:288px minmax(0,1fr) 0;height:calc(100% - 52px);transition:grid-template-columns .22s ease}
+.shell.drawer{grid-template-columns:288px minmax(0,1fr) 360px}
+.col{min-width:0;min-height:0;overflow:auto}
+.col::-webkit-scrollbar{width:8px}.col::-webkit-scrollbar-thumb{background:var(--surface-3);border-radius:8px}
+
+/* ===== 左：事故列表 ===== */
+.rail{background:var(--surface);border-right:1px solid var(--line);padding:var(--s4) var(--s3);display:flex;flex-direction:column;gap:14px}
+.rail-hd{display:flex;align-items:center;justify-content:space-between;padding:0 4px}
+.rail-hd b{font-size:13px}
+.rail-hd .cnt{font-size:11px;color:var(--muted);font-family:var(--mono)}
+.seg{display:flex;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:3px;gap:2px}
+.seg button{flex:1;background:none;border:0;color:var(--muted);font-size:11px;padding:5px 4px;border-radius:6px}
+.seg button.on{background:var(--surface-3);color:var(--txt)}
+.newbtn{width:100%;background:var(--accent);color:#06121f;border:0;border-radius:8px;padding:8px;font-size:12.5px;font-weight:600}
+.search{background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:7px 10px;color:var(--txt-2);font-size:12px;display:flex;gap:7px;align-items:center}
+.search input{background:none;border:0;outline:0;color:var(--txt);font:inherit;width:100%}
+.li-hd{font-size:10.5px;color:var(--muted);letter-spacing:.4px;padding:6px 4px 2px;text-transform:uppercase}
+.inc{display:block;width:100%;text-align:left;background:transparent;border:1px solid transparent;border-radius:9px;padding:10px 11px;color:inherit;position:relative}
+.inc:hover{background:var(--surface-2)}
+.inc.on{background:var(--surface-2);border-color:var(--line)}
+.inc.on::before{content:"";position:absolute;left:0;top:12px;bottom:12px;width:3px;border-radius:3px;background:var(--accent)}
+.inc-x{display:flex;align-items:center;gap:7px;margin-bottom:5px}
+.inc-x .sev{font-size:10px;font-family:var(--mono);padding:1px 6px;border-radius:4px;font-weight:600}
+.sev.p1{background:rgba(248,81,73,.14);color:#ff7b72}
+.sev.p2{background:rgba(210,153,34,.14);color:#e3b341}
+.sev.p3{background:rgba(88,166,255,.14);color:#79c0ff}
+.inc-x .t{font-size:12px;font-weight:600;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.inc .meta{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.inc .meta code{font-family:var(--mono);color:var(--txt-2);font-size:10.5px}
+.inc .foot{display:flex;align-items:center;gap:6px;margin-top:7px;font-size:10.5px;color:var(--muted)}
+.st{display:inline-flex;align-items:center;gap:5px}
+.st .num-dot{width:6px;height:6px}
+.st.open{color:#e3b341}.st.open .num-dot{background:var(--warn)}
+.st.done{color:#56d364}.st.done .num-dot{background:var(--ok)}
+.st.prog{color:#79c0ff}.st.prog .num-dot{background:var(--accent)}
+
+/* ===== 中：工作区 ===== */
+.work{padding:0;background:var(--bg)}
+.wk-head{padding:16px var(--s5) 13px;border-bottom:1px solid var(--line-soft);display:flex;align-items:flex-start;gap:14px;position:sticky;top:0;background:var(--bg);z-index:5}
+.crumb{font-size:11px;color:var(--muted);margin-bottom:6px}
+.crumb b{color:var(--accent);font-family:var(--mono)}
+.wk-head h1{font-size:18px;font-weight:650;margin:0 0 5px;letter-spacing:.2px}
+.wk-head .sub{font-size:11.5px;color:var(--txt-2);display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.wk-head .sub code{font-family:var(--mono);background:var(--surface-2);border:1px solid var(--line);padding:1px 6px;border-radius:4px;color:var(--txt-2)}
+.tagp1{font-size:10px;font-family:var(--mono);padding:2px 7px;border-radius:4px;background:rgba(248,81,73,.14);color:#ff7b72;font-weight:600}
+.wk-actions{display:flex;gap:8px;align-items:center}
+.btn{border:1px solid var(--line);background:var(--surface-2);color:var(--txt-2);border-radius:8px;padding:7px 12px;font-size:12px}
+.btn:hover{border-color:var(--muted);color:var(--txt)}
+.btn.pri{background:var(--accent);color:#06121f;border-color:transparent;font-weight:600}
+.btn.pri:hover{background:#79c0ff}
+.btn.gho{background:none}
+
+.canvas{padding:18px var(--s5) 60px;display:grid;gap:15px;max-width:1000px;margin:0 auto}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.card-hd{display:flex;align-items:center;gap:9px;padding:10px 14px;border-bottom:1px solid var(--line-soft);background:var(--surface-2)}
+.card-hd .k{font-size:11px;font-weight:600;color:var(--txt-2);letter-spacing:.3px}
+.card-hd .spacer{flex:1}
+.pill{font-size:10px;padding:2px 8px;border-radius:999px;font-family:var(--mono);border:1px solid var(--line);color:var(--txt-2)}
+.pill.ok{color:#56d364;border-color:rgba(63,185,80,.35);background:rgba(63,185,80,.08)}
+.pill.warn{color:#e3b341;border-color:rgba(210,153,34,.35);background:rgba(210,153,34,.08)}
+.pill.err{color:#ff7b72;border-color:rgba(248,81,73,.35);background:rgba(248,81,73,.08)}
+.pill.acc{color:#79c0ff;border-color:rgba(88,166,255,.35);background:rgba(88,166,255,.08)}
+
+/* 结论卡 */
+.verdict{border-left:3px solid var(--ok)}
+.verdict.refuse{border-left-color:var(--err)}
+.verdict.clarify{border-left-color:var(--warn)}
+.verdict .body{padding:14px 16px}
+.vline{font-size:15.5px;font-weight:600;line-height:1.5;margin:2px 0 12px}
+.vkpi{display:flex;gap:18px;flex-wrap:wrap;padding:10px 0;border-top:1px solid var(--line-soft);border-bottom:1px solid var(--line-soft);margin-bottom:10px}
+.vkpi div{display:flex;flex-direction:column;gap:2px}
+.vkpi .l{font-size:10px;color:var(--muted)}
+.vkpi .v{font-size:14px;font-family:var(--mono);color:var(--txt)}
+.vsub{font-size:11.5px;color:var(--muted)}
+.impact{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.chip{font-size:11px;padding:3px 9px;border-radius:6px;background:var(--surface-2);border:1px solid var(--line);color:var(--txt-2);font-family:var(--mono)}
+.chip.hot{color:#ff7b72;border-color:rgba(248,81,73,.3)}
+
+/* 诊断分析 md */
+.md{padding:14px 16px;font-size:13px;line-height:1.75;color:var(--txt-2)}
+.md h3{font-size:13px;color:var(--txt);margin:14px 0 6px;font-weight:600}
+.md h3:first-child{margin-top:0}
+.md p{margin:6px 0}
+.md ol,.md ul{margin:6px 0;padding-left:20px}
+.md li{margin:3px 0}
+.md code{font-family:var(--mono);background:var(--surface-3);padding:1px 5px;border-radius:4px;font-size:12px;color:#a5d6ff}
+.md .ref{color:var(--purple);font-family:var(--mono);font-size:11px}
+.md blockquote{border-left:2px solid var(--purple);margin:8px 0;padding:4px 12px;color:var(--muted);font-size:12px}
+
+/* 只读命令 */
+.contract{padding:4px 0}
+.cmd{display:flex;gap:11px;align-items:flex-start;padding:11px 15px;border-bottom:1px solid var(--line-soft)}
+.cmd:last-child{border-bottom:0}
+.cmd .n{width:20px;height:20px;border-radius:6px;background:var(--surface-3);display:grid;place-items:center;font-family:var(--mono);font-size:11px;color:var(--txt-2);flex:0 0 auto}
+.cmd .c-body{flex:1;min-width:0}
+.cmd .step{font-size:12px;color:var(--txt);margin-bottom:5px}
+.cmd pre{margin:0;font-family:var(--mono);font-size:11.5px;color:#a5d6ff;background:var(--bg);border:1px solid var(--line-soft);border-radius:6px;padding:7px 10px;overflow-x:auto;white-space:pre}
+.cmd .ref{font-size:10px;color:var(--muted);margin-top:5px;font-family:var(--mono)}
+.copy{font-size:10.5px;color:var(--accent);background:none;border:0;padding:2px 4px}
+.note-ro{font-size:11px;color:var(--muted);padding:8px 15px;background:var(--surface-2);border-top:1px solid var(--line-soft)}
+
+/* 证据 */
+.refs{padding:6px 0}
+.refitem{display:flex;gap:10px;align-items:center;padding:8px 15px;font-size:11.5px;border-bottom:1px solid var(--line-soft)}
+.refitem:last-child{border:0}
+.refitem b{color:var(--purple);font-family:var(--mono);font-size:11px}
+.refitem .id{font-family:var(--mono);color:var(--txt-2)}
+.refitem .svc{font-family:var(--mono);font-size:10.5px;color:var(--muted);border:1px solid var(--line);padding:1px 6px;border-radius:4px}
+
+/* 处置时间线 */
+.tl{padding:14px 16px}
+.tl-row{display:flex;gap:12px;position:relative;padding-bottom:14px}
+.tl-row:last-child{padding-bottom:0}
+.tl-row::before{content:"";position:absolute;left:6px;top:14px;bottom:-2px;width:1px;background:var(--line)}
+.tl-row:last-child::before{display:none}
+.tl-dot{width:13px;height:13px;border-radius:50%;border:2px solid var(--line);background:var(--surface);flex:0 0 auto;margin-top:2px;z-index:1}
+.tl-dot.done{background:var(--ok);border-color:var(--ok)}
+.tl-dot.now{background:var(--accent);border-color:var(--accent);box-shadow:0 0 0 3px rgba(88,166,255,.15)}
+.tl-c .t{font-size:12px;color:var(--txt)}
+.tl-c .m{font-size:10.5px;color:var(--muted);font-family:var(--mono);margin-top:2px}
+
+/* 拒答 near_miss */
+.near{padding:13px 16px}
+.near .hint{font-size:12px;color:var(--txt-2);margin-bottom:9px}
+.near .chips{display:flex;gap:7px;flex-wrap:wrap}
+.near .chip{cursor:pointer}
+
+/* ===== 右抽屉 ===== */
+.drawer{background:var(--surface);border-left:1px solid var(--line);display:flex;flex-direction:column}
+.drawer-hd{padding:13px var(--s4);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:9px}
+.drawer-hd b{font-size:13px;flex:1}
+.drawer-hd .x{background:none;border:0;color:var(--muted);font-size:16px}
+.dbody{padding:var(--s4);overflow:auto;display:grid;gap:13px}
+.dsec{border:1px solid var(--line-soft);border-radius:9px;padding:12px;background:var(--surface-2)}
+.dsec h4{margin:0 0 10px;font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.dnums{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.dnums .n{background:var(--bg);border:1px solid var(--line-soft);border-radius:7px;padding:8px 10px}
+.dnums .v{font-family:var(--mono);font-size:15px}
+.dnums .k{font-size:10px;color:var(--muted)}
+.deps-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;font-size:11.5px;border-bottom:1px solid var(--line-soft)}
+.deps-row:last-child{border:0}
+.deps-row .s{display:flex;align-items:center;gap:6px;color:var(--txt-2)}
+.deg{display:flex;gap:4px}
+.deg i{flex:1;height:5px;border-radius:3px;background:var(--surface-3)}
+.deg i.on{background:var(--ok)}
+.deg i.warn{background:var(--warn)}
+
+/* ===== 状态演示浮条 ===== */
+.demo-bar{position:fixed;left:50%;transform:translateX(-50%);bottom:14px;z-index:50;
+  background:rgba(21,26,34,.96);border:1px solid var(--line);border-radius:12px;
+  padding:7px 9px;display:flex;gap:5px;align-items:center;box-shadow:0 10px 40px rgba(0,0,0,.5);backdrop-filter:blur(8px)}
+.demo-bar .lb{font-size:10px;color:var(--muted);padding:0 6px 0 4px;letter-spacing:.3px}
+.demo-bar button{font-size:11px;background:transparent;border:1px solid var(--line);color:var(--txt-2);padding:5px 10px;border-radius:7px}
+.demo-bar button.on{background:var(--accent);color:#06121f;border-color:transparent;font-weight:600}
+.demo-bar .sep{width:1px;height:18px;background:var(--line);margin:0 3px}
+
+/* 锁屏 */
+.lock{margin:40px auto;max-width:560px;background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--warn);border-radius:var(--r);padding:26px}
+.lock .ic{width:40px;height:40px;border-radius:10px;background:rgba(210,153,34,.12);display:grid;place-items:center;margin-bottom:14px}
+.lock h2{margin:0 0 8px;font-size:16px}
+.lock p{color:var(--txt-2);font-size:12.5px;margin:6px 0;line-height:1.7}
+.lock code{font-family:var(--mono);color:#e3b341;background:var(--surface-2);padding:1px 5px;border-radius:4px}
+
+/* 流式光标 */
+.cursor{display:inline-block;width:7px;height:14px;background:var(--accent);vertical-align:-2px;animation:bl 1s steps(2) infinite;margin-left:2px}
+@keyframes bl{50%{opacity:0}}
+.skel{height:12px;border-radius:5px;background:linear-gradient(90deg,var(--surface-2),var(--surface-3),var(--surface-2));background-size:200% 100%;animation:sh 1.4s linear infinite;margin:8px 0}
+@keyframes sh{to{background-position:-200% 0}}
+
+@media(max-width:1100px){
+  .shell,.shell.drawer{grid-template-columns:240px minmax(0,1fr) 0}
+  .shell.drawer{grid-template-columns:240px minmax(0,1fr) 320px}
+}
+@media(max-width:820px){
+  .shell,.shell.drawer{grid-template-columns:minmax(0,1fr)}
+  .rail{display:none}
+  .shell.drawer .drawer{position:fixed;inset:0 0 0 auto;width:min(360px,94vw);z-index:40}
+  .wk-head,.canvas{padding-left:var(--s4);padding-right:var(--s4)}
+  .brand span,.inc-id{display:none}
+  .demo-bar{flex-wrap:wrap;justify-content:center;width:94vw}
+}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="brand"><b>Ops<i>Pilot</i></b><span>事件响应工作台</span></div>
+  <div class="topsep"></div>
+  <div class="inc-id">事故 <b id="topInc">INC-1120-0047</b></div>
+  <div class="spacer"></div>
+  <div class="health"><span class="num-dot" style="background:var(--ok)"></span>系统正常</div>
+  <button class="btn gho" id="drawerBtn" style="font-size:11px;padding:5px 10px">☰ 运行态</button>
+  <div class="who"><span class="av">SR</span><span id="whoName">sre-full</span><span class="pill">L4</span></div>
+</div>
+
+<div class="shell" id="shell">
+  <!-- 左：事故列表 -->
+  <aside class="col rail">
+    <div class="rail-hd"><b>我的事故</b><span class="cnt" id="incCount">3 进行中</span></div>
+    <div class="seg"><button class="on">进行中</button><button>我处理的</button><button>已结单</button></div>
+    <div class="search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg><input placeholder="搜索事故 / 服务 / 错误码"></div>
+
+    <div class="li-hd">今天 · 11月20日</div>
+    <button class="inc on" data-inc="0">
+      <div class="inc-x"><span class="sev p1">P1</span><span class="t">支付网关 502 批量报错</span></div>
+      <div class="meta"><code>payment-service</code><span>·</span><code>50041_PAY_GATEWAY_502</code></div>
+      <div class="foot"><span class="st open"><span class="num-dot"></span>诊断中</span><span>·</span><span>14:02</span><span>·</span><span>我</span></div>
+    </button>
+    <button class="inc" data-inc="1">
+      <div class="inc-x"><span class="sev p2">P2</span><span class="t">订单创建超时告警</span></div>
+      <div class="meta"><code>order-service</code><span>·</span><span code>50012_DB_TIMEOUT</span></div>
+      <div class="foot"><span class="st prog"><span class="num-dot"></span>待确认</span><span>·</span><span>11:36</span><span>·</span><span>我</span></div>
+    </button>
+    <button class="inc" data-inc="2">
+      <div class="inc-x"><span class="sev p2">P2</span><span class="t">Redis 连接池告警</span></div>
+      <div class="meta"><code>opspilot-redis</code><span>·</span><code>50021_REDIS_TIMEOUT</code></div>
+      <div class="foot"><span class="st open"><span class="num-dot"></span>诊断中</span><span>·</span><span>09:50</span><span>·</span><span>李工</span></div>
+    </button>
+    <div class="li-hd">昨天 · 11月19日</div>
+    <button class="inc" data-inc="3">
+      <div class="inc-x"><span class="sev p3">P3</span><span class="t">配置中心偶发不可达</span></div>
+      <div class="meta"><code>opspilot-gateway</code><span>·</span><code>50071_CONFIG_CENTER_UNREACHABLE</code></div>
+      <div class="foot"><span class="st done"><span class="num-dot"></span>已结单</span><span>·</span><span>17:20</span><span>·</span><span>我</span></div>
+    </button>
+    <button class="newbtn" style="margin-top:6px">+ 从告警新建事故</button>
+  </aside>
+
+  <!-- 中：工作区 -->
+  <main class="col work">
+    <div class="wk-head">
+      <div style="flex:1">
+        <div class="crumb">事故 / <b>INC-1120-0047</b> / 诊断与处置</div>
+        <h1>支付网关 502 批量报错</h1>
+        <div class="sub">
+          <span class="tagp1">P1</span>
+          <span>来源 <code>alert</code></span>
+          <span>告警 <code>ALT-PAY-502-0912</code></span>
+          <span>环境 <code>prod</code></span>
+          <span>创建 14:02</span>
+        </div>
+      </div>
+      <div class="wk-actions">
+        <button class="btn" id="reDiag">↻ 重新诊断</button>
+        <button class="btn pri" id="closeInc">结单并记录处置</button>
+      </div>
+    </div>
+
+    <div class="canvas" id="canvas">
+      <!-- 结论卡 -->
+      <section class="card verdict" id="verdictCard">
+        <div class="card-hd"><span class="k">诊断结论</span><span class="pill ok" id="verdictBadge">完成</span>
+          <span class="pill">cache L1</span><span class="pill">检索 86ms</span>
+          <span class="spacer"></span><button class="copy">⧉ 复制为工单</button></div>
+        <div class="body">
+          <div class="vline" id="vline">支付网关上游连接池耗尽，导致请求在 3s 后返回 502。</div>
+          <div class="vkpi">
+            <div><span class="l">依据</span><span class="v">3 条引用</span></div>
+            <div><span class="l">只读命令</span><span class="v">2 条</span></div>
+            <div><span class="l">检索</span><span class="v">86ms</span></div>
+            <div><span class="l">总耗时</span><span class="v">1.42s</span></div>
+            <div><span class="l">指纹</span><span class="v" style="font-size:11px">9f3c…a71d</span></div>
+          </div>
+          <div class="vsub" id="vsub">结论来自 3 篇知识切片，逐字核对后生成；下方命令来自原文，网关不代为执行。</div>
+          <div class="impact">
+            <span class="chip hot">payment-service</span><span class="chip">prod</span>
+            <span class="chip">影响面：支付下单链路</span><span class="chip">持续 14:00–14:05</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- 拒答态（默认隐藏） -->
+      <section class="card verdict refuse" id="refuseCard" hidden>
+        <div class="card-hd"><span class="k">诊断结论</span><span class="pill err">拒答</span><span class="spacer"></span></div>
+        <div class="body">
+          <div class="vline">覆盖范围内没有足够可靠的依据——系统选择不作答，而不是拼一个像答案的东西。</div>
+          <div class="near">
+            <div class="hint">最接近的标识符（点击补入重问）：</div>
+            <div class="chips"><span class="chip">payment-service</span><span class="chip">50042_PAY_SIGN_INVALID</span><span class="chip">50041_PAY_GATEWAY_502</span></div>
+          </div>
+          <div class="vsub" style="margin-top:10px">可将这次问不出来的问题上报为覆盖缺口，供知识回灌。</div>
+        </div>
+      </section>
+
+      <!-- 错误态（默认隐藏） -->
+      <section class="card verdict refuse" id="errorCard" hidden>
+        <div class="card-hd"><span class="k">诊断结论</span><span class="pill err">链路异常</span><span class="spacer"></span></div>
+        <div class="body">
+          <div class="vline">本次诊断链路中断（已收到部分证据）。</div>
+          <div class="vsub">错误：上游 Rerank 超时（retrieval timeout）。异常前已到手的命令清单照常保留在下方，可直接取用。</div>
+          <div style="margin-top:10px"><button class="btn pri">↻ 重试诊断</button></div>
+        </div>
+      </section>
+
+      <!-- 空态（默认隐藏） -->
+      <section class="card" id="emptyCard" hidden>
+        <div class="body" style="padding:34px 16px;text-align:center">
+          <div style="font-size:15px;font-weight:600;margin-bottom:7px">这条事故还没有诊断记录</div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:16px">已带入告警上下文，点击下方按钮开始检索知识库。</div>
+          <button class="btn pri">▶ 开始诊断</button>
+        </div>
+      </section>
+
+      <!-- 权限锁（默认隐藏） -->
+      <section class="lock" id="lockCard" hidden>
+        <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#e3b341" stroke-width="2"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg></div>
+        <h2>当前身份无法查看该事故</h2>
+        <p>该事故属于 <code>tenant=acme</code>，你的身份为 <code>tenant=default</code>。租户之间严格隔离。</p>
+        <p>如需访问，请联系管理员为你的账号调整租户归属。</p>
+      </section>
+
+      <!-- 诊断分析 -->
+      <section class="card" id="analysisCard">
+        <div class="card-hd"><span class="k">诊断分析</span><span class="spacer"></span><span class="pill">生成于 14:03:11</span></div>
+        <div class="md" id="md">
+          <h3>问题定位</h3>
+          <p>支付网关上游连接池耗尽，导致请求在 3s 后返回 502。<span class="ref">[参考1]</span></p>
+          <h3>止损操作</h3>
+          <ol>
+            <li>先确认网关连接数水位，再决定是否扩容，避免盲目重启。<span class="ref">[参考2]</span></li>
+            <li>若确认耗尽，按 SOP 滚动重启支付服务释放连接。<span class="ref">[参考3]</span></li>
+          </ol>
+          <blockquote>网关只读，所有命令需由值班人核对后自行执行。</blockquote>
+        </div>
+      </section>
+
+      <!-- 只读命令 -->
+      <section class="card" id="cmdCard">
+        <div class="card-hd"><span class="k">只读命令清单</span><span class="pill acc">2 条</span><span class="spacer"></span><span class="pill">网关不执行</span></div>
+        <div class="contract">
+          <div class="cmd"><span class="n">1</span><div class="c-body">
+            <div class="step">确认支付服务连接数与状态</div>
+            <pre>kubectl get pods -n payment -o wide</pre>
+            <div class="ref">来源：payment-service · 生产环境 SOP · 参考2</div>
+          </div><button class="copy">复制</button></div>
+          <div class="cmd"><span class="n">2</span><div class="c-body">
+            <div class="step">查看网关近端错误日志</div>
+            <pre>kubectl logs -n payment deploy/payment-gateway --tail=200 | grep 502</pre>
+            <div class="ref">来源：opspilot-gateway · 502 排查手册 · 参考1</div>
+          </div><button class="copy">复制</button></div>
+        </div>
+        <div class="note-ro">以上命令逐字摘自被引用的知识切片，仅用于诊断。写操作（如 rollout restart）需在受控动作能力开启后走双人确认。</div>
+      </section>
+
+      <!-- 证据 -->
+      <section class="card" id="refCard">
+        <div class="card-hd"><span class="k">参考来源</span><span class="pill">3</span><span class="spacer"></span><span style="font-size:10.5px;color:var(--muted)">编号与正文一一对应</span></div>
+        <div class="refs">
+          <div class="refitem"><b>[1]</b><span class="id">payment-gateway::502 排查手册</span><span class="svc">opspilot-gateway</span></div>
+          <div class="refitem"><b>[2]</b><span class="id">payment-service::连接池水位与扩容 SOP</span><span class="svc">payment-service</span></div>
+          <div class="refitem"><b>[3]</b><span class="id">payment-service::滚动重启止损步骤</span><span class="svc">payment-service</span></div>
+        </div>
+      </section>
+
+      <!-- 处置记录 -->
+      <section class="card" id="tlCard">
+        <div class="card-hd"><span class="k">处置记录</span><span class="spacer"></span><span class="pill">4 条</span></div>
+        <div class="tl">
+          <div class="tl-row"><span class="tl-dot done"></span><div class="tl-c"><div class="t">告警触发，事故自动创建</div><div class="m">14:02:07 · source=alert · ALT-PAY-502-0912</div></div></div>
+          <div class="tl-row"><span class="tl-dot done"></span><div class="tl-c"><div class="t">首次诊断完成，命中 L1 缓存</div><div class="m">14:03:11 · fingerprint 9f3c…a71d · 86ms</div></div></div>
+          <div class="tl-row"><span class="tl-dot done"></span><div class="tl-c"><div class="t">值班人复制只读命令并执行，连接数回落</div><div class="m">14:04:38 · by sre-full</div></div></div>
+          <div class="tl-row"><span class="tl-dot now"></span><div class="tl-c"><div class="t">等待填写处置结论并结单</div><div class="m">现在</div></div></div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <!-- 右：运行态抽屉 -->
+  <aside class="col drawer" id="drawer">
+    <div class="drawer-hd"><b>运行态 · 本次事故上下文</b><button class="x" id="drawerX">✕</button></div>
+    <div class="dbody">
+      <div class="dsec">
+        <h4>请求与收敛</h4>
+        <div class="dnums">
+          <div class="n"><div class="v" style="color:var(--ok)">L1</div><div class="k">缓存命中</div></div>
+          <div class="n"><div class="v">86ms</div><div class="k">检索耗时</div></div>
+          <div class="n"><div class="v">实时</div><div class="k">后端形态</div></div>
+          <div class="n"><div class="v">0</div><div class="k">逐字拦截</div></div>
+        </div>
+      </div>
+      <div class="dsec">
+        <h4>降级档位 · L0 正常</h4>
+        <div class="deg"><i class="on"></i><i></i><i></i></div>
+        <div style="font-size:10.5px;color:var(--muted);margin-top:8px">全链路可用（词法+向量+精排+LLM）</div>
+      </div>
+      <div class="dsec">
+        <h4>依赖健康</h4>
+        <div class="deps-row"><span class="s"><span class="num-dot" style="background:var(--ok)"></span>Elasticsearch</span><span class="num" style="color:var(--ok)">UP</span></div>
+        <div class="deps-row"><span class="s"><span class="num-dot" style="background:var(--ok)"></span>Qdrant</span><span class="num" style="color:var(--ok)">UP</span></div>
+        <div class="deps-row"><span class="s"><span class="num-dot" style="background:var(--ok)"></span>Redis</span><span class="num" style="color:var(--ok)">UP</span></div>
+        <div class="deps-row"><span class="s"><span class="num-dot" style="background:var(--warn)"></span>LLM 后端</span><span class="num" style="color:var(--warn)">MOCK</span></div>
+      </div>
+      <div class="dsec">
+        <h4>证据链</h4>
+        <div style="font-size:11.5px;color:var(--txt-2);line-height:1.7">审计序号 <span class="num">#2841</span><br>哈希链校验 <span style="color:var(--ok)">✓ 通过</span><br>请求 ID <span class="num" style="font-size:10px">req_7f2c9a</span></div>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<div class="demo-bar">
+  <span class="lb">业务状态演示</span>
+  <button class="on" data-state="normal">正常结论</button>
+  <button data-state="streaming">流式生成</button>
+  <button data-state="refuse">拒答</button>
+  <button data-state="error">链路异常</button>
+  <button data-state="empty">空状态</button>
+  <button data-state="lock">权限锁</button>
+</div>
+
+<script>
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const panels={normal:'verdictCard',refuse:'refuseCard',error:'errorCard',empty:'emptyCard',lock:'lockCard'};
+const extra=['analysisCard','cmdCard','refCard','tlCard'];
+function setState(st){
+  Object.values(panels).forEach(id=>$('#'+id).hidden=true);
+  const normalExtra=(st==='normal'||st==='streaming');
+  extra.forEach(id=>$('#'+id).hidden=!normalExtra);
+  if(panels[st]) $('#'+panels[st]).hidden=false;
+  if(st==='streaming'){
+    $('#verdictCard').hidden=false;
+    $('#verdictBadge').textContent='生成中';
+    $('#verdictBadge').className='pill acc';
+    $('#vline').innerHTML='支付网关上游连接池耗尽，导致请求在 3s 后返回 502<span class="cursor"></span>';
+    $('#md').innerHTML='<h3>问题定位</h3><p>支付网关上游连接池耗尽，导致请求在 3s 后返回 502。<span class="ref">[参考1]</span></p><div class="skel" style="width:92%"></div><div class="skel" style="width:78%"></div><h3>止损操作</h3><div class="skel" style="width:85%"></div><div class="skel" style="width:60%"></div>';
+  }else{
+    $('#verdictBadge').textContent='完成';
+    $('#verdictBadge').className='pill ok';
+    $('#vline').textContent='支付网关上游连接池耗尽，导致请求在 3s 后返回 502。';
+    $('#md').innerHTML='<h3>问题定位</h3><p>支付网关上游连接池耗尽，导致请求在 3s 后返回 502。<span class="ref">[参考1]</span></p><h3>止损操作</h3><ol><li>先确认网关连接数水位，再决定是否扩容，避免盲目重启。<span class="ref">[参考2]</span></li><li>若确认耗尽，按 SOP 滚动重启支付服务释放连接。<span class="ref">[参考3]</span></li></ol><blockquote>网关只读，所有命令需由值班人核对后自行执行。</blockquote>';
+  }
+  $$('.demo-bar button').forEach(b=>b.classList.toggle('on',b.dataset.state===st));
+}
+$$('.demo-bar button').forEach(b=>b.onclick=()=>setState(b.dataset.state));
+
+$$('.inc').forEach(b=>b.onclick=()=>{
+  $$('.inc').forEach(x=>x.classList.remove('on'));b.classList.add('on');
+  const names=['INC-1120-0047','INC-1120-0031','INC-1120-0022','INC-1119-0098'];
+  $('#topInc').textContent=names[+b.dataset.inc];
+  setState('normal');
+});
+$('#drawerBtn').onclick=()=>$('#shell').classList.toggle('drawer');
+$('#drawerX').onclick=()=>$('#shell').classList.remove('drawer');
+$('#reDiag').onclick=()=>{setState('streaming');setTimeout(()=>setState('normal'),2200)};
+$('#closeInc').onclick=()=>alert('演示：写入处置结论 → 触发 feedback(verdict=up) → 事故状态转「已结单」');
+$$('.copy').forEach(b=>b.onclick=()=>{const t=b.textContent;b.textContent='已复制 ✓';setTimeout(()=>b.textContent=t,1200)});
+</script>
+</body>
+</html>
