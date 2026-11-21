@@ -79,7 +79,13 @@ static_ok "G1 发布 smoke"                     scripts/smoke.sh "发布 smoke �
 static_ok "sha256"                             scripts/release.sh "发布 manifest（G1）"
 static_ok "回滚目标校验"                       scripts/rollback.sh "回滚脚本（G1）"
 static_ok "trivy"                              .github/workflows/ci.yml "SCA 扫描（G1）"
-static_ok "Spring_Boot-4.1.1"                 README.md "受支持 Boot 版本（G1）"
+# 从 pom 现取 Boot 版本：Dependabot 升版时 README 必须同批更新，否则门闩报红。
+BOOT_VERSION="$(awk '/<artifactId>spring-boot-starter-parent<\/artifactId>/{f=1;next} f&&/<version>/{gsub(/.*<version>|<\/version>.*/,"");print;exit}' pom.xml)"
+if [ -z "$BOOT_VERSION" ]; then
+  bad "静态：受支持 Boot 版本（G1）（pom.xml 未解析到 spring-boot-starter-parent 版本）"
+else
+  static_ok "Spring_Boot-${BOOT_VERSION}"     README.md "受支持 Boot 版本（G1）"
+fi
 
 
 # ---------- 1.5 仓库卫生（#36） ----------
