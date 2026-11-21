@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="260" viewBox="0 0 1200 260" role="img" aria-labelledby="bannerTitle bannerDesc">
+  <title id="bannerTitle">OpsShield — 面向 AIOps 与 SRE 的 LLM 韧性治理与流量防御网关</title>
+  <desc id="bannerDesc">盾牌标识与四项能力：只读可信底座、双路召回与 RRF 融合、三级自适应降级、告警风暴削峰。</desc>
+
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="260" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#070D18"/>
+      <stop offset="0.55" stop-color="#0B1526"/>
+      <stop offset="1" stop-color="#0A1B2E"/>
+    </linearGradient>
+    <linearGradient id="brand" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#60A5FA"/>
+      <stop offset="1" stop-color="#22D3EE"/>
+    </linearGradient>
+    <linearGradient id="shieldFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1D4ED8" stop-opacity="0.30"/>
+      <stop offset="1" stop-color="#22D3EE" stop-opacity="0.04"/>
+    </linearGradient>
+    <radialGradient id="glowA" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#2563EB" stop-opacity="0.34"/>
+      <stop offset="1" stop-color="#2563EB" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowB" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#22D3EE" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#22D3EE" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0H0V40" fill="none" stroke="#94A3B8" stroke-opacity="0.055"/>
+    </pattern>
+    <clipPath id="cardClip">
+      <rect width="1200" height="260" rx="26"/>
+    </clipPath>
+  </defs>
+
+  <rect width="1200" height="260" rx="26" fill="url(#bg)"/>
+  <g clip-path="url(#cardClip)">
+    <rect width="1200" height="260" rx="26" fill="url(#grid)"/>
+    <circle cx="1010" cy="28" r="235" fill="url(#glowA)"/>
+    <circle cx="1180" cy="250" r="200" fill="url(#glowB)"/>
+  </g>
+  <rect x="0.75" y="0.75" width="1198.5" height="258.5" rx="25.25" fill="none" stroke="#1E293B" stroke-width="1.5"/>
+
+  <g transform="translate(56 62)">
+    <rect width="62" height="62" rx="17" fill="#0B1526" stroke="#1E3A5F"/>
+    <path d="M31 11l15 5.6v11.7c0 9.9-6.6 16.7-15 20.7-8.4-4-15-10.8-15-20.7V16.6z" fill="none" stroke="url(#brand)" stroke-width="2.6" stroke-linejoin="round"/>
+    <path d="M23.5 31.4l5.2 5.2L40 24.8" fill="none" stroke="#67E8F9" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <g font-family="'Segoe UI','PingFang SC','Microsoft YaHei','Noto Sans CJK SC','Helvetica Neue',Arial,sans-serif">
+    <text x="142" y="108" font-size="54" font-weight="700" fill="#F8FAFC" letter-spacing="-1.2">OpsShield</text>
+    <text x="144" y="145" font-size="21" fill="#CBD5E1">面向 AIOps 与 SRE 的 LLM 韧性治理与流量防御网关</text>
+    <text x="144" y="172" font-size="13" fill="#64748B" letter-spacing="1.6">READ-ONLY RESILIENCE GATEWAY FOR AIOPS &amp; SRE</text>
+
+    <g font-size="14" fill="#BFDBFE">
+      <rect x="144" y="192" width="136" height="32" rx="16" fill="#0C1B2E" stroke="#1E3A8A"/>
+      <text x="212" y="213" text-anchor="middle">只读可信底座</text>
+      <rect x="290" y="192" width="140" height="32" rx="16" fill="#0C1B2E" stroke="#1E3A8A"/>
+      <text x="360" y="213" text-anchor="middle">双路召回 · RRF</text>
+      <rect x="440" y="192" width="150" height="32" rx="16" fill="#0C1B2E" stroke="#1E3A8A"/>
+      <text x="515" y="213" text-anchor="middle">三级自适应降级</text>
+      <rect x="600" y="192" width="132" height="32" rx="16" fill="#0C1B2E" stroke="#1E3A8A"/>
+      <text x="666" y="213" text-anchor="middle">告警风暴削峰</text>
+    </g>
+  </g>
+
+  <g transform="translate(900 32)" opacity="0.95">
+    <circle cx="128" cy="96" r="104" fill="none" stroke="#1D4ED8" stroke-opacity="0.28"/>
+    <circle cx="128" cy="96" r="78" fill="none" stroke="#1D4ED8" stroke-opacity="0.36" stroke-dasharray="4 7"/>
+    <path d="M128 8l72 26v62c0 46-31 75-72 92-41-17-72-46-72-92V34z" fill="url(#shieldFill)" stroke="url(#brand)" stroke-width="2.4" stroke-linejoin="round"/>
+    <path d="M128 26l54 19.5v50c0 35-23 57-54 71-31-14-54-36-54-71v-50z" fill="none" stroke="#38BDF8" stroke-opacity="0.35" stroke-width="1.4"/>
+    <circle cx="128" cy="104" r="34" fill="none" stroke="#22D3EE" stroke-opacity="0.45" stroke-width="1.5"/>
+    <circle cx="128" cy="104" r="18" fill="none" stroke="#22D3EE" stroke-opacity="0.55" stroke-width="1.5"/>
+    <path d="M128 104l24-24" stroke="#67E8F9" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="128" cy="104" r="3.5" fill="#A5F3FC"/>
+    <path d="M104 143l9 9 18-19" fill="none" stroke="#67E8F9" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="128" cy="8" r="3" fill="#60A5FA"/>
+    <circle cx="56" cy="118" r="2.5" fill="#22D3EE" fill-opacity="0.85"/>
+  </g>
+</svg>

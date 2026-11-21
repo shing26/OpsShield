@@ -1,10 +1,37 @@
 <div align="center">
 
-# 🛡️ OpsShield
+<img src="docs/assets/readme-banner.svg" alt="OpsShield —— 面向 AIOps 与 SRE 的 LLM 韧性治理与流量防御网关" width="100%">
 
-**面向 AIOps 与 SRE 场景的 LLM 韧性治理与流量防御网关——单机可复现的生产级机制参考实现**
+**单机可复现的生产级机制参考实现** · 只读 · 可审计 · 零依赖可试跑
 
 *告警风暴打不穿、模型挂了不雪崩、运维指令零幻觉。*
+
+<p align="center">
+  <a href="https://github.com/shing26/OpsShield/actions"><img src="https://github.com/shing26/OpsShield/actions/workflows/ci.yml/badge.svg" alt="CI Status"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
+  <a href="https://openjdk.org/"><img src="https://img.shields.io/badge/Java-21-ED8B00?style=flat&amp;logo=openjdk&amp;logoColor=white" alt="Java 21"></a>
+  <a href="https://spring.io/projects/spring-boot"><img src="https://img.shields.io/badge/Spring_Boot-4.1.2-6DB33F?style=flat&amp;logo=springboot&amp;logoColor=white" alt="Spring Boot 4.1.2"></a>
+  <br>
+  <a href="#-测试体系与安全回归测试"><img src="https://img.shields.io/badge/Java_Tests-505_Passed-4CAF50?style=flat&amp;logo=openjdk&amp;logoColor=white" alt="Java Tests: 505 passed"></a>
+  <a href="#-测试体系与安全回归测试"><img src="https://img.shields.io/badge/Probes-598_Passed-3776AB?style=flat&amp;logo=python&amp;logoColor=white" alt="Python Probes: 598 passed"></a>
+  <a href="docs/benchmark.md"><img src="https://img.shields.io/badge/Benchmark-Regression_Gated-4CAF50?style=flat&amp;logo=githubactions&amp;logoColor=white" alt="Benchmark: regression gated"></a>
+  <a href="https://prometheus.io/"><img src="https://img.shields.io/badge/Metrics-Micrometer_%7C_Prometheus-498BA3?style=flat&amp;logo=prometheus&amp;logoColor=white" alt="Metrics: Micrometer and Prometheus"></a>
+  <a href="#-系统架构与流量管道"><img src="https://img.shields.io/badge/Action_Contract-read--only-0EA5E9?style=flat" alt="Action contract: read-only"></a>
+</p>
+
+<p align="center">
+  <a href="#-项目定位与核心立场">📖 项目定位</a> •
+  <a href="#界面一览">🖼️ 界面一览</a> •
+  <a href="#-30-秒版本">📊 30 秒版本</a> •
+  <a href="#-运维就绪边界">🧭 就绪边界</a> •
+  <a href="#-系统架构与流量管道">🏗️ 系统架构</a> •
+  <a href="#-快速开始">🚀 快速开始</a> •
+  <a href="#-端点与可观测性矩阵">🖥️ 端点矩阵</a> •
+  <a href="#-测试体系与安全回归测试">🧪 测试与验证</a> •
+  <a href="#-仓库导航">🗺️ 仓库导航</a>
+</p>
+
+</div>
 
 <p align="center">
   <img src="docs/assets/readme-workbench.gif" alt="OpsShield 统一工作台 18 秒动线：空态三步引导 → 账号接入 → 预设一键排障 → 结论卡与只读命令清单 → 运行面板成果视图（完成排障 / 命中依据 / 可执行动作 / 结论耗时 + 逐条成果流）" width="920">
@@ -12,27 +39,8 @@
 
 <p align="center"><sub>18 秒动线（memory + mock 零依赖试跑；画面上的数字用于说明视图结构，不用于复述 live 指标）：空态三步引导 → 预设一键排障 → 结论卡 + 只读命令清单 → 运行面板「成果视图」（成果 KPI / 逐条成果流 / 处理轨迹 / 系统健康）｜静态图：<a href="docs/assets/panel-preview.png">panel-preview.png</a></sub></p>
 
-[![CI Status](https://github.com/shing26/OpsShield/actions/workflows/ci.yml/badge.svg)](https://github.com/shing26/OpsShield/actions)
-[![Java](https://img.shields.io/badge/Java-21-ED8B00?style=flat&logo=openjdk&logoColor=white)](https://openjdk.org/)
-[![Spring Boot](https://img.shields.io/badge/Spring_Boot-4.1.1-6DB33F?style=flat&logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)
-[![Metrics](https://img.shields.io/badge/Metrics-Micrometer_%7C_Prometheus-498BA3?style=flat&logo=prometheus&logoColor=white)](https://prometheus.io/)
-[![Java Tests](https://img.shields.io/badge/Java_Tests-492_Passed-4CAF50?style=flat&logo=openjdk&logoColor=white)](#-测试体系与安全回归测试)
-[![Benchmark](https://img.shields.io/badge/Benchmark-Regression_Gated-4CAF50?style=flat&logo=githubactions&logoColor=white)](docs/benchmark.md)
-[![Python Probes](https://img.shields.io/badge/Probes-594_Passed-3776AB?style=flat&logo=python&logoColor=white)](#-测试体系与安全回归测试)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-
-<p align="center">
-  <a href="#-项目定位与核心立场">📖 项目定位</a> •
-  <a href="#-30-秒版本">📊 30 秒版本</a> •
-  <a href="#-运维就绪边界">🧭 运维就绪边界</a> •
-  <a href="#-系统架构与流量管道">🏗️ 系统架构</a> •
-  <a href="#-快速开始">🚀 快速开始</a> •
-  <a href="#-端点与可观测性矩阵">🖥️ 端点矩阵</a> •
-  <a href="#-测试体系与安全回归测试">🧪 测试与验证</a> •
-  <a href="#-架构决策记录">📐 架构决策</a>
-</p>
-
-</div>
+> [!TIP]
+> **零依赖试跑**：只需 JDK 21 + Maven，三条命令起完整链路（memory + mock，不需要 Docker / Redis / Elasticsearch / Qdrant / API Key）。命令见 [快速开始](#-快速开始) 的「零依赖试跑」。
 
 ---
 
@@ -58,6 +66,35 @@ Java 21 虚拟线程 · ES 倒排 + Qdrant 向量双路召回（RRF 融合）· 
 - 它身上有三处 agent 形状——自举告警闭环（感知→上报→处置→停报）、三级降级状态机、置信度门控与显式拒答；但判据全是阈值与计数器，**没有一处是模型决策**；
 - 多步 agent 可以把它当只读下游依赖调用（OpenAI 兼容面，JWT 即 Key），而它自己**不引入 LLM 决策循环与 tool-calling**；
 - 更完整的自我定位——AIOps 五域三分类自证、与朴素 RAG 的五条机制级差异、给多步 agent 的调用契约——见 [docs/positioning-aiops.md](docs/positioning-aiops.md)。
+
+### 界面一览
+
+<p align="center"><sub>同一份页面、两个视图：排障台负责「给结论 + 给依据 + 给只读动作」，运行面板负责「看见系统此刻怎么运转」。点击图片查看原图。</sub></p>
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="docs/assets/console-empty-hero.png"><img src="docs/assets/console-empty-hero.png" alt="OpsShield 空态：三步引导、预设问题与身份接入" width="100%"></a>
+      <br><sub><b>空态 · 三步引导</b>：贴报错 → 看结论 → 拿动作；未接入身份时先引导接入。</sub>
+    </td>
+    <td width="50%" valign="top">
+      <a href="docs/assets/console-verdict.png"><img src="docs/assets/console-verdict.png" alt="OpsShield 排障结论卡：问题定位、参考来源与只读命令清单" width="100%"></a>
+      <br><sub><b>结论卡 · 只读命令清单</b>：定位、依据、耗时同屏；命令逐字抽取、可溯源，网关只读不执行。</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="docs/assets/panel-preview.png"><img src="docs/assets/panel-preview.png" alt="OpsShield 运行面板成果视图：成果 KPI、逐条成果流、处理轨迹与系统健康" width="100%"></a>
+      <br><sub><b>运行面板 · 成果视图</b>：完成排障 / 命中依据 / 可执行动作 / 结论耗时，逐条成果流与系统健康。</sub>
+    </td>
+    <td width="50%" valign="top">
+      <a href="docs/assets/panel-outcome-mobile.png"><img src="docs/assets/panel-outcome-mobile.png" alt="OpsShield 移动端成果流：窄屏下逐条成果以卡片呈现" width="100%"></a>
+      <br><sub><b>移动端 · 成果流</b>：窄屏下退化为卡片，状态、依据数与耗时仍可读。</sub>
+    </td>
+  </tr>
+</table>
+
+更多录屏与复现步骤见 [docs/DEMO.md](docs/DEMO.md)。
 
 ---
 
@@ -100,6 +137,8 @@ Java 21 虚拟线程 · ES 倒排 + Qdrant 向量双路召回（RRF 融合）· 
 >
 > **G0 收尾批次（2026-10-22）**已把其中一部分从「没有」推进到「有脚本与门禁、待部署接线/演练」：strict 启动校验、环回默认、占位凭据拒启、1MB 请求上限、面板转义、安全响应头、失败请求审计/堆栈/计数、备份校验与龄期指标、恢复演练脚本、告警人类出口、优雅停机配置、审计 2GB 上限/180 天/异步落盘。**这些仍不等于「可托付」**——下表只保留仍未闭环的部分，状态只认门禁文件的复核记录。
 >
+> **G1 门禁现状（2026-11-21）**：门禁 5 已在 Ubuntu VM 真实回滚、8 已 Trivy 实跑、10 已 A/B/C 实演，仅门禁 6 仍黄；下表「首版」段为历史记录，不代表当前未做到。
+
 > **G1 首版（2026-10-22）**继续补上了：全局+租户准入与 429/Retry-After、客户端断开取消与优雅排空、L2 TTL/有界 LRU/reingest 清空、SOP TTL 与启动补灌、Redis volatile-lru、H2/backend 健康指示器与 liveness/readiness 分组、TTFT/请求耗时 Timer 与 SLO burn-rate 规则、Flyway schema 版本化、运行时 smoke 与 release/rollback/SBOM 脚本、Spring Boot 3.5.14 升版、按症状拆的 5 分钟 runbook、审计 SHA-256 哈希链与校验器、人类告警多渠道路由（Slack/飞书自定义机器人/企微/Telegram）、**MCP Server**（`scripts/mcp_server.py`，stdio/stdlib，3 个只读工具，见 [docs/ops/mcp-server.md](docs/ops/mcp-server.md)）。门禁 5/6/8/10（发布回滚演练、单人并发压测、SCA 实跑、runbook 演练）仍只有 fast/单测/静态证据。2026-10-22 另跑过一次 **`--full` 运行时冒烟**（memory/mock 真进程 + 真实手动备份）：PASS=68 / WARN=0 / FAIL=0，覆盖 readiness、全部 aiops 指标、审计链、面板身份；`soak.sh` 8 并发 5s：185 请求 / 181 成功 / 4×429 / 0×5xx，审计链正常；`fault_drill.sh` 验证 strict 配置启动即拒（exit 1）与审计链改一行必红（exit 3）。它们证明的是「运行时面与准入背压接线通了」，**不等于十条门禁全绿**；剩余真实环境动作逐项列在 [docs/ops/g1-remaining.md](docs/ops/g1-remaining.md)。
 
 这个口径来自 2026-10-22 的运维审查（[docs/qa/2026-10-22-ops-readiness-review.md](docs/qa/2026-10-22-ops-readiness-review.md)）：四条线并行实测后的结论是**机制层可演示、可论证，运维交付层尚未可托付**。下面三张表是那份结论的可执行版本；表格与门禁文件冲突时，以门禁文件为准（它带日期与复核记录）。
@@ -127,7 +166,7 @@ Java 21 虚拟线程 · ES 倒排 + Qdrant 向量双路召回（RRF 融合）· 
 | 优雅停机与发布回滚 | **Ubuntu 24.04 VM systemd 真实停服/换 jar/回滚已通过**：current→v-prev→current，readiness UP，`/state.build.commit` 与 manifest 对齐（969e137/65cc9b3） | 5 |
 | 准入控制 | 全局+租户两级许可、429+Retry-After、admission_rejected 计数已落地（[ADR-0026](docs/adr/0026-admission-control-and-degradation-scope.md)）；**live 20 并发 10s**：4×200/80×429/0×5xx，另一租户 1×200/0×429；样本短，缺 20–30 条对照与长窗口（门禁 6；补证节奏见 [30 天观察清单](docs/ops/gate6-7-30day-observation.md)） | 6 |
 | 延迟分位与 SLO 测量 | TTFT/请求 Timer、SLO burn-rate 规则已落地；**已用 live 样本生成 [SLO 样本报告](docs/ops/slo-sample-2026-10-23.md)**（0×5xx、TTFT P95 18.1s）；缺 30 天连续流量与月报（门禁 7；补证节奏见 [30 天观察清单](docs/ops/gate6-7-30day-observation.md)） | 7 |
-| 依赖支持窗口 | Spring Boot 4.1.1、Flyway、CycloneDX SBOM 已落地；Trivy：Boot 4 重基线 13→0（Tomcat/Jackson 同主版本补丁）；2026-10-28 新增 1 条 guava 临时豁免（修复版 33.7.2 未发布，补偿：无 Java 反序列化入口），矩阵见 [sca-findings.md](docs/ops/sca-findings.md) | 8 |
+| 依赖支持窗口 | Spring Boot 4.1.2、Flyway、CycloneDX SBOM 已落地；Trivy：Boot 4 重基线 13→0（Tomcat/Jackson 同主版本补丁）；2026-10-28 新增 1 条 guava 临时豁免（修复版 33.7.2 未发布，补偿：无 Java 反序列化入口），矩阵见 [sca-findings.md](docs/ops/sca-findings.md) | 8 |
 | 审计留存与防篡改 | 2GB 上限/180 天/异步落盘 + SHA-256 链 + `verify_audit_chain.py` 已落地；**本地 MinIO Object Lock 已验**（COMPLIANCE 180d、版本删除被拒、副本验链 PASS）；**用户已确认接受“本地对象锁，非异地”口径** | 9 |
 | 值班 5 分钟动作 | [docs/ops/runbook.md](docs/ops/runbook.md) 已拆三症状；**A/B/C 均已本地实演**：登录 500→恢复、网关停→重启、L2→L0；生产 systemd 形态仍需目标机复跑 | 10 |
 
@@ -249,7 +288,7 @@ STORAGE_MODE=memory DASHSCOPE_MODE=mock bash scripts/start_gateway.sh
 
 `opspilot.storage.mode=memory` 把 ES / Qdrant / Redis 三者**全部**换成进程内实现
 （[ADR-0022](docs/adr/0022-standalone-storage-mode.md)）：语料从 `offline/corpus/chunks.jsonl`
-直接读进内存（本机实测 448 块 **约 0.2s**，170–204ms），检索仍是**两条腿 + RRF 融合**——词法腿与向量腿
+直接读进内存（本机实测 459 块 **约 0.2s**，170–204ms），检索仍是**两条腿 + RRF 融合**——词法腿与向量腿
 打分方式不同，融合是真事，不是把同一份结果摆两遍。权限过滤走**与生产同一份**判据
 （`IdentityFilter`），不是内存实现自己写的一套。
 
@@ -323,6 +362,7 @@ OpsShield 把"系统活着"做成了结构化的入口矩阵（默认端口 `808
 | **SSE 排障流** | `POST /api/v1/copilot/chat/stream` | `meta/delta/done` 三帧；`done` 帧恒带引用来源与只读命令清单 |
 | **覆盖范围** | `GET /api/v1/copilot/coverage` | 提问前可见的知识库边界：按调用者身份现算的**服务数 / 错误码数 / 语义块数 + 最近重建时间**，外加可点的服务名与错误码清单（点一下填进输入框）。拒答时同源给出"最接近的标识符"，让答不出来读成**边界**而非故障（[ADR-0023](docs/adr/0023-public-surface-terminology.md)） |
 | **管理快照 / 审计流** | `GET /api/v1/admin/state` · `/api/v1/admin/audit/recent` | 运行面板视图与右上角健康抽屉的数据源；`role=platform ∧ auth_level≥3` 门禁，非平台身份渲染锁定态 |
+| **事故单记录** | `GET/POST /api/v1/copilot/incidents` · `/assignees` · `GET/PATCH /{id}` | 服务端持久化（ADR-0032，Flyway V5）；登录锁 429 响应带 `Retry-After` |
 
 #### 核心指标定义（`aiops.*` 层级名，Prometheus 侧点号转下划线）
 
@@ -331,7 +371,7 @@ OpsShield 把"系统活着"做成了结构化的入口矩阵（默认端口 `808
 * `aiops_degradation_state`：降级档位序数 gauge，`0=NORMAL`、`1=CACHE_ONLY`、`2=SOP_FALLBACK`（实时读状态机，非 bind 时刻快照）；
 * `aiops_guard_verbatim_masked`：流式导出中被出口护栏掩码的句数（按句累计，非按请求）；
 * `aiops_guard_action_commands_rejected`：只读命令清单里被命令策略判拒的条数（判拒即丢弃，不静默）；
-* 计数器另有 `aiops_llm_calls`、`aiops_llm_rate_limited`、`aiops_dedup_aggregated`、`aiops_cache_l1_hits`、`aiops_sop_fallbacks`、`aiops_guard_refusals` 等——全部由 Micrometer 单一事实源同时供控制台快照与抓取面两个出口（[ADR-0016](docs/adr/0016-prometheus-metrics-exposure.md)）。
+* 计数器另有 `aiops_llm_calls`、`aiops_llm_rate_limited`、`aiops_dedup_aggregated`、`aiops_cache_l1_hits`、`aiops_sop_fallbacks`、`aiops_guard_refusals`、`aiops_feedback_total{verdict}`（反馈质量闭环）与 `aiops.retrieval.diagnostic_leaf_swap`（命令产额保位）等——全部由 Micrometer 单一事实源同时供控制台快照与抓取面两个出口（[ADR-0016](docs/adr/0016-prometheus-metrics-exposure.md)）。
 
 ---
 
@@ -340,9 +380,9 @@ OpsShield 把"系统活着"做成了结构化的入口矩阵（默认端口 `808
 防线不只靠单测——关键判据全部经"改坏必红、复原必绿"的安全回归测试，文档数字由门闩每次现算比对产物：
 
 * **Java 505 单测**（`mvn test` 实跑全绿）：并发合并、状态机无损跃迁、AST 词法解析、双出口指标一致性、覆盖范围聚合、内存存储后端与身份过滤的跨后端对照、事故单租户隔离与分配权限；
-* **Python 594 条 test 函数**（`pytest offline/tests/`；参数化展开后执行例数更多）：含 `action_contract_probe.py` 的 **AC-1..AC-9 九组形式化不变式**——帧形状 / 逐字性 / 契约⊆引用闭包 / 段名闸 / 红线绊线 / 回放一致性 / 租户围栏 / 指标单调 / 反假绿覆盖；以及 `preset_probe.py` 的 **P-1..P-3 三组**——左栏预设与页面同源、预设形状（不锁产额）、覆盖范围与语料逐项相等；
+* **Python 598 条 test 函数**（`pytest offline/tests/`；参数化展开后执行例数更多）：含 `action_contract_probe.py` 的 **AC-1..AC-9 九组形式化不变式**——帧形状 / 逐字性 / 契约⊆引用闭包 / 段名闸 / 红线绊线 / 回放一致性 / 租户围栏 / 指标单调 / 反假绿覆盖；以及 `preset_probe.py` 的 **P-1..P-3 三组**——左栏预设与页面同源、预设形状（不锁产额）、覆盖范围与语料逐项相等；
 * **安全回归测试**：契约探针 5 路（段名闸恒真、逐字恒真、红线恒空、闭包前置 None、AC-7 租户恒真——每条都有"改坏后 N failed / 复原后全绿"的实测记录）；文档门闩另有 A/B/C 三路（改文档数字、改产物、改写措辞，各须红）；
-* **CI 全部 job**（java / static-gate / panel-contract / provenance / python / shell / security / sbom / smoke / benchmark）零 key 零中间件可跑；`doc_numbers` 门闩现算比对 **33 条文档数字 / 48 处引用**，数字与产物分叉即 CI 红；评测报告与语料的同代性用内容摘要钉死（`provenance`，不用 checkout 会刷平的 mtime）；对外面用词由 `check_public_copy` 钉住（内部 canonical 词不得漏到本 README 与页面文案，词表从 `docs/CONTEXT.md` 现取）。
+* **CI 全部 job**（java / static-gate / panel-contract / provenance / python / shell / security / sbom / smoke / benchmark / redteam）零 key 零中间件可跑；`doc_numbers` 门闩现算比对 **33 条文档数字 / 48 处引用**，数字与产物分叉即 CI 红；评测报告与语料的同代性用内容摘要钉死（`provenance`，不用 checkout 会刷平的 mtime）；对外面用词由 `check_public_copy` 钉住（内部 canonical 词不得漏到本 README 与页面文案，词表从 `docs/CONTEXT.md` 现取）。
 
 <details>
 <summary><b>评测与压测：复现命令</b>（需活体栈 + 活体 key；数字底稿即各自产物）</summary>
@@ -396,8 +436,13 @@ $PY load/l1_latency.py       # L1 回放延迟（热点命中口径）→ load/r
 | [0026](docs/adr/0026-admission-control-and-degradation-scope.md) | 准入控制：全局 + 租户信号量、429 退避、降级作用域保持全局 | 单人并发不该演成全员降级；先挡在入口，再谈降级维度 |
 | [0028](docs/adr/0028-l1-controlled-action-contract.md) | L1 受控恢复动作：文档声明 + 双白名单判定 + 人确认 + 签名派发，OpsShield 仍不执行 | 价值链延伸到恢复动作；红队门禁闭环是开闸前提 |
 | [0029](docs/adr/0029-reuse-boundary-trust-base-vs-domain-plugins.md) | 可复用边界：可信底座与领域插件显式分层，rule of three 提接口（2026-11-16 设计评审 accepted、Lead 已签收；首个切面=L1 命令策略内容外置，已通过独立验证并合并，PR #85） | 底座判据不含领域词汇；换插件只换内容不换防线 |
+| [0030](docs/adr/0030-telemetry-consumption-and-baseline-alerting.md) | 遥测消费与统计基线预警：只经 Prometheus HTTP API 读既有时序，中位数 + MAD 双阈值，预警复用既有编排链 | 谱系表 ①② 从「永久非目标」修订为「消费侧已覆盖」，底座零改动 |
+| [0031](docs/adr/0031-second-reference-implementation.md) | 第二个参考实现：数据库值班领域包（薄切片） | rule of three 的第二个用例，验证可复用边界 |
+| [0032](docs/adr/0032-incident-persistence.md) | 事故单服务端持久化：`GET/POST /api/v1/copilot/incidents`、`/assignees`、`GET/PATCH /{id}`，Flyway V5 | 事故单从前端状态升级为可审计的服务端记录；429 登录锁补 `Retry-After` |
 
 ---
+
+**新增文档入口**：`docs/ops/feedback-loop.md`（反馈质量闭环）、`docs/ops/case-study-self-dogfood.md`（自证 dogfood）、`docs/ops/g1-remaining.md`（门禁 6 余项）、`docs/ops/gate6-7-30day-observation.md`（确定性时钟与 up=1 覆盖修正）、`docs/design-mockups/README.md`（三个设计样机）。
 
 ## 🗺️ 仓库导航
 
@@ -409,7 +454,7 @@ $PY load/l1_latency.py       # L1 回放延迟（热点命中口径）→ load/r
 | 日常运维、脚本索引、**债务触发线** | [OPS.md](OPS.md)（脚本按"服务生命周期 / 门禁检查 / 故障注入与演示"分组索引） |
 | 领域词汇 | [docs/CONTEXT.md](docs/CONTEXT.md) |
 | 目录地图 / 逐包职责 / 维护者向内容 | [docs/repo-map.md](docs/repo-map.md) |
-| 架构决策与否决理由 | [docs/adr/](docs/adr/)（31 篇，每篇含否决项与后果） |
+| 架构决策与否决理由 | [docs/adr/](docs/adr/)（32 篇，每篇含否决项与后果） |
 
 ---
 
