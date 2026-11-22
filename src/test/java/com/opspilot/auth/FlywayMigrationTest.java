@@ -130,8 +130,62 @@ class FlywayMigrationTest {
                 assertTrue(rs.next());
                 assertEquals(1, rs.getInt(1), "空库一次跑完必须留下 V8 版本记录");
             }
+            try (ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM alert_intake")) {
+                assertTrue(rs.next());
+                assertEquals(0, rs.getInt(1), "空库必须由 V9 建出告警台账表");
+            }
+            try (ResultSet rs = st.executeQuery(
+                    "SELECT COUNT(*) FROM \"flyway_schema_history\" WHERE \"version\" = '9' AND \"success\"")) {
+                assertTrue(rs.next());
+                assertEquals(1, rs.getInt(1), "空库一次跑完必须留下 V9 版本记录");
+            }
         }
-        assertEquals(4000, bodyColumnWidth(ds), "空库跑完 V1..V8 后 body 应为 VARCHAR(4000)");
+        assertEquals(4000, bodyColumnWidth(ds), "空库跑完 V1..V9 后 body 应为 VARCHAR(4000)");
+    }
+
+    /** V8 库升级到 V9：只新增告警台账表，既有事故/评论/转交数据必须原样保留。 */
+    @Test
+    void v9AddsAlertIntakeOnExistingV8Database() throws Exception {
+        DataSource ds = ds("v8-to-v9");
+        Flyway.configure()
+                .dataSource(ds)
+                .locations("classpath:db/migration")
+                .baselineOnMigrate(true)
+                .baselineVersion("1")
+                .target("8")
+                .load()
+                .migrate();
+
+        try (Connection c = ds.getConnection(); Statement st = c.createStatement()) {
+            st.execute("INSERT INTO incidents (incident_id, tenant, client_id, title, query, source, status,"
+                    + " created_by) VALUES ('INC-V8-1', 'tenant-1', 'cid-v8', 'V8 旧单', '排查', 'manual',"
+                    + " 'open', 't1-alice')");
+            st.execute("INSERT INTO incident_comments (tenant, incident_id, author, body)"
+                    + " VALUES ('tenant-1', 'INC-V8-1', 't1-alice', 'V8 评论')");
+        }
+
+        flyway(ds).migrate();
+
+        try (Connection c = ds.getConnection(); Statement st = c.createStatement()) {
+            try (ResultSet rs = st.executeQuery(
+                    "SELECT title FROM incidents WHERE incident_id = 'INC-V8-1'")) {
+                assertTrue(rs.next(), "V9 升级不得丢已有事故行");
+                assertEquals("V8 旧单", rs.getString("title"));
+            }
+            try (ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM incident_comments")) {
+                assertTrue(rs.next());
+                assertEquals(1, rs.getInt(1), "V9 升级不得丢已有评论");
+            }
+            try (ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM alert_intake")) {
+                assertTrue(rs.next());
+                assertEquals(0, rs.getInt(1), "V9 必须建出空的告警台账表");
+            }
+            try (ResultSet rs = st.executeQuery(
+                    "SELECT COUNT(*) FROM \"flyway_schema_history\" WHERE \"version\" = '9' AND \"success\"")) {
+                assertTrue(rs.next());
+                assertEquals(1, rs.getInt(1), "已有 V8 库升级后必须留下 V9 版本记录");
+            }
+        }
     }
 
     /**

@@ -285,3 +285,44 @@ def test_comment_failure_keeps_draft_and_clears_only_on_success() -> None:
     cleared = html.index("delete S.commentDraft[inc.id]")
     kept = html.index("S.commentDraft[inc.id] = draft")
     assert cleared < kept, "草稿只能在成功路径清除；失败路径必须保留"
+
+
+def test_alert_intake_block_is_before_results_and_uses_row_tenant() -> None:
+    """ADR-0035：运行面板「告警入口」区块必须真实取数、带行租户、空态不摆样例。"""
+    html = _html()
+    assert "<h2>告警入口" in html, "缺「告警入口」区块"
+    assert 'id="alerts"' in html, "告警入口缺渲染容器"
+    assert html.index("<h2>告警入口") < html.index("排障成果流"), \
+        "告警入口必须排在「排障成果流」之前（契约 AC7）"
+    assert "/api/v1/admin/alerts/recent" in html, "面板必须读 /admin/alerts/recent"
+    assert "alertSince" in html and "&limit=50" in html, "增量水位与单页上限必须存在"
+
+    # R1：建单请求的 tenant 只能来自该告警行，不得自行猜测。
+    assert 'data-act="alertinc"' in html, "缺「建事故单」按钮"
+    assert 'data-tenant="' in html, "建单按钮必须携带该行的 tenant"
+    assert "/incident?tenant=" in html, "建单请求必须带 tenant 查询参数"
+    assert "encodeURIComponent(tenant)" in html, "tenant 必须按 URL 组件编码"
+    assert "打开事故单" in html, "已有 incident_id 的行必须显示「打开事故单」"
+
+    # 空态：写明数据源与保留窗口，且明确不是样例数字。
+    assert "尚无告警记录" in html, "缺空态文案"
+    assert "不是示例数据" in html, "空态必须说明没有摆样例"
+    assert "retention_days" in html and "max_per_tenant" in html, \
+        "保留窗口必须来自接口字段，不得在前端写死"
+    assert "建事故单失败：" in html, "建单失败必须 toast 明示"
+
+
+def test_alert_truncated_is_consumed_and_labelled() -> None:
+    """ADR-0035 / R2：since 是新告警水位不是游标；truncated=true 必须显式告知只看到一部分。"""
+    html = _html()
+    assert "仅显示最近 " in html, "truncated=true 时面板必须显示「仅显示最近 N 条」"
+    assert "meta.truncated" in html, "renderAlerts 必须读取响应里的 truncated"
+    assert "S.alertTruncated" in html, "增量轮询不得把首屏的 truncated 事实覆盖掉"
+    assert "仅显示最近 ' + S.alerts.length" in html, "N 必须取当前渲染行数（与表体同口径）"
+
+
+def test_cross_tenant_incident_toast_names_tenant_and_id() -> None:
+    """ADR-0035 / R2：跨租户建单不静默、不跨租户展示，toast 必须带租户与本单号。"""
+    html = _html()
+    assert "已为 ' + tenant + ' 建单 ' + inc.id + '，切换到该租户身份可查看', 'warn')" in html, \
+        "跨租户建单必须 toast「已为 <tenant> 建单 <id>，切换到该租户身份可查看」"

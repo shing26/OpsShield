@@ -198,6 +198,17 @@ H2 主库中的一行用户记录（sub + bcrypt 口令 + tenant + auth_level + 
 **闸门（Gate）**:
 这一次请求被**哪道闸**拦下的协议面标记：`none`（正常作答）/ `clarify`（回指澄清，零检索零 LLM）/ `refuse`（知识库无据，检索跑完但低于阈值）。进 SSE `meta` 帧（`gate`），与 `refused` 并存。**必须与"拒答"分开命名**：`CONTEXT.md`「回指澄清」条明确写着"澄清不是拒答"——把两者压成一个 `refused=true` 会让页面只能把它们渲染成同一个徽标，而它们的成因与代价都不同（零检索 vs 跑完检索）。**不得用 `retrieval_ms == 0` 反推澄清**：那是拿性能量当状态量，任何一次缓存命中都会让它误判。_对外_: 无对外别名。_Avoid_: 拒答（作为统称——它会吞掉澄清）、闸门类型（口语可用，字段名统一 `gate`）
 
+### 告警域
+
+**告警台账（Alert Intake）**:
+每一条真实告警请求在 `ChatOrchestrator` 里留下的一行（`alert_intake`，[ADR-0035](adr/0035-alert-intake.md)）。写入是 **best-effort**：台账坏了不能拖垮排障。它回答"今天进来了哪些告警、各自来了几次、有没有人接手"，不替代审计 JSONL（后者是合规证据，前者是运行面板的可操作视图）。_对外_: 无对外别名。_Avoid_: 告警历史（暗示永久留存）、告警库（像独立数据仓库）
+
+**告警身份（Alert Identity）**:
+桥按 `alertname|job|error_code|status` 四元组派生的 32 位十六进制串（`alertId`）。它是**不透明身份**，服务端不重新派生；**不含租户**，因此台账主键必须是 `(tenant, alert_id)`——同一 alertId 在两个租户是两行、两个建单目标（契约 R1）。firing 与 resolved 是两个身份，刻意不合并。_对外_: 无对外别名。_Avoid_: 全局告警 ID（R1 明确否证）、告警指纹（那容易与 query 的文本指纹混淆）
+
+**保留窗口（Retention Window）**:
+告警台账的有界留存口径：默认保留 30 天，且每租户最多 500 条，超出由每日 `@Scheduled` 清理。阈值来自 `opspilot.alert.retention-days` / `max-per-tenant`，面板显示的窗口与后端清理读同一组配置。_对外_: 无对外别名。_Avoid_: 永久保留、只写"30 天"（漏掉每租户条数上限会让人误以为是无限台账）
+
 ### 部署域
 
 **存储模式（Storage Mode）**:

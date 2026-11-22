@@ -87,6 +87,11 @@ opspilot:
       due-soon-ratio: ${INCIDENT_SLA_DUE_SOON_RATIO:0.2}
       scan-interval-ms: ${INCIDENT_SLA_SCAN_INTERVAL_MS:60000}
       scan-initial-delay-ms: ${INCIDENT_SLA_SCAN_INITIAL_DELAY_MS:60000}
+  # ADR-0035 告警台账：有界留存。面板读同一组数字（/admin/alerts/recent 的
+  # retention_days / max_per_tenant）；清理任务 @Scheduled 每日一次，阈值只从这里取。
+  alert:
+    retention-days: ${ALERT_RETENTION_DAYS:30}
+    max-per-tenant: ${ALERT_MAX_PER_TENANT:500}
   storage:
     # live=真中间件（缺则启动失败，与历史行为一致）| memory=内存实现，零外部依赖（ADR-0022）。
     # **不自动回退**：探不到中间件只打印一条可执行的提示，然后照常失败——配置期事实不该

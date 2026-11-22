@@ -40,7 +40,8 @@ public record OpsPilotProperties(
         @Valid Cache cache,
         @Valid Storm storm,
         @Valid Retrieval retrieval,
-        @Valid Degrade degrade
+        @Valid Degrade degrade,
+        @Valid Alert alert
 ) {
 
     /**
@@ -66,7 +67,23 @@ public record OpsPilotProperties(
      */
     public OpsPilotProperties(DashScope dashscope, Es es, Qdrant qdrant, Jwt jwt, Cache cache,
                               Storm storm, Retrieval retrieval, Degrade degrade) {
-        this(dashscope, new Storage("live"), es, qdrant, jwt, cache, storm, retrieval, degrade);
+        this(dashscope, new Storage("live"), es, qdrant, jwt, cache, storm, retrieval, degrade, null);
+    }
+
+    /** 九参兼容构造（ADR-0035 之前的位置参数调用点）：alert 段缺省。 */
+    public OpsPilotProperties(DashScope dashscope, Storage storage, Es es, Qdrant qdrant, Jwt jwt,
+                              Cache cache, Storm storm, Retrieval retrieval, Degrade degrade) {
+        this(dashscope, storage, es, qdrant, jwt, cache, storm, retrieval, degrade, null);
+    }
+
+    /**
+     * {@code alert} 的**空值兜底**：整个 {@code opspilot.alert.*} 缺失时 Spring 会把嵌套 record
+     * 绑成 {@code null}。默认值与 {@code application.yml} 的 30 天 / 每租户 500 条同口径；
+     * 真实部署以配置为准（契约 AC6：阈值不得写死）。
+     */
+    @Override
+    public Alert alert() {
+        return alert == null ? new Alert(null, null) : alert;
     }
 
     /**
@@ -144,4 +161,18 @@ public record OpsPilotProperties(
 
     public record Degrade(@Min(1) int inflightThreshold, @Min(1) int llmFailureThreshold,
                           @Min(1) int llmOpenSeconds) {}
+
+    /**
+     * 告警台账保留窗口（ADR-0035 / 契约 AC6）：默认 30 天、每租户 500 条。
+     *
+     * <p>字段用 {@code Integer} 而不是 {@code int}：整个 {@code opspilot.alert} 段缺失时
+     * Spring 绑定得到 null，而 {@code int} 会变 0 并撞 {@code @Min(1)}，把"没配"变成启动失败。
+     * null 在紧凑构造器里归一到同一组默认值——与 {@code application.yml} 两处同口径。
+     */
+    public record Alert(@Min(1) Integer retentionDays, @Min(1) Integer maxPerTenant) {
+        public Alert {
+            if (retentionDays == null) retentionDays = 30;
+            if (maxPerTenant == null) maxPerTenant = 500;
+        }
+    }
 }

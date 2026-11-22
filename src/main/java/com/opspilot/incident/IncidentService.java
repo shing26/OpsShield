@@ -250,9 +250,33 @@ public class IncidentService {
 
     public Created create(UserContext user, IncidentRequests.Create req) {
         requireUser(user);
+        return createInternal(user.tenantId(), user, req);
+    }
+
+    /**
+     * 显式目标租户建单（ADR-0035 / 契约 R1 的内部入口）：平台身份跨租户运维时，
+     * 事故归属必须落在**告警行所属租户**，而不是操作者 JWT 的租户。
+     * {@code created_by} / {@code owner} 仍记实际操作人 {@code sub}。
+     *
+     * <p>不映射任何公开端点——只有告警一键建单在服务端按 alert_intake 的 tenant 调用它。
+     */
+    public Created createForTenant(UserContext operator, String targetTenant, IncidentRequests.Create req) {
+        requireUser(operator);
+        if (targetTenant == null || targetTenant.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "目标租户不能为空");
+        }
+        return createInternal(targetTenant.trim(), operator, req);
+    }
+
+    /** 平台面按告警行的 (tenant, incident_id) 回查；调用方已保证 tenant 来自台账行。 */
+    public java.util.Optional<Incident> findInTenant(String tenant, String id) {
+        return store.find(tenant, id);
+    }
+
+    private Created createInternal(String tenant, UserContext actor, IncidentRequests.Create req) {
         String clientId = blankToNull(req.clientId());
         if (clientId == null) clientId = UUID.randomUUID().toString();
-        var replay = store.findByClientId(user.tenantId(), clientId);
+        var replay = store.findByClientId(tenant, clientId);
         if (replay.isPresent()) return new Created(replay.get(), false);
 
         Instant now = Instant.now();
@@ -264,19 +288,19 @@ public class IncidentService {
         Instant dueAt = deriveDueAt(priority, now);
 
         Incident draft = new Incident(
-                null, user.tenantId(), clientId, title, query,
+                null, tenant, clientId, title, query,
                 nz(req.service()), nz(req.errorCode()), nz(req.env()), nz(req.alertId()),
-                source, priority, Incident.STATUS_OPEN, user.sub(), user.sub(),
+                source, priority, Incident.STATUS_OPEN, actor.sub(), actor.sub(),
                 now, now, null, null, null,
                 null, initialTimeline(source, req.alertId(), now),
                 dueAt, Incident.SLA_OK);
         try {
             Incident saved = store.insert(draft);
-            audit.logIncident(user, saved.id(), "create", "ok", source);
+            audit.logIncident(actor, saved.id(), "create", "ok", source);
             return new Created(saved, true);
         } catch (DuplicateKeyException e) {
             // 并发重放：另一条请求已经用同一 clientId 建好，回查即幂等
-            return new Created(store.findByClientId(user.tenantId(), clientId).orElseThrow(() -> e), false);
+            return new Created(store.findByClientId(tenant, clientId).orElseThrow(() -> e), false);
         }
     }
 

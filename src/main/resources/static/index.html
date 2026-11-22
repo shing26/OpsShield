@@ -479,6 +479,11 @@
   .panel-main #degfacts{display:flex;flex-wrap:wrap;gap:7px 16px;margin-top:9px;font-size:11px;color:var(--txt-2)}
   .panel-main .meter{margin-top:9px}
   .panel-main .tracks{display:flex;flex-direction:column;gap:7px}
+  .panel-main .alerts-t{width:100%;border-collapse:collapse;font-size:11.5px}
+  .panel-main .alerts-t th{text-align:left;padding:7px 10px;font-weight:500;color:var(--muted);
+    background:var(--surface-2);border-bottom:1px solid var(--line-soft)}
+  .panel-main .alerts-t td{padding:7px 10px;border-top:1px solid var(--line-soft);vertical-align:top}
+  .panel-main .alerts-t td.sum{max-width:460px;word-break:break-word}
   .panel-main .req{background:var(--surface-2);border:1px solid var(--line-soft);border-radius:7px;
          padding:9px 11px;border-left:2px solid var(--line)}
   .panel-main .req.refused{border-left-color:var(--err)}
@@ -748,6 +753,10 @@
       <span class="win">进程内累计</span>
     </div>
     <div class="kpis" id="kpis"></div>
+    <section>
+      <h2>告警入口 <span class="tag" id="alerttag">数据源：带 alertId 的真实告警请求</span></h2>
+      <div id="alerts"></div>
+    </section>
     <div class="row split">
       <section>
         <h2>排障成果流 <span class="tag">最近请求 · 依据/动作条数取自审计行 refs/actions</span></h2>
@@ -910,6 +919,7 @@ const S = {
   a: side('sre-full'), b: side('sre-limited'),
   incidents: [], activeId: null, filter: 'open', search: '',
   comments: [], commentsFor: null, commentDraft: {}, commentBusy: false, assignees: null,
+  alerts: [], alertMeta: null, alertTruncated: false,
   quick: '', drawerOpen: false, mfactsOpen: false
 };
 
@@ -1404,6 +1414,7 @@ async function login(k) {
         S.platform = null;
         // 切换账号时先丢掉上一身份的事故单缓存（含 activeId），再由服务端按新 token 重新拉取。
         S.incidents = []; S.activeId = null;
+        S.alerts = []; S.alertMeta = null; S.alertTruncated = false; alertSince = 0;
         // 评论正文、已读水位与 @ 候选都带租户边界：换身份必须整块失效，防止旧租户名字漏进补全。
         S.comments = []; S.commentsFor = null; S.commentDraft = {}; S.assignees = null;
         try { localStorage.removeItem(ACTIVE_KEY); } catch (e) { /* 非致命 */ }
@@ -1591,6 +1602,7 @@ function dropToken(k, msg) {
   if (k === 'a') {
     S.platform = null; S.coverage = null; S.covErr = null; S.asking = false;
     S.incidents = []; S.activeId = null;
+    S.alerts = []; S.alertMeta = null; S.alertTruncated = false; alertSince = 0;
     try { localStorage.removeItem(ACTIVE_KEY); } catch (e) { /* 非致命 */ }
     stopPoll();
     renderHeader(); renderRail(); renderWorkspace();
@@ -2771,6 +2783,7 @@ function renderAll() {
   renderWorkspace();
   renderDrawer();
   renderPanelGate();
+  renderAlerts();
   renderStoreStat();
 }
 
@@ -2913,7 +2926,8 @@ async function submitClose() {
 
 /* ==================== 运行面板：轮询与渲染 ==================== */
 let cursor = 0, prevMetrics = null, pollTimer = null, pollPeriod = 0, alive = false,
-    lastPollFailed = false, drawerState = null, drawerPrev = null, pollInFlight = false, tracks = [];
+    lastPollFailed = false, drawerState = null, drawerPrev = null, pollInFlight = false, tracks = [],
+    alertSince = 0;
 
 async function httpErrText(r) {
   const base = 'HTTP ' + r.status;
@@ -2979,6 +2993,7 @@ async function poll() {
     renderHeader(); renderPanelGate();
     $('pollstate').textContent = '轮询中 · ' + (cadence() / 1000) + 's'; $('pollstate').style.color = '';
     renderState(s); if (a) renderEvents(a);
+    loadAlerts();
     refreshActions();
   } finally { pollInFlight = false; }
 }
@@ -3051,6 +3066,123 @@ document.addEventListener('click', async e => {
 
 const qp = new URLSearchParams(location.search).get('op');
 if (qp) { const el = $('l1op'); if (el) el.value = qp; }
+
+/* ---------- 告警入口（ADR-0035） ---------- */
+// 建单路径拆开拼：面板契约第 1 层只认静态字面量路径，动态 id 段无法也不该在静态层核对。
+const ALERTS_API = '/api/v1/admin/' + 'alerts';
+
+async function loadAlerts() {
+  if (!S.a.token || S.platform !== true) return;
+  const token = S.a.token;
+  try {
+    const d = await api('/api/v1/admin/alerts/recent?since=' + alertSince + '&limit=50');
+    if (S.a.token !== token) return;
+    S.alertMeta = d;
+    // truncated 语义（契约 R2）：since 是新告警水位，不是分页游标；首屏 since=0 若超过
+    // limit，后端会置 truncated=true 表示窗口里还有更老的告警。后续增量轮询的响应通常是
+    // truncated=false，所以这里**锁存**，避免下一次轮询把"只看到一部分"的事实覆盖掉。
+    if (d.truncated === true) S.alertTruncated = true;
+    for (const row of (d.alerts || [])) {
+      const i = S.alerts.findIndex(x => x.tenant === row.tenant && x.alertId === row.alertId);
+      if (i >= 0) S.alerts[i] = row; else S.alerts.push(row);
+    }
+    S.alerts.sort((a, b) => (b.lastSeen || 0) - (a.lastSeen || 0));
+    if (d.retention_days) {
+      // 前端累积列表也遵守同一保留窗口；否则被后端清掉的行会一直留在页面上。
+      const cutoff = Date.now() - d.retention_days * 86400000;
+      S.alerts = S.alerts.filter(x => (x.lastSeen || 0) >= cutoff);
+    }
+    if (S.alerts.length > 100) S.alerts.length = 100;
+    if (d.nextSince > alertSince) alertSince = d.nextSince;
+    renderAlerts();
+  } catch (e) { /* 面板非致命：下次轮询再试 */ }
+}
+
+function alertStatusText(s) { return s ? s : '—'; }
+
+function renderAlerts() {
+  const box = $('alerts');
+  if (!box) return;
+  const meta = S.alertMeta || {};
+  const tag = $('alerttag');
+  // P1-3 / 契约 R2：truncated 必须被消费，不能让老告警静默不可见。N 取**当前渲染行数**
+  // （S.alerts 就是下面表格实际展示的集合，最多 100 条），与表体口径一致。
+  const truncated = (meta.truncated === true || S.alertTruncated === true) && S.alerts.length > 0;
+  if (tag) {
+    tag.textContent = (meta.retention_days
+      ? '数据源：带 alertId 的真实告警请求 · 保留 ' + meta.retention_days
+        + ' 天 / 每租户 ' + meta.max_per_tenant + ' 条'
+      : '数据源：带 alertId 的真实告警请求')
+      + (truncated ? ' · 仅显示最近 ' + S.alerts.length + ' 条' : '');
+  }
+  if (!S.a.token || S.platform !== true) {
+    box.innerHTML = '<div class="empty">平台身份可见；切换身份后这里显示真实告警。</div>';
+    return;
+  }
+  if (!S.alerts.length) {
+    const ret = meta.retention_days
+      ? '保留 ' + meta.retention_days + ' 天、每租户最多 ' + meta.max_per_tenant + ' 条。'
+      : '保留窗口读取中。';
+    box.innerHTML = '<div class="empty">尚无告警记录。数据源是真实告警请求'
+      + '（<code>source=alert</code> 且带 <code>alertId</code> 的排障调用）落表，不是示例数据；'
+      + ret + '</div>';
+    return;
+  }
+  const tr = a => {
+    const title = a.summary || a.errorCode || a.alertId;
+    const action = a.incidentId
+      ? '<button type="button" class="ghost" data-act="openalertinc" data-openid="'
+        + esc(a.incidentId) + '">打开事故单</button>'
+      : '<button type="button" class="ghost" data-act="alertinc" data-tenant="' + esc(a.tenant)
+        + '" data-alert="' + esc(a.alertId) + '">建事故单</button>';
+    return '<tr><td class="num">' + esc(fmtDT(new Date(a.lastSeen).toISOString())) + '</td>'
+      + '<td><code>' + esc(a.tenant) + '</code></td>'
+      + '<td class="sum">' + esc(title) + '<div class="sub"><code>' + esc(a.alertId) + '</code></div></td>'
+      + '<td class="num">' + (a.seenCount | 0) + '</td>'
+      + '<td>' + esc(alertStatusText(a.alertStatus)) + '</td>'
+      + '<td>' + action + '</td></tr>';
+  };
+  box.innerHTML = '<table class="alerts-t"><thead><tr><th>最近时间</th><th>租户</th><th>告警</th>'
+    + '<th>次数</th><th>状态</th><th>关联事故单</th></tr></thead><tbody>'
+    + S.alerts.map(tr).join('') + '</tbody></table>';
+}
+
+async function createAlertIncident(tenant, alertId, btn) {
+  if (!S.a.token) return;
+  if (btn) { btn.disabled = true; btn.textContent = '建单中…'; }
+  try {
+    // tenant 必须来自该告警行（R1）：alertId 不含租户，前端不得自行猜测。
+    const resp = await fetch(ALERTS_API + '/' + encodeURIComponent(alertId)
+      + '/incident?tenant=' + encodeURIComponent(tenant), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + S.a.token },
+      body: JSON.stringify({})
+    });
+    if (resp.status === 401) {
+      dropToken('a', '401 · token 失效，重新接入');
+      showAuth('401 · token 失效，重新接入');
+      return;
+    }
+    if (!resp.ok) throw new Error(await httpErrText(resp));
+    const inc = await resp.json();
+    const row = S.alerts.find(x => x.tenant === tenant && x.alertId === alertId);
+    if (row) { row.incidentId = inc.id; renderAlerts(); }
+    await refreshIncidents();
+    if (findIncident(inc.id)) {
+      selectIncident(inc.id);
+      toast('已建立事故单 ' + inc.id, 'ok');
+    } else {
+      // 契约 R2：事故单列表按 JWT 租户隔离，平台身份给别的租户建单后左栏不会出现该单。
+      // 这不是失败，但必须明示租户与本单号，不能假装成功、也不能跨租户展示。
+      toast('已为 ' + tenant + ' 建单 ' + inc.id + '，切换到该租户身份可查看', 'warn');
+    }
+    await loadAlerts();
+  } catch (e) {
+    toast('建事故单失败：' + (e && e.message ? e.message : e), 'err');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '建事故单'; }
+  }
+}
 
 /* ---------- 运行态 ---------- */
 function fingerprintText(b) {
@@ -3394,6 +3526,14 @@ document.addEventListener('click', async e => {
   if (act) {
     if (act === 'opendrawer') { openDrawer(); return; }
     if (act === 'closedrawer') { closeDrawer(); return; }
+    if (act === 'alertinc') { await createAlertIncident(t.dataset.tenant, t.dataset.alert, t); return; }
+    if (act === 'openalertinc') {
+      await refreshIncidents();
+      const id = t.dataset.openid;
+      if (findIncident(id)) { selectIncident(id); setView('trouble'); }
+      else toast('该事故单不在当前身份的左栏（事故单按租户隔离；平台可跨租户建单但不跨租户展示）', 'warn');
+      return;
+    }
     if (act === 'openacct') { openPop('acctpop'); return; }
     if (act === 'covtoggle') { S.covOpen = !S.covOpen; renderRail(); return; }
     if (act === 'newinc') { openIncidentDialog({ mode: 'create' }); return; }

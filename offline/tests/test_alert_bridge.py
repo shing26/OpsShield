@@ -667,3 +667,31 @@ def test_bridge_inherits_loopback_only_exit_allowlist():
                 "http://user:pw@localhost:8081/x"):
         with pytest.raises(ValueError):
             localapi.assert_local(bad)
+
+
+def test_alert_id_is_the_identity_the_gateway_ledger_keys_on():
+    """桥产出的 alertId 必须逐字成为网关告警台账的身份。
+
+    V8 `alert_intake` 的主键是 `(tenant, alert_id)`，写入值与一键建单的 URL 都直接用
+    请求体里的这个字符串（服务端不重新派生）。桥若在这里改算法或把身份塞进注释文本，
+    台账会对不上：同一条告警每次都变成新行。故锁三件事：
+      1) `request.alertId` == 台账 `alert_id`；
+      2) 它等于四元组 `alertname|job|error_code|status` 的 sha256 前 32 位；
+      3) firing 与 resolved 是两个身份（契约明确不合并）。
+    """
+    firing = _alert(name="OpsPilotUpstreamRateLimited", summary="上游限流",
+                    code="51001_MODEL_ARREARAGE", status="firing")
+    resolved = _alert(name="OpsPilotUpstreamRateLimited", summary="上游限流",
+                      code="51001_MODEL_ARREARAGE", status="resolved")
+    items, _ = ab.flatten(_payload(firing, resolved), "local")
+    assert len(items) == 2
+    for item in items:
+        assert item["request"]["alertId"] == item["alert_id"]
+        assert item["alert_id"] == ab.derive_alert_id(
+            item["alertname"], item["job"], item["error_code"], item["status"])
+        assert re.fullmatch(r"[0-9a-f]{32}", item["alert_id"])
+    assert items[0]["alert_id"] != items[1]["alert_id"], "firing 与 resolved 必须是两个身份"
+
+    # 同一四元组重复投递得到同一个 id——这正是网关 upsert 的键。
+    again, _ = ab.flatten(_payload(firing), "local")
+    assert again[0]["alert_id"] == items[0]["alert_id"]

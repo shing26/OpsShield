@@ -2,6 +2,7 @@ package com.opspilot.gateway;
 
 import com.opspilot.auth.JwtAuthFilter;
 import com.opspilot.auth.UserContext;
+import com.opspilot.alert.AlertIntakeService;
 import com.opspilot.cache.L1CacheService;
 import com.opspilot.cache.L2SemanticCacheService;
 import com.opspilot.config.BackupStatusService;
@@ -15,7 +16,9 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -50,6 +53,7 @@ public class AdminController {
     private final com.opspilot.resilience.QuotaService quota;
     private final BackupStatusService backupStatus;   // 最近成功备份的可观测面（G0）
     private final org.springframework.boot.info.BuildProperties build; // 面板 build 指纹（build-info 缺省时为 null）
+    private final AlertIntakeService alerts;          // 告警台账（ADR-0035）
 
     public AdminController(OpsMetrics metrics, DegradationState degrade,
                            L1CacheService l1, L2SemanticCacheService l2, OpsPilotProperties props,
@@ -59,6 +63,21 @@ public class AdminController {
                            com.opspilot.resilience.QuotaService quota,
                            BackupStatusService backupStatus,
                            @org.springframework.lang.Nullable org.springframework.boot.info.BuildProperties build) {
+        this(metrics, degrade, l1, l2, props, ingestion, users, healthProbe, audit, singleFlight,
+                quota, backupStatus, build, null);
+    }
+
+    /** Spring 装配入口：多一个告警台账依赖；13 参构造保留给既有单测。 */
+    @org.springframework.beans.factory.annotation.Autowired
+    public AdminController(OpsMetrics metrics, DegradationState degrade,
+                           L1CacheService l1, L2SemanticCacheService l2, OpsPilotProperties props,
+                           com.opspilot.ingest.IngestionRunner ingestion, com.opspilot.auth.UserStore users,
+                           com.opspilot.health.HealthProbe healthProbe, com.opspilot.metrics.AuditService audit,
+                           com.opspilot.storm.SingleFlight singleFlight,
+                           com.opspilot.resilience.QuotaService quota,
+                           BackupStatusService backupStatus,
+                           @org.springframework.lang.Nullable org.springframework.boot.info.BuildProperties build,
+                           AlertIntakeService alerts) {
         this.metrics = metrics;
         this.degrade = degrade;
         this.l1 = l1;
@@ -72,6 +91,7 @@ public class AdminController {
         this.quota = quota;
         this.backupStatus = backupStatus;
         this.build = build;
+        this.alerts = alerts;
     }
 
     /** 平台门禁 + 拒绝留痕（QA P1-2：破坏性端点被拒/成功都必须可回溯）。 */
@@ -231,6 +251,46 @@ public class AdminController {
         requirePlatformAdmin(http, "audit/recent");
         var r = audit.recentSince(since, limit);
         return Map.of("events", r.events(), "max_seq", r.maxSeq(), "truncated", r.truncated());
+    }
+
+    /**
+     * 告警台账增量读取（ADR-0035 / AC4）：跨租户、{@code last_seen DESC}。
+     * 门禁与 /state 同口径：{@code role=platform ∧ auth_level>=3}；被拒由
+     * {@link #requirePlatformAdmin} 留痕。
+     */
+    @GetMapping("/alerts/recent")
+    public Map<String, Object> alertsRecent(@RequestParam(defaultValue = "0") long since,
+                                            @RequestParam(defaultValue = "50") int limit,
+                                            HttpServletRequest http) {
+        requirePlatformAdmin(http, "alerts/recent");
+        return alerts.recent(since, limit);
+    }
+
+    /**
+     * 一键建单（AC5 / R1）：{@code POST /alerts/{alertId}/incident?tenant=<tenant>}。
+     *
+     * <p>{@code tenant} **必填**——{@code alertId} 由桥按四元组派生、不含租户，而本端点跨租户
+     * 可见；同一 alertId 在两个租户各有一行，缺少 tenant 无法判定建给谁。建单归属以告警行
+     * 所属租户为准，不是操作者 JWT 租户。请求体只允许 {@code {priority}}；其余字段一律来自
+     * alert_intake，前端不得拼装。
+     */
+    @PostMapping("/alerts/{alertId}/incident")
+    public ResponseEntity<Map<String, Object>> alertIncident(@PathVariable String alertId,
+                                                             @RequestParam(name = "tenant", required = false) String tenant,
+                                                             @RequestBody(required = false) Map<String, Object> body,
+                                                             HttpServletRequest http) {
+        requirePlatformAdmin(http, "alerts/incident");
+        UserContext u = JwtAuthFilter.from(http);
+        if (tenant == null || tenant.isBlank()) {
+            audit.logAdmin(u, "alerts/incident", "rejected", "tenant missing");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "tenant 必填：alertId 不含租户，同一告警在不同租户是不同事故");
+        }
+        String priority = body == null || body.get("priority") == null
+                ? "" : String.valueOf(body.get("priority"));
+        var result = alerts.createIncident(u, tenant, alertId, priority);
+        return ResponseEntity.status(result.created() ? HttpStatus.CREATED : HttpStatus.OK)
+                .body(alerts.incidentView(result.incident()));
     }
 
     /**
