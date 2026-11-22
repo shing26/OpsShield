@@ -31,14 +31,16 @@ ADR-0032 把事故变成了服务端对象，但只回答了"这条单现在归�
    用缓存补回来会让筛选形同虚设。
 5. **SLA 由优先级派生，阈值全走配置**。`opspilot.incident.sla.*`：
    `p1-minutes=30 / p2-minutes=120 / p3-minutes=480`，空优先级不设时限。
-   `due_at` 在创建与改优先级时重算；清空优先级则 `due_at=null`。
+   `due_at` 在创建、改优先级与**重开**时重算；清空优先级则 `due_at=null`。
    配置由 `@EnableConfigurationProperties(IncidentSlaProperties.class)` 显式注册——
    record 的构造器绑定不能靠 `@Component` 扫描（会退化成按参数自动装配并启动失败）。
 6. **SLA 提醒是状态跃迁，不是每次扫描都写日志**。`@Scheduled` 默认 60s（可配）扫描未结单事故：
    `now > due_at - 20% 窗口` → `due_soon`，`now > due_at` → `breached`。
    迁跃只前进不后退；`transitionSla` 带旧状态做条件更新，只有更新成功的线程写
    `ev=incident action=sla outcome=due_soon|breached`。同一状态不重复落审计；
-   已结单事故由 SQL 的 `status = 'open'` 排除。重开或改优先级时 Service 显式把状态重置为 `ok`。
+   已结单事故由 SQL 的 `status = 'open'` 排除。**重开或改优先级时 Service 显式把状态重置为 `ok`**；
+   重开同时按当前优先级从重开时刻重算 `due_at`（视为新的响应周期）——否则保留已过期的
+   `due_at` 会让扫描器在 60s 内把状态重新跃迁到 `breached`，重置形同虚设。
 7. **界面沿用既有视觉语言**：左栏增加「我的」，右栏事实区增加「时限 / 剩余」，
    `due_soon` / `breached` 复用既有 warn / err 语义色；页头增加「转交」弹层
    （负责人 + 理由 + 最近 3 条历史），失败必须 toast 明示。不引入新依赖。

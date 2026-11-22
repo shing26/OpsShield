@@ -7,6 +7,7 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ThreadLocalRandom;
@@ -183,17 +184,23 @@ public class IncidentStore {
      */
     public boolean transfer(Incident row, String expectedOwner, String reason, String assignedBy,
                             Instant assignedAt) {
-        int updated = jdbc.update("UPDATE incidents SET title = ?, query = ?, service = ?, error_code = ?, "
-                        + "env = ?, alert_id = ?, priority = ?, status = ?, owner = ?, due_at = ?, sla_state = ?, "
-                        + "closed_at = ?, closed_by = ?, close_note = ?, diagnosis_json = ?, timeline_json = ?, "
-                        + "updated_at = ? WHERE tenant = ? AND incident_id = ? AND owner = ?",
+        // SQL 三值逻辑：owner = NULL 恒为 UNKNOWN，旧 owner 为空时必须用 IS NULL，
+        // 否则未指派单（含刚被「取消分配」的单）会永久 409。条件本身不能去掉——那是并发保护。
+        String ownerPredicate = expectedOwner == null ? " AND owner IS NULL" : " AND owner = ?";
+        List<Object> args = new ArrayList<>(Arrays.asList(
                 row.title(), row.query(), row.service(), row.errorCode(), row.env(), row.alertId(),
                 row.priority(), row.status(), row.owner(),
                 row.dueAt() == null ? null : Timestamp.from(row.dueAt()), row.slaState(),
                 row.closedAt() == null ? null : Timestamp.from(row.closedAt()),
                 row.closedBy(), row.closeNote(),
                 row.diagnosisJson(), row.timelineJson(), Timestamp.from(row.updatedAt()),
-                row.tenant(), row.id(), expectedOwner);
+                row.tenant(), row.id()));
+        if (expectedOwner != null) args.add(expectedOwner);
+        int updated = jdbc.update("UPDATE incidents SET title = ?, query = ?, service = ?, error_code = ?, "
+                        + "env = ?, alert_id = ?, priority = ?, status = ?, owner = ?, due_at = ?, sla_state = ?, "
+                        + "closed_at = ?, closed_by = ?, close_note = ?, diagnosis_json = ?, timeline_json = ?, "
+                        + "updated_at = ? WHERE tenant = ? AND incident_id = ?" + ownerPredicate,
+                args.toArray());
         if (updated != 1) return false;
         jdbc.update("INSERT INTO incident_assignments (tenant, incident_id, from_owner, to_owner, reason, "
                         + "assigned_by, assigned_at) VALUES (?, ?, ?, ?, ?, ?, ?)",

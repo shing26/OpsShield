@@ -192,6 +192,55 @@ class IncidentResponsibilityTest {
                 "条件更新失败后不得追加转交行（同一事务的原子性）");
     }
 
+    // ---- 清空 owner 后的再指派 / 转交（P1 回归） ----
+
+    @Test
+    void clearingOwnerThenPatchAssignAgainSucceeds() {
+        Incident inc = create("cid-clear-reassign", "P2");
+
+        Incident cleared = service.patch(ALICE, inc.id(), owner(""));
+        assertNull(cleared.owner(), "PATCH owner:'' 应清空负责人（取消分配）");
+        List<IncidentAssignment> afterClear = service.assignments(ALICE, inc.id());
+        assertEquals(1, afterClear.size());
+        assertEquals("t1-alice", afterClear.get(0).fromOwner());
+        assertNull(afterClear.get(0).toOwner());
+
+        // 回归：owner 为 NULL 时条件更新必须用 IS NULL；写成 owner = NULL 会恒假 → 409。
+        Incident reassigned = service.patch(ALICE, inc.id(), owner("t1-bob"));
+        assertEquals("t1-bob", reassigned.owner());
+        List<IncidentAssignment> afterAssign = service.assignments(ALICE, inc.id());
+        assertEquals(2, afterAssign.size(), "取消分配后再指派必须新增一行责任事实");
+        assertNull(afterAssign.get(0).fromOwner(), "新行的 from_owner 应为空（原单未指派）");
+        assertEquals("t1-bob", afterAssign.get(0).toOwner());
+    }
+
+    @Test
+    void clearingOwnerThenTransferSucceeds() {
+        Incident inc = create("cid-clear-transfer", "P2");
+        service.patch(ALICE, inc.id(), owner(""));
+
+        Incident moved = service.transfer(ALICE, inc.id(), transfer("t1-bob", "取消分配后转交"));
+
+        assertEquals("t1-bob", moved.owner());
+        assertEquals(2, service.assignments(ALICE, inc.id()).size(),
+                "清空后的显式转交必须成功并追加一行");
+    }
+
+    @Test
+    void legacyUnassignedIncidentCanBeTransferred() {
+        Incident inc = create("cid-legacy-unassigned", "P2");
+        // 模拟升级前 owner 本就允许 NULL 的历史行
+        jdbc.update("UPDATE incidents SET owner = NULL WHERE tenant = ? AND incident_id = ?",
+                inc.tenant(), inc.id());
+
+        Incident moved = service.transfer(ALICE, inc.id(), transfer("t1-bob", "历史未指派单"));
+
+        assertEquals("t1-bob", moved.owner());
+        IncidentAssignment row = service.assignments(ALICE, inc.id()).get(0);
+        assertNull(row.fromOwner());
+        assertEquals("t1-bob", row.toOwner());
+    }
+
     // ---- 「我的」筛选 ----
 
     @Test
@@ -274,6 +323,23 @@ class IncidentResponsibilityTest {
 
         assertEquals(0, scanner.scan(now));
         assertEquals(Incident.SLA_OK, service.get(ALICE, inc.id()).slaState());
+    }
+
+    @Test
+    void reopenResetsSlaStateAndRestartsDueAt() {
+        Incident inc = create("cid-sla-reopen", "P1");
+        service.patch(ALICE, inc.id(), status("closed"));
+        jdbc.update("UPDATE incidents SET sla_state = ?, due_at = ? WHERE tenant = ? AND incident_id = ?",
+                Incident.SLA_BREACHED,
+                java.sql.Timestamp.from(Instant.now().minus(Duration.ofHours(1))),
+                inc.tenant(), inc.id());
+
+        Incident reopened = service.patch(ALICE, inc.id(), status("open"));
+
+        assertEquals(Incident.STATUS_OPEN, reopened.status());
+        assertEquals(Incident.SLA_OK, reopened.slaState(), "重开必须把 SLA 状态重置为 ok");
+        assertEquals(30, Duration.between(reopened.updatedAt(), reopened.dueAt()).toMinutes(),
+                "重开按当前优先级从重开时刻重新起算 due_at");
     }
 
     private long slaAudit(String id, String outcome) {

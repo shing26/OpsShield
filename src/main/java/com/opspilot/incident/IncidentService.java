@@ -245,6 +245,12 @@ public class IncidentService {
             dueAt = deriveDueAt(priority, now);
             slaState = Incident.SLA_OK;
         }
+        if (reopening) {
+            // 重开视为新的响应周期（ADR-0033 决策 6）：按当前优先级从重开时刻重算 due_at，
+            // 并把 sla_state 重置为 ok。否则已 breached 的单重开后仍是终态，扫描器不再理会。
+            dueAt = deriveDueAt(priority, now);
+            slaState = Incident.SLA_OK;
+        }
         Incident next = new Incident(cur.id(), cur.tenant(), cur.clientId(),
                 title.isBlank() ? cur.title() : title, query,
                 p.service() == null ? cur.service() : p.service().trim(),
