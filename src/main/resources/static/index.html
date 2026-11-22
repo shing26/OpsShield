@@ -25,18 +25,19 @@
 <style>
   :root{
     color-scheme:dark;
-    --top-h:52px; --status-h:28px; --rail:288px; --drawer:360px;
-    --bg:#0d1016; --surface:#151a22; --surface-2:#1b212b; --surface-3:#222a36;
-    --line:#2a3341; --line-soft:#212935;
-    --txt:#e7edf4; --txt-2:#b3c0cf; --muted:#7d8b9b;
-    --ok:#3fb950; --warn:#d29922; --err:#f85149; --accent:#58a6ff; --purple:#a371f7;
+    --top-h:56px; --status-h:28px; --rail:264px; --facts:288px; --drawer:360px;
+    --bg:#0a0d0c; --surface:#111514; --surface-2:#161c1a; --surface-3:#1d2522;
+    --line:#28312d; --line-soft:#1e2723;
+    --txt:#e9eee9; --txt-2:#aab7b0; --muted:#6f7d76;
+    --ok:#7fbf8f; --warn:#d6a44a; --err:#e07a6f;
+    --accent:#e6e0d2; --on-accent:#12160f; --link:#a9c9bd; --purple:#9fb3a8;
     --r:10px; --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px;
-    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif;
-    --mono:ui-monospace,"Cascadia Mono",Consolas,"Liberation Mono",monospace;
+    --sans:"Segoe UI Variable Text","Segoe UI","Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif;
+    --mono:"Cascadia Code","Cascadia Mono",Consolas,"Liberation Mono",monospace;
   }
   *{box-sizing:border-box}
   html,body{margin:0;height:100%}
-  body{background:var(--bg);color:var(--txt);font:13.5px/1.55 var(--sans);
+  body{background:var(--bg);color:var(--txt);font:14px/1.55 var(--sans);
        -webkit-font-smoothing:antialiased;display:flex;flex-direction:column;overflow:hidden}
   .num,.mono,code,pre{font-family:var(--mono);font-variant-numeric:tabular-nums}
   input::placeholder,textarea::placeholder{color:var(--muted)}
@@ -53,16 +54,17 @@
   .top{flex:0 0 var(--top-h);display:flex;align-items:center;gap:10px;padding:0 16px;
        border-bottom:1px solid var(--line);background:var(--surface);position:relative;z-index:20;min-width:0}
   .brand{display:flex;align-items:baseline;gap:9px;white-space:nowrap;min-width:0}
-  .brand b{font-size:15px;font-weight:650;letter-spacing:.2px}
+  .brand b{font-size:14px;font-weight:600;letter-spacing:.01em}
   .brand b i{color:var(--accent);font-style:normal}
   .brand span{font-size:11px;color:var(--muted);white-space:nowrap}
   .topsep{width:1px;height:20px;background:var(--line);flex:0 0 auto}
   .inc-id{font-size:11.5px;color:var(--muted);white-space:nowrap}
   .inc-id b{color:var(--txt-2);font-family:var(--mono);font-weight:500}
-  .tabs{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden;flex:0 0 auto}
-  .tabs button{background:var(--surface-2);border:0;color:var(--muted);font-size:11.5px;padding:5px 11px}
-  .tabs button:hover:not(.on){color:var(--txt-2);background:#232a34}
-  .tabs button.on{background:var(--accent);color:#06121f;font-weight:600}
+  .tabs{display:inline-flex;align-items:stretch;align-self:stretch;gap:20px;flex:0 0 auto}
+  .tabs button{background:none;border:0;border-bottom:2px solid transparent;color:var(--muted);
+               font-size:12px;padding:0 2px}
+  .tabs button:hover:not(.on){color:var(--txt-2)}
+  .tabs button.on{color:var(--txt);border-bottom-color:var(--accent);font-weight:500}
   .health{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--txt-2);
           border:1px solid var(--line);border-radius:999px;padding:4px 10px;white-space:nowrap}
   .pillbtn{background:var(--surface-2);border:1px solid var(--line);color:var(--txt-2);
@@ -70,22 +72,51 @@
            gap:6px;white-space:nowrap;max-width:190px;overflow:hidden;text-overflow:ellipsis}
   .pillbtn:hover{border-color:var(--muted);color:var(--txt)}
   .btn{border:1px solid var(--line);background:var(--surface-2);color:var(--txt-2);
-       border-radius:7px;padding:6px 11px;font-size:11.5px;white-space:nowrap}
+       border-radius:6px;padding:6px 12px;font-size:12px;white-space:nowrap}
   .btn:hover:not(:disabled){border-color:var(--muted);color:var(--txt)}
-  .btn.pri{background:var(--accent);color:#06121f;border-color:transparent;font-weight:600}
-  .btn.pri:hover:not(:disabled){background:#79c0ff}
+  .btn.pri{background:var(--accent);color:var(--on-accent);border-color:transparent;font-weight:600}
+  .btn.pri:hover:not(:disabled){background:#f2ede2;color:var(--on-accent)}
   .btn.gho{background:none}
   .btn:disabled{opacity:.42;cursor:not-allowed}
   .btn.wide{width:100%;padding:9px 12px}
 
   /* 三栏壳 */
-  .shell{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:var(--rail) minmax(0,1fr) 0;overflow:hidden}
-  .shell.with-drawer{grid-template-columns:var(--rail) minmax(0,1fr) var(--drawer)}
+  .shell{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:var(--rail) minmax(0,1fr) var(--facts) 0;overflow:hidden}
+  .shell.with-drawer{grid-template-columns:var(--rail) minmax(0,1fr) var(--facts) var(--drawer)}
   .rail{background:var(--surface);border-right:1px solid var(--line);padding:14px 12px;
         display:flex;flex-direction:column;gap:10px;overflow:auto;min-height:0}
   .workspace{min-width:0;min-height:0;overflow:auto;background:var(--bg)}
   .drawer{background:var(--surface);border-left:1px solid var(--line);display:flex;
           flex-direction:column;min-height:0;overflow:hidden}
+  .facts{background:var(--surface);border-left:1px solid var(--line);padding:16px;overflow:auto;min-height:0}
+  .facts .fact{grid-template-columns:56px minmax(0,1fr)}
+  .facts .fact dd{white-space:normal;overflow-wrap:anywhere;line-height:1.55;font-size:11px}
+  .facts h2{font-size:12px;font-weight:600;margin:0 0 10px}
+  .facts h3{font-size:11px;font-weight:600;color:var(--txt-2);margin:20px 0 10px}
+  .facts .tl{padding:0}
+  .facts .tl-row{padding-bottom:12px}
+  .facts .tl-c .t{font-size:11px}
+  .facts .tl-c .m{font-size:9.5px}
+  .facts .empty{font-size:11px;padding:0}
+  /* 窄屏：本单事实折叠 + 底部结单条 */
+  .mfacts,.mbar{display:none}
+  .mfacts{margin:0 16px 12px;border:1px solid var(--line-soft);
+          border-radius:var(--r);background:var(--surface);overflow:hidden}
+  .mfacts summary{display:flex;align-items:center;gap:8px;padding:10px 12px;cursor:pointer;
+                  font-size:12px;color:var(--txt-2);list-style:none}
+  .mfacts summary::-webkit-details-marker{display:none}
+  .mfacts summary .right{margin-left:auto;font:11px/1 var(--mono);color:var(--muted)}
+  .mfacts summary::after{content:"⌄";font-size:13px;color:var(--muted);line-height:1}
+  .mfacts[open] summary::after{content:"⌃"}
+  .mfacts .in{padding:0 12px 10px}
+  .mfacts .fact{grid-template-columns:64px minmax(0,1fr);padding:7px 0;font-size:12px}
+  .mfacts .fact dd{font-size:12px;white-space:normal;overflow-wrap:anywhere}
+  .mfacts .fact dd.mono{font-size:11.5px}
+  .fact{display:grid;grid-template-columns:64px minmax(0,1fr);gap:10px;padding:8px 0;
+        border-bottom:1px solid var(--line-soft);font-size:11px}
+  .fact dt{color:var(--muted)}
+  .fact dd{margin:0;color:var(--txt-2);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .fact dd.mono{font-size:10.5px;font-family:var(--mono)}
 
   /* 左栏：事故单列表 */
   .rail-hd{display:flex;align-items:center;justify-content:space-between;padding:0 3px}
@@ -97,16 +128,16 @@
   .search{background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:6px 9px;
           color:var(--muted);font-size:11.5px;display:flex;gap:7px;align-items:center}
   .search input{background:none;border:0;outline:0;color:var(--txt);font:inherit;width:100%;min-width:0}
-  .newbtn{width:100%;background:var(--accent);color:#06121f;border:0;border-radius:8px;
-          padding:8px;font-size:12px;font-weight:600}
-  .newbtn:hover{background:#79c0ff}
+  .newbtn{width:100%;background:var(--accent);color:var(--on-accent);border:0;border-radius:6px;
+          padding:9px;font-size:12px;font-weight:600}
+  .newbtn:hover{background:#f2ede2;color:var(--on-accent)}
   .inc-list{display:flex;flex-direction:column;gap:2px;min-height:80px}
   .li-hd{font-size:10px;color:var(--muted);letter-spacing:.35px;padding:8px 4px 2px}
   .inc{display:block;width:100%;text-align:left;background:transparent;border:1px solid transparent;
        border-radius:9px;padding:9px 10px;color:inherit;position:relative}
   .inc:hover{background:var(--surface-2)}
   .inc.on{background:var(--surface-2);border-color:var(--line)}
-  .inc.on::before{content:"";position:absolute;left:0;top:11px;bottom:11px;width:3px;border-radius:3px;background:var(--accent)}
+  .inc.on::before{content:"";position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--accent)}
   .inc-x{display:flex;align-items:center;gap:6px;margin-bottom:3px;min-width:0}
   .inc-x .t{font-size:12px;font-weight:600;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .sev{font-size:9.5px;font-family:var(--mono);padding:1px 5px;border-radius:4px;font-weight:600;flex:0 0 auto}
@@ -148,9 +179,9 @@
   .crumb{font-size:10.5px;color:var(--muted);margin-bottom:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .crumb b{color:var(--accent);font-family:var(--mono);font-weight:500}
   .wk-title{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
-  .wk-title h1{font-size:19px;font-weight:650;margin:0;letter-spacing:.15px;line-height:1.3;word-break:break-word}
+  .wk-title h1{font-size:20px;font-weight:600;margin:0;letter-spacing:-.005em;line-height:1.3;word-break:break-word}
   .wk-sub{font-size:11px;color:var(--txt-2);display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:5px}
-  .wk-sub .tag{font-family:var(--mono);font-size:10px;color:var(--txt-2);background:var(--surface-2);
+  .wk-sub .tag{font-family:var(--mono);font-size:10.5px;color:var(--txt-2);background:var(--surface-2);
                border:1px solid var(--line);padding:1px 6px;border-radius:4px}
   .wk-sub button.tag{cursor:pointer}
   .wk-sub button.tag:hover{border-color:var(--accent);color:var(--txt)}
@@ -177,7 +208,7 @@
   .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;min-width:0}
   .card-hd{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:9px 14px;
            border-bottom:1px solid var(--line-soft);background:var(--surface-2)}
-  .card-hd .k{font-size:11px;font-weight:600;color:var(--txt-2);letter-spacing:.3px}
+  .card-hd .k{font-size:12px;font-weight:600;color:var(--txt-2);letter-spacing:.01em}
   .card-bd{padding:14px 16px}
   .pill{font-size:10px;padding:2px 8px;border-radius:999px;font-family:var(--mono);
         border:1px solid var(--line);color:var(--txt-2);white-space:nowrap}
@@ -197,13 +228,25 @@
   .verdict{border-left:3px solid var(--ok)}
   .verdict.refuse,.verdict.err{border-left-color:var(--err)}
   .verdict.clarify{border-left-color:var(--warn)}
-  .vline{font-size:15px;font-weight:600;line-height:1.55;margin:2px 0 12px;color:var(--txt);word-break:break-word}
-  .vkpi{display:flex;gap:18px;flex-wrap:wrap;padding:10px 0;border-top:1px solid var(--line-soft);
-        border-bottom:1px solid var(--line-soft);margin-bottom:10px}
-  .vkpi div{display:flex;flex-direction:column;gap:2px}
-  .vkpi .l{font-size:10px;color:var(--muted)}
-  .vkpi .v{font-size:13.5px;font-family:var(--mono);color:var(--txt)}
+  .vline{font-size:16px;font-weight:600;line-height:1.5;margin:2px 0 14px;color:var(--txt);word-break:break-word}
+  .vkpi{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));padding:10px 0;
+        border-top:1px solid var(--line-soft);border-bottom:1px solid var(--line-soft);margin-bottom:12px}
+  .vkpi div{display:flex;flex-direction:column;gap:3px;padding-left:16px}
+  .vkpi div:first-child{padding-left:0}
+  .vkpi div + div{border-left:1px solid var(--line-soft)}
+  .vkpi .l{font-size:10.5px;color:var(--muted)}
+  .vkpi .v{font-size:14px;font-family:var(--mono);color:var(--txt)}
   .vkpi .v.small{font-size:10.5px}
+  .vkpi .v small{font-size:10px;color:var(--muted);font-family:var(--sans)}
+  .readbar{display:flex;height:4px;background:var(--surface-3);margin-top:2px}
+  .readbar i{display:block;height:100%}
+  .readbar .ret{background:var(--link)}
+  .readbar .rest{background:var(--line)}
+  .readbar-lab{display:flex;align-items:center;gap:16px;margin-top:6px;
+               font:10px/1.4 var(--mono);color:var(--muted)}
+  .readbar-lab .right{margin-left:auto}
+  .readbar-lab .sw{display:inline-block;width:6px;height:6px;margin-right:5px;vertical-align:0}
+  .readbar-lab .sw.ret{background:var(--link)} .readbar-lab .sw.rest{background:var(--line)}
   .vsub{font-size:11.5px;color:var(--muted);line-height:1.7}
   .impact{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
   .chip{font-size:10.5px;padding:3px 8px;border-radius:6px;background:var(--surface-2);
@@ -213,8 +256,8 @@
   .chips .chip:hover{border-color:var(--accent);color:var(--accent)}
 
   /* 诊断分析 */
-  .md{font-size:13px;line-height:1.75;word-break:break-word;color:var(--txt-2)}
-  .md .md-h{font-weight:600;font-size:13px;color:var(--txt);margin:14px 0 6px}
+  .md{font-size:14px;line-height:1.75;word-break:break-word;color:var(--txt-2)}
+  .md .md-h{font-weight:600;font-size:14px;color:var(--txt);margin:14px 0 6px}
   .md .md-h:first-child{margin-top:0}
   .md .md-li{padding-left:15px;text-indent:-15px}
   .md .md-oli{padding-left:0;text-indent:0}
@@ -256,6 +299,8 @@
                   padding:7px 11px;font-size:11.5px;color:var(--txt-2);line-height:1.6}
   .contract-empty .ic{color:var(--muted);flex:0 0 auto}
   .contract-empty .txt{min-width:0}
+  .cmdempty{display:flex;align-items:center;gap:9px;padding:12px 16px;font-size:12px;color:var(--txt-2)}
+  .cmdempty .ic{color:var(--muted);font-size:13px;flex:0 0 auto}
 
   /* 参考来源 */
   .reflist{display:flex;flex-direction:column;gap:5px}
@@ -346,8 +391,8 @@
   .deg i{flex:1;height:5px;border-radius:3px;background:var(--surface-3)}
   .deg i.on{background:var(--ok)}
   .deg i.warn{background:var(--warn)}
-  .facts{display:flex;flex-wrap:wrap;gap:5px 12px;margin-top:8px;font-size:10.5px;color:var(--txt-2)}
-  .facts b{font-family:var(--mono)}
+  #degfacts{display:flex;flex-wrap:wrap;gap:5px 12px;margin-top:8px;font-size:10.5px;color:var(--txt-2)}
+  #degfacts b{font-family:var(--mono)}
   .badge{display:inline-block;padding:1px 7px;border-radius:999px;font-size:9.5px;font-weight:600;
          border:1px solid var(--warn);color:var(--warn)}
   .meter{margin-top:8px}
@@ -391,7 +436,7 @@
   .panel-main .step{flex:1;text-align:center;padding:7px 0;border-radius:7px;font-size:11px;
         background:var(--surface-2);border:1px solid var(--line-soft);color:var(--muted)}
   .panel-main .step.on{background:rgba(63,185,80,.12);border-color:var(--ok);color:var(--ok);font-weight:600}
-  .panel-main .facts{display:flex;flex-wrap:wrap;gap:7px 16px;margin-top:9px;font-size:11px;color:var(--txt-2)}
+  .panel-main #degfacts{display:flex;flex-wrap:wrap;gap:7px 16px;margin-top:9px;font-size:11px;color:var(--txt-2)}
   .panel-main .meter{margin-top:9px}
   .panel-main .tracks{display:flex;flex-direction:column;gap:7px}
   .panel-main .req{background:var(--surface-2);border:1px solid var(--line-soft);border-radius:7px;
@@ -510,43 +555,65 @@
 
   /* 响应式 */
   @media(max-width:1180px){
-    .shell,.shell.with-drawer{grid-template-columns:240px minmax(0,1fr) 0}
+    .shell,.shell.with-drawer{grid-template-columns:216px minmax(0,1fr) 236px 0}
+    .facts{padding:14px 12px}
+    .facts .fact{grid-template-columns:52px minmax(0,1fr);gap:8px}
     .drawer{position:fixed;top:var(--top-h);right:0;bottom:var(--status-h);width:min(390px,94vw);z-index:32;
             box-shadow:-18px 0 40px rgba(0,0,0,.35)}
     .shell.with-drawer .drawer{display:flex}
-    .wk-head{padding:13px 18px 11px}
-    .canvas{padding:14px 18px 46px}
+    .wk-head{padding:13px 16px 11px}
+    .canvas{padding:14px 16px 46px}
   }
   @media(max-width:900px){
-    body{overflow:auto}
+    body{height:auto;min-height:100%;overflow:auto}
     .shell{grid-template-columns:1fr;overflow:visible;min-height:0}
     .shell.with-drawer{grid-template-columns:1fr}
-    .rail{max-height:42vh;border-right:0;border-bottom:1px solid var(--line)}
+    .rail{max-height:44vh;border-right:0;border-bottom:1px solid var(--line)}
+    .facts{display:none}
+    .rail-foot{display:none}
     .workspace{overflow:visible}
     .canvas.compare{grid-template-columns:1fr}
     .wk-head{position:static}
     .hero-grid{grid-template-columns:1fr}
     .brand span,.inc-id{display:none}
-    .top{gap:7px;padding:0 10px;flex-wrap:nowrap}
+    .top{gap:10px;padding:0 12px;flex-wrap:nowrap;overflow:hidden}
+    .brand{min-width:0}
+    .tabs{flex:0 0 auto}
+    .topsep{display:none}
     .health{display:none}
     .wk-head{gap:9px}
     .wk-actions{justify-content:flex-start}
     .fgrid{grid-template-columns:1fr}
     .fgrid .span2{grid-column:auto}
+    .mfacts{display:block;margin:0 16px 12px}
     .statusbar #fingerprint{display:none}
   }
   @media(max-width:600px){
+    .brand{flex:0 0 auto}
     .brand b{font-size:14px}
-    .tabs button{padding:5px 8px;font-size:10.5px}
+    .tabs{gap:12px}
+    .tabs button{padding:0;font-size:11px}
     .pillbtn{max-width:130px}
+    #llmchip{display:none}
     #advbtn{display:none}
-    .wk-title h1{font-size:16px}
+    .wk-title{gap:7px}
+    .wk-title h1{font-size:18px;line-height:1.35;letter-spacing:-.005em;word-break:normal}
+    .wk-sub{gap:6px 10px;font-size:11px}
+    .wk-sub .tag{font-size:10.5px}
+    .wk-actions{display:none}
+    .wk-actions .btn{height:30px;font-size:11.5px;padding:0 10px}
+    .wk-actions .btn.pri{flex:1;justify-content:center}
     .canvas{padding:12px 12px 40px}
-    .wk-head{padding:11px 12px 10px}
-    .rail{padding:11px 10px;max-height:46vh}
+    .wk-head{padding:12px 12px 10px;flex-direction:column;align-items:stretch;gap:10px}
+    .rail{padding:11px 10px;max-height:none}
+    .rail .newbtn{padding:8px}
+    .rail .search{padding:6px 9px}
     .card-bd{padding:12px}
-    .vline{font-size:14.5px}
-    .vkpi{gap:12px}
+    .vline{font-size:15px}
+    .vkpi{grid-template-columns:repeat(3,minmax(0,1fr))}
+    .vkpi div{padding-left:10px}
+    .readbar-lab{gap:10px;font-size:10px}
+    .readbar-lab span:nth-child(2){display:none}
     .panel-main{padding:12px 12px 22px}
     .panel-main .kpis{grid-template-columns:1fr 1fr;gap:8px}
     .panel-main .kpi{padding:10px}
@@ -556,10 +623,20 @@
     .panel-main table.res th:nth-child(5),.panel-main table.res td:nth-child(5){display:none}
     .toasts{bottom:38px}
     .statusbar{padding:0 10px;gap:8px}
+    body.has-mbar{padding-bottom:60px}
+    .mfacts{margin:0 12px 12px}
+    .mbar:not([hidden]){position:fixed;left:0;right:0;bottom:0;z-index:25;display:flex;align-items:center;
+      gap:8px;height:60px;padding:0 12px calc(env(safe-area-inset-bottom, 0px));
+      background:var(--surface);border-top:1px solid var(--line);
+      box-shadow:0 -10px 26px rgba(0,0,0,.35)}
+    .mbar .btn{height:38px}
+    .mbar .btn.pri{flex:1;justify-content:center;font-size:12.5px}
   }
   /* 移动端可读性下限（#36）：图例/脚注/标签不低于 12px */
   @media (max-width:600px){
     .pill,.copy,.vsub,.ref-badge,.cmd .ref,.card-hd .k,.vkpi .l,.statusbar{font-size:12px}
+    .rail-foot{display:none}
+    .statusbar #storestat{display:none}
   }
 </style>
 </head>
@@ -608,9 +685,11 @@
   </aside>
   <main class="workspace">
     <div id="wsHead"></div>
+    <div id="mfacts" class="mfacts" hidden></div>
     <div id="canvas" class="canvas"></div>
     <div id="diff"></div>
   </main>
+  <aside class="facts" id="facts" aria-label="本单事实"></aside>
   <aside class="drawer" id="drawer" aria-label="运行态抽屉" hidden>
     <div class="drawer-hd"><b>运行态</b><span class="pill" id="drawerMode">—</span>
       <button type="button" class="x" data-act="closedrawer" aria-label="关闭运行态">✕</button></div>
@@ -692,6 +771,7 @@
   </div>
 </div>
 
+<div class="mbar" id="mbar" hidden></div>
 <footer class="statusbar">
   <span id="pollstate">idle</span>
   <span class="spacer"></span>
@@ -786,7 +866,7 @@ const S = {
   coverage: null, covErr: null, covOpen: false,
   a: side('sre-full'), b: side('sre-limited'),
   incidents: [], activeId: null, filter: 'open', search: '',
-  quick: '', drawerOpen: false
+  quick: '', drawerOpen: false, mfactsOpen: false
 };
 
 try {
@@ -1076,6 +1156,11 @@ function selectIncident(id) {
   S.b.r = null;
   try { localStorage.setItem(ACTIVE_KEY, inc.id); } catch (e) { /* 非致命 */ }
   renderAll();
+  // 窄屏下左栏在文档流上方：选中事故单后把工作区带到视口，避免用户以为"点了没反应"。
+  if (window.matchMedia && window.matchMedia('(max-width:900px)').matches) {
+    const ws = document.querySelector('.workspace');
+    if (ws) ws.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }
 }
 
 function incidentStatus(inc) {
@@ -1412,24 +1497,31 @@ function verdict(r, k, inc) {
         ? '拒答是安全信号：下方给出“最接近的标识符”与上报入口，而不是低置信度正文。'
         : '依据 ' + refsN + ' 条引用' + (actsN ? '、' + actsN + ' 条只读命令' : '')
           + '；下方「诊断分析 → 只读命令清单 → 参考来源」可逐项核对。';
+  const totalMs = r.ms != null ? r.ms : null;
+  const retMs = (r.meta && r.meta.retrieval_ms != null && !clarify) ? (r.meta.retrieval_ms | 0) : null;
+  const pct = (totalMs && retMs != null && totalMs > 0)
+    ? Math.max(0, Math.min(100, Math.round(retMs * 100 / totalMs))) : null;
+  const bars = pct == null ? ''
+    : '<div class="readbar" aria-hidden="true"><i class="ret" style="width:' + pct + '%"></i>'
+      + '<i class="rest" style="width:' + (100 - pct) + '%"></i></div>'
+      + '<div class="readbar-lab"><span><i class="sw ret"></i>检索 ' + retMs + 'ms</span>'
+      + '<span><i class="sw rest"></i>其余 ' + Math.max(0, totalMs - retMs) + 'ms</span>'
+      + '<span class="right">总 ' + totalMs + 'ms</span></div>';
   return '<section class="card verdict ' + tone + '" aria-label="诊断结论">'
     + '<div class="card-hd"><span class="k">诊断结论</span>' + badge(r)
     + (r.meta ? '<span class="pill">cache ' + esc(r.meta.cache_hit || 'none') + '</span>' : '')
     + (r.meta ? '<span class="pill">' + esc(r.meta.degradation_level || 'L0') + '</span>' : '')
-    + (r.meta && !clarify ? '<span class="pill">检索 ' + ret + '</span>' : '')
     + '<span class="spacer"></span>'
     + (streaming ? '<button type="button" class="ghost" data-act="stop" data-k="' + k + '">停止</button>' : '')
     + (!streaming ? '<button type="button" class="copy" data-act="copymd" data-k="' + k + '">⧉ 复制为工单</button>' : '')
     + '</div><div class="card-bd">'
     + '<div class="vline">' + esc(line) + '</div>'
     + '<div class="vkpi">'
-    + '<div><span class="l">依据</span><span class="v">' + refsN + ' 条引用</span></div>'
-    + '<div><span class="l">只读命令</span><span class="v">' + actsN + ' 条</span></div>'
-    + '<div><span class="l">检索</span><span class="v">' + ret + '</span></div>'
+    + '<div><span class="l">引用</span><span class="v">' + refsN + '<small> 条</small></span></div>'
+    + '<div><span class="l">只读命令</span><span class="v">' + actsN + '<small> 条</small></span></div>'
     + '<div><span class="l">总耗时</span><span class="v">' + total + '</span></div>'
-    + '<div><span class="l">去重键</span><span class="v small" title="'
-      + esc(r.meta && r.meta.fingerprint || '') + '">' + esc(shortFp(r.meta && r.meta.fingerprint)) + '</span></div>'
     + '</div>'
+    + bars
     + '<div class="vsub">' + sub + '</div>'
     + '<div class="impact">'
     + (inc && inc.service ? '<span class="chip hot">' + esc(inc.service) + '</span>' : '')
@@ -1523,6 +1615,12 @@ function analysisCard(r, k) {
 function commandsCard(r) {
   const g = (r.meta && r.meta.gate) || 'none';
   if (g === 'clarify' || g === 'refuse') return '';
+  if (!(r.actions || []).length) {
+    return '<section class="card"><div class="cmdempty">'
+      + '<span class="ic">ℹ</span><span>本轮引用不含可执行代码围栏 · 0 条只读命令</span>'
+      + '<span class="spacer"></span>'
+      + '<button type="button" class="linkbtn" data-act="cmdwhy">为什么</button></div></section>';
+  }
   return '<section class="card"><div class="card-hd"><span class="k">只读命令清单</span>'
     + '<span class="pill acc">' + (r.actions || []).length + ' 条</span>'
     + '<span class="spacer"></span><span class="pill">网关不执行</span></div>'
@@ -1565,6 +1663,81 @@ function timelineCard(inc) {
         + '<div class="m">' + esc(fmtDT(ev.at)) + (ev.meta ? ' · ' + esc(ev.meta) : '') + '</div>'
         + '</div></div>';
     }).join('') + '</div></section>';
+}
+
+function factsPanel(inc) {
+  const box = $('facts');
+  if (!box) return;
+  if (!inc) {
+    const c = S.coverage;
+    box.innerHTML = '<h2>能力边界</h2>'
+      + '<div class="fact"><dt>只读</dt><dd>网关不执行任何命令，只展示逐字抽取的只读命令。</dd></div>'
+      + '<div class="fact"><dt>L1</dt><dd>受控恢复动作默认关闭，需单独开启与确认。</dd></div>'
+      + '<div class="fact"><dt>后端</dt><dd>当前 mock 模板；指标仍来自真实字段。</dd></div>'
+      + '<h3>覆盖范围</h3><div class="fact"><dt>语料</dt><dd>'
+      + (c ? esc((c.services | 0) + ' 服务 · ' + (c.error_codes | 0) + ' 错误码 · ' + (c.chunks | 0) + ' 语义块')
+        : (S.a.token ? '读取中…' : '接入后可见'))
+      + '</dd></div>';
+    return;
+  }
+  const st = incidentStatus(inc);
+  const closed = inc.status === 'closed';
+  const rows = factRows(inc);
+  box.innerHTML = '<h2>本单事实</h2><dl style="margin:0">'
+    + rows.map(([k, v]) => '<div class="fact"><dt>' + esc(k) + '</dt><dd'
+      + (k === '状态' ? '' : ' class="mono"') + '>' + esc(v) + '</dd></div>').join('')
+    + '</dl>'
+    + '<h3>处置记录</h3>'
+    + ((inc.timeline || []).length
+      ? '<div class="tl">' + (inc.timeline || []).slice(-6).map((ev, i, arr) => {
+          const last = i === arr.length - 1 && !closed;
+          return '<div class="tl-row"><span class="tl-dot ' + (last ? 'now' : 'done') + '"></span>'
+            + '<div class="tl-c"><div class="t">' + esc(ev.text) + '</div>'
+            + '<div class="m">' + esc(fmtDT(ev.at)) + (ev.meta ? ' · ' + esc(ev.meta) : '') + '</div></div></div>';
+        }).join('') + '</div>'
+      : '<div class="empty">尚无处置记录</div>');
+}
+
+function factRows(inc) {
+  return [
+    ['状态', incidentStatus(inc).label],
+    ['优先级', inc.priority || '未定'],
+    ['来源', inc.source || '—'],
+    ['负责人', inc.owner || '未分配'],
+    ['创建', fmtDT(inc.createdAt)],
+    ['服务', inc.service || '—'],
+    ['错误码', inc.errorCode || '—'],
+    ['告警 ID', inc.alertId || '—'],
+    ['环境', inc.env || '—'],
+  ];
+}
+
+function mobileFacts(inc) {
+  const box = $('mfacts');
+  if (!box) return;
+  if (!inc) { box.hidden = true; box.innerHTML = ''; return; }
+  const rows = factRows(inc);
+  box.hidden = false;
+  box.innerHTML = '<details' + (S.mfactsOpen ? ' open' : '') + ' data-mfacts>'
+    + '<summary>本单事实<span class="right">' + rows.length + ' 项</span></summary>'
+    + '<div class="in"><dl style="margin:0">'
+    + rows.map(([k, v]) => '<div class="fact"><dt>' + esc(k) + '</dt><dd'
+      + (k === '状态' ? '' : ' class="mono"') + '>' + esc(v) + '</dd></div>').join('')
+    + '</dl></div></details>';
+  box.querySelector('details').addEventListener('toggle', e => { S.mfactsOpen = e.target.open; });
+}
+
+function mobileBar(inc) {
+  const bar = $('mbar');
+  if (!bar) return;
+  const show = !!inc && S.view !== 'panel';
+  document.body.classList.toggle('has-mbar', show);
+  if (!show) { bar.hidden = true; bar.innerHTML = ''; return; }
+  bar.hidden = false;
+  bar.innerHTML = inc.status === 'closed'
+    ? '<button type="button" class="btn pri" data-act="reopen">重新打开</button>'
+    : '<button type="button" class="btn gho" data-act="diag">重新诊断</button>'
+      + '<button type="button" class="btn pri" data-act="closeinc">结单并记录处置</button>';
 }
 
 function nearMs(x, y) {
@@ -1883,6 +2056,9 @@ function renderWorkspace() {
   $('topInc').textContent = inc ? inc.id : '—';
   $('wsHead').innerHTML = inc ? incidentHeader(inc) : welcomeHeader();
   const cv = $('canvas');
+  factsPanel(inc);
+  mobileFacts(inc);
+  mobileBar(inc);
   if (!inc) {
     cv.className = 'canvas';
     cv.innerHTML = welcomeCanvas();
@@ -2193,6 +2369,8 @@ function setView(v, opts) {
   $('v-trouble').hidden = v !== 'trouble';
   $('v-panel').hidden = v !== 'panel';
   $('healthbtn').hidden = v === 'panel';
+  $('mbar').hidden = v === 'panel' || !activeIncident();
+  document.body.classList.toggle('has-mbar', v !== 'panel' && !!activeIncident());
   if (v === 'panel') closeDrawer();
   renderPanelGate();
   closePops();
@@ -2842,6 +3020,7 @@ document.addEventListener('click', async e => {
     if (act === 'editinc') { openIncidentDialog({ mode: 'edit', inc: activeIncident() }); return; }
     if (act === 'assign') { await openAssignPop(); return; }
     if (act === 'diag') { await ask(activeIncident()); return; }
+    if (act === 'cmdwhy') { toast(EMPTY_CONTRACT_TIP, 'warn'); return; }
     if (act === 'closeinc') { openCloseDialog(); return; }
     if (act === 'reopen') {
       const inc = activeIncident();

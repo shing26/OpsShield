@@ -158,3 +158,41 @@ def test_reopen_sends_status_only() -> None:
     html = _html()
     assert "patchIncident(inc, { status: 'open' }, null, null, null, { content: false })" in html, \
         "重开必须剥离内容字段，只发 {\"status\":\"open\"}"
+
+
+def test_right_rail_facts_do_not_inherit_panel_flex_layout() -> None:
+    """右栏 `.facts` 曾命中运行面板的 flex 规则，把「处置记录」挤到标题右侧。"""
+    html = _html()
+    assert re.search(r"\.facts\{display:flex", html) is None, \
+        "禁止用 .facts 选择器做 flex 行布局（会污染右栏本单事实）"
+    assert "#degfacts{display:flex" in html, "降级状态机的行内事实应挂在 #degfacts 上"
+
+
+def test_narrow_layout_can_grow_past_viewport() -> None:
+    """≤900px 若 body 仍是 100% 高，底部状态栏会压住正文。"""
+    html = _html()
+    m = re.search(r"@media\(max-width:900px\)\{(.*?)\.rail\{", html, re.S)
+    assert m, "缺 ≤900px 断点"
+    assert "body{height:auto" in m.group(1), "窄屏 body 必须允许随文档增高"
+
+
+def test_right_rail_survives_tablet_width() -> None:
+    """1024px 曾把右栏压成 0 宽却保留内边距，内容溢出到视口外。"""
+    html = _html()
+    m = re.search(r"@media\(max-width:1180px\)\{(.*?)\n  \}", html, re.S)
+    assert m, "缺 ≤1180px 断点"
+    block = m.group(1)
+    assert "minmax(0,1fr) 0}" not in block, "≤1180px 不能把第三列压成 0 宽还留内边距"
+    assert re.search(r"grid-template-columns:[^;]*236px", block), \
+        "≤1180px 右栏应保留可读宽度（236px）"
+
+
+def test_mobile_facts_and_action_bar_exist() -> None:
+    """≤900px 隐藏右栏后，事实与结单入口不能一起消失。"""
+    html = _html()
+    assert 'id="mfacts"' in html and "function mobileFacts" in html, \
+        "缺窄屏「本单事实」折叠块"
+    assert 'id="mbar"' in html and "function mobileBar" in html, \
+        "缺窄屏底部结单操作条"
+    assert "body.has-mbar{padding-bottom:60px}" in html, \
+        "底部操作条必须给 body 留出安全区，避免遮住最后一行内容"

@@ -1,0 +1,662 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>OpsShield 界面精修阅览稿 · 2026-11-22</title>
+<style>
+  :root{
+    --bg:#0a0d0c; --surface:#111514; --surface-2:#161c1a; --surface-3:#1d2522;
+    --line:#28312d; --line-soft:#1e2723;
+    --txt:#e9eee9; --txt-2:#aab7b0; --muted:#6f7d76;
+    --ink:#e6e0d2; --ink-2:#f2ede2; --ink-text:#12160f;
+    --ok:#7fbf8f; --warn:#d6a44a; --err:#e07a6f; --link:#a9c9bd;
+    --sans:"Segoe UI Variable Text","Segoe UI","Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif;
+    --mono:"Cascadia Code","Cascadia Mono",Consolas,"Liberation Mono",monospace;
+    --r-ctl:6px; --r-panel:10px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:#070908;color:var(--txt)}
+  body{font:14px/1.55 var(--sans);-webkit-font-smoothing:antialiased}
+  .i{width:16px;height:16px;flex:0 0 auto;stroke:currentColor;fill:none;stroke-width:1.5;
+     stroke-linecap:round;stroke-linejoin:round;vertical-align:-3px}
+  .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+  /* ---------- 阅览稿外壳 ---------- */
+  .brief{max-width:1360px;margin:0 auto;padding:40px 32px 24px}
+  .brief .eyebrow{font:11px/1 var(--mono);letter-spacing:.08em;color:var(--muted)}
+  .brief h1{font-size:24px;font-weight:600;letter-spacing:-.01em;margin:12px 0 6px}
+  .brief .lede{color:var(--txt-2);max-width:76ch;margin:0}
+  .direction{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:1px;background:var(--line-soft);
+             border:1px solid var(--line-soft);border-radius:var(--r-panel);overflow:hidden;margin-top:24px}
+  .direction div{background:var(--surface);padding:14px 16px}
+  .direction dt{font:10px/1 var(--mono);color:var(--muted);margin-bottom:8px}
+  .direction dd{margin:0;font-size:12px;line-height:1.6;color:var(--txt-2)}
+  .direction dd b{color:var(--txt);font-weight:500}
+  .audit{display:grid;grid-template-columns:1fr 1fr;gap:28px;margin-top:24px}
+  .audit h2{font-size:12px;font-weight:600;color:var(--txt);margin:0 0 8px}
+  .audit ul{margin:0;padding:0;list-style:none;color:var(--txt-2);font-size:12px;line-height:1.7}
+  .audit li{padding-left:14px;position:relative}
+  .audit li::before{content:"";position:absolute;left:0;top:.62em;width:5px;height:5px;background:var(--muted)}
+  .audit li b{color:var(--txt);font-weight:500}
+  .ask{border-left:2px solid var(--ink);padding:2px 0 2px 14px;margin-top:24px;color:var(--txt-2);font-size:12px}
+  .ask b{color:var(--txt);font-weight:500}
+
+  .stage{max-width:1360px;margin:0 auto;padding:8px 32px 64px}
+  .stage h2{font:11px/1 var(--mono);color:var(--muted);letter-spacing:.06em;margin:36px 0 12px}
+  .screen{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--bg)}
+
+  /* ---------- 应用本体 ---------- */
+  .app{height:860px;display:flex;flex-direction:column;background:var(--bg);color:var(--txt);overflow:hidden}
+  .bar{height:56px;flex:0 0 56px;display:flex;align-items:center;gap:20px;padding:0 20px;
+       border-bottom:1px solid var(--line);background:var(--surface)}
+  .brand{display:flex;align-items:center;gap:10px;white-space:nowrap}
+  .mark{width:18px;height:18px;border:1px solid var(--ink);display:grid;place-items:center;border-radius:3px}
+  .mark i{width:6px;height:6px;background:var(--ink);display:block}
+  .brand b{font-size:14px;font-weight:600;letter-spacing:.01em}
+  .brand span{font-size:11px;color:var(--muted);margin-left:2px}
+  .crumbbar{font:11px/1 var(--mono);color:var(--muted);white-space:nowrap}
+  .crumbbar b{color:var(--txt-2);font-weight:400}
+  .tabs{display:flex;align-items:stretch;height:56px;gap:20px}
+  .tabs button{background:none;border:0;border-bottom:2px solid transparent;padding:0 2px;
+               color:var(--muted);font:12px/1 var(--sans);cursor:pointer}
+  .tabs button.on{color:var(--txt);border-bottom-color:var(--ink)}
+  .topright{margin-left:auto;display:flex;align-items:center;gap:12px}
+  .status{display:inline-flex;align-items:center;gap:7px;font-size:11px;color:var(--txt-2)}
+  .lamp{width:7px;height:7px;flex:0 0 auto;background:var(--muted);border-radius:1px;
+        box-shadow:0 0 0 1px rgba(233,238,233,.14)}
+  .lamp.ok{background:var(--ok)} .lamp.warn{background:var(--warn)} .lamp.err{background:var(--err)}
+  .mock{font:10px/1 var(--mono);color:var(--muted);letter-spacing:.04em}
+  .ghost{height:30px;display:inline-flex;align-items:center;gap:6px;padding:0 10px;background:none;
+         border:1px solid var(--line);border-radius:var(--r-ctl);color:var(--txt-2);font-size:12px;cursor:pointer}
+  .ghost:hover{border-color:var(--muted);color:var(--txt)}
+  .iconbtn{width:30px;height:30px;display:grid;place-items:center;background:none;border:0;
+           border-radius:var(--r-ctl);color:var(--muted);cursor:pointer}
+  .iconbtn:hover{background:var(--surface-2);color:var(--txt)}
+  .user{display:flex;align-items:center;gap:8px;color:var(--txt-2);font:11px/1 var(--mono)}
+  .avatar{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:var(--surface-3);
+          color:var(--txt);font:10px/1 var(--mono);border:1px solid var(--line)}
+  .body{flex:1;display:grid;grid-template-columns:264px minmax(0,1fr) 288px;min-height:0}
+
+  /* 左栏 */
+  .rail{border-right:1px solid var(--line);background:var(--surface);padding:16px 12px;
+        display:flex;flex-direction:column;min-height:0}
+  .rail-head{display:flex;align-items:baseline;justify-content:space-between;padding:0 4px}
+  .rail-head h2{font-size:13px;font-weight:600;margin:0}
+  .rail-head .cnt{font:10px/1 var(--mono);color:var(--muted)}
+  .seg{display:flex;gap:16px;border-bottom:1px solid var(--line-soft);margin-top:12px;padding:0 4px}
+  .seg button{background:none;border:0;border-bottom:2px solid transparent;padding:0 0 8px;
+              color:var(--muted);font-size:11px;cursor:pointer}
+  .seg button.on{color:var(--txt);border-bottom-color:var(--ink)}
+  .search{height:32px;display:flex;align-items:center;gap:8px;margin-top:12px;padding:0 10px;
+          background:var(--surface-2);border:1px solid var(--line-soft);border-radius:var(--r-ctl);color:var(--muted)}
+  .search span{font-size:11px}
+  .new{height:36px;width:100%;margin-top:8px;display:flex;align-items:center;gap:8px;padding:0 10px;
+       background:var(--ink);color:var(--ink-text);border:0;border-radius:var(--r-ctl);
+       font-size:12px;font-weight:600;cursor:pointer}
+  .new .key{margin-left:auto;font:10px/1 var(--mono);border:1px solid rgba(18,22,15,.28);
+            border-radius:3px;padding:2px 4px;color:rgba(18,22,15,.62)}
+  .list{margin-top:12px;display:flex;flex-direction:column;gap:2px;min-height:0;overflow:auto}
+  .item{width:100%;text-align:left;background:transparent;border:0;border-left:2px solid transparent;
+        border-radius:0 6px 6px 0;padding:11px 10px;color:inherit;cursor:pointer}
+  .item:hover{background:var(--surface-2)}
+  .item.on{background:var(--surface-2);border-left-color:var(--ink)}
+  .item-top{display:flex;align-items:center;gap:8px;min-width:0}
+  .prio{width:17px;height:17px;display:grid;place-items:center;border:1px solid var(--err);border-radius:3px;
+        color:var(--err);font:9px/1 var(--mono);flex:0 0 auto}
+  .item-title{font-size:12.5px;font-weight:500;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .item-meta{margin-top:5px;font:10.5px/1.4 var(--mono);color:var(--muted);
+             overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .item-foot{display:flex;align-items:center;justify-content:space-between;margin-top:6px;font-size:10.5px;color:var(--muted)}
+  .st{display:inline-flex;align-items:center;gap:6px}
+  .rail-empty{margin-top:12px;padding:12px 10px;border:1px solid var(--line-soft);border-radius:var(--r-ctl);
+              color:var(--muted);font-size:11px;line-height:1.65}
+  .rail-empty b{display:block;color:var(--txt-2);font-weight:500;margin-bottom:4px}
+  .rail-empty a{color:var(--link);text-decoration:none;border-bottom:1px solid rgba(169,201,189,.35)}
+  .rail-foot{margin-top:auto;padding-top:14px;border-top:1px solid var(--line-soft)}
+  .shift{display:flex;align-items:center;justify-content:space-between;font:10px/1 var(--mono);color:var(--muted)}
+  .ticks{height:7px;margin:8px 0 12px;
+         background:repeating-linear-gradient(90deg,var(--line) 0 1px,transparent 1px 9px)}
+  .cov{display:flex;align-items:center;justify-content:space-between;font-size:10.5px;color:var(--muted)}
+  .cov b{color:var(--txt-2);font-weight:500}
+  .cov-line{margin-top:6px;font:10px/1.5 var(--mono);color:var(--muted)}
+
+  /* 工作区 */
+  .work{min-width:0;overflow:auto;background:var(--bg)}
+  .wk-head{padding:20px 24px 16px;border-bottom:1px solid var(--line-soft);display:flex;gap:20px;align-items:flex-start}
+  .wk-main{flex:1;min-width:0}
+  .wk-crumb{font:10.5px/1 var(--mono);color:var(--muted)}
+  .wk-crumb b{color:var(--txt-2);font-weight:400}
+  .wk-title{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:8px}
+  .wk-title h1{font-size:20px;font-weight:600;letter-spacing:-.005em;line-height:1.3;margin:0}
+  .wk-status{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--txt-2)}
+  .wk-meta{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:9px;font-size:11px;color:var(--muted)}
+  .wk-meta b{color:var(--txt-2);font-weight:400}
+  .wk-meta .mono{font-size:10.5px}
+  .wk-actions{display:flex;gap:8px;align-items:center;flex:0 0 auto}
+  .btn{height:32px;display:inline-flex;align-items:center;gap:6px;padding:0 12px;border-radius:var(--r-ctl);
+       border:1px solid var(--line);background:var(--surface-2);color:var(--txt-2);font-size:12px;cursor:pointer}
+  .btn:hover{border-color:var(--muted);color:var(--txt)}
+  .btn.pri{background:var(--ink);border-color:transparent;color:var(--ink-text);font-weight:600}
+  .btn.pri:hover{background:var(--ink-2);color:var(--ink-text)}
+  .query{display:flex;align-items:center;gap:12px;margin-top:14px;padding:8px 12px;
+         background:var(--surface);border:1px solid var(--line-soft);border-radius:var(--r-ctl)}
+  .query .lbl{font:10px/1 var(--mono);color:var(--muted);flex:0 0 auto}
+  .query .q{flex:1;min-width:0;font-size:12px;color:var(--txt-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .query a{font-size:11px;color:var(--link);text-decoration:none;border-bottom:1px solid rgba(169,201,189,.35)}
+  .canvas{padding:20px 24px 48px;display:flex;flex-direction:column;gap:12px;max-width:860px}
+  .panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-panel);overflow:hidden}
+  .readout{border-left:3px solid var(--ok);padding:16px 18px}
+  .readout.refuse{border-left-color:var(--err)}
+  .ro-head{display:flex;align-items:center;gap:10px}
+  .ro-head .k{font:10px/1 var(--mono);color:var(--muted);letter-spacing:.04em}
+  .ro-head .right{margin-left:auto;display:flex;gap:12px;align-items:center}
+  .ro-head .right button{background:none;border:0;color:var(--link);font-size:11px;display:inline-flex;
+                         align-items:center;gap:5px;cursor:pointer;padding:0}
+  .verdict{font-size:16px;font-weight:600;line-height:1.5;margin:10px 0 14px;color:var(--txt)}
+  .instr{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-top:1px solid var(--line-soft);
+         border-bottom:1px solid var(--line-soft)}
+  .instr div{padding:10px 0}
+  .instr div + div{padding-left:16px;border-left:1px solid var(--line-soft)}
+  .instr .l{font-size:10px;color:var(--muted)}
+  .instr .v{font:14px/1.3 var(--mono);color:var(--txt);margin-top:3px}
+  .instr .v small{font-size:10px;color:var(--muted);margin-left:4px}
+  .stagebar{margin-top:12px}
+  .bar-track{height:4px;background:var(--surface-3);display:flex;overflow:hidden}
+  .bar-track i{display:block;height:100%}
+  .bar-track .ret{background:var(--link)}
+  .bar-track .rest{background:var(--line)}
+  .bar-labels{display:flex;justify-content:space-between;margin-top:6px;font:10px/1 var(--mono);color:var(--muted)}
+  .bar-labels .k{display:inline-flex;align-items:center;gap:5px}
+  .swatch{width:6px;height:6px;display:inline-block}
+  .swatch.ret{background:var(--link)} .swatch.rest{background:var(--line)}
+  .sec{padding:16px 18px;border-top:1px solid var(--line-soft)}
+  .sec-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:10px}
+  .sec-head h3{font-size:12px;font-weight:600;margin:0}
+  .sec-head .meta{font:10px/1 var(--mono);color:var(--muted)}
+  .prose{font-size:14px;line-height:1.75;color:var(--txt-2);max-width:68ch}
+  .prose p{margin:0 0 10px}
+  .prose p:last-child{margin-bottom:0}
+  .prose strong{color:var(--txt);font-weight:500}
+  .sup{font:10px/1 var(--mono);color:var(--link);border-bottom:1px dotted rgba(169,201,189,.5);
+       padding:0 1px;margin-left:2px}
+  .cmdrow{display:flex;align-items:center;gap:10px;padding:12px 18px;border-top:1px solid var(--line-soft);
+          color:var(--txt-2);font-size:12px}
+  .cmdrow .i{color:var(--muted)}
+  .cmdrow .why{margin-left:auto;color:var(--link);font-size:11px;text-decoration:none;
+               border-bottom:1px solid rgba(169,201,189,.35)}
+  .reftable{padding:4px 0}
+  .refrow{display:grid;grid-template-columns:24px minmax(0,1fr) 112px 64px;gap:12px;align-items:center;
+          min-height:36px;padding:0 18px;font-size:12px;color:var(--txt-2)}
+  .refrow:hover{background:var(--surface-2)}
+  .refrow.head{min-height:28px;font:10px/1 var(--mono);color:var(--muted)}
+  .refrow .idx{font:10px/1 var(--mono);color:var(--muted)}
+  .refrow .doc{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .refrow .svc,.refrow .kind{font:10px/1 var(--mono);color:var(--muted)}
+
+  /* 右栏事实 */
+  .facts{border-left:1px solid var(--line);background:var(--surface);padding:16px;overflow:auto}
+  .facts h2{font-size:12px;font-weight:600;margin:0 0 10px}
+  .fact{display:grid;grid-template-columns:64px minmax(0,1fr);gap:10px;padding:8px 0;
+        border-bottom:1px solid var(--line-soft);font-size:11px}
+  .fact dt{color:var(--muted)}
+  .fact dd{margin:0;color:var(--txt-2);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .fact dd.mono{font-size:10.5px}
+  .facts h3{font-size:11px;font-weight:600;color:var(--txt-2);margin:20px 0 10px}
+  .tl{position:relative;padding-left:16px}
+  .tl::before{content:"";position:absolute;left:4px;top:5px;bottom:5px;width:1px;background:var(--line)}
+  .tl-item{position:relative;padding-bottom:14px}
+  .tl-item:last-child{padding-bottom:0}
+  .tl-item::before{content:"";position:absolute;left:-15px;top:4px;width:7px;height:7px;
+                   background:var(--surface);border:1px solid var(--muted);border-radius:1px}
+  .tl-item.now::before{background:var(--ink);border-color:var(--ink)}
+  .tl-item .t{font-size:11px;color:var(--txt-2)}
+  .tl-item .m{font:10px/1.5 var(--mono);color:var(--muted);margin-top:2px}
+  .covbox{margin-top:20px;padding:10px 12px;border:1px solid var(--line-soft);border-radius:var(--r-ctl)}
+  .covbox .l{font-size:10px;color:var(--muted)}
+  .covbox .v{font:11px/1.6 var(--mono);color:var(--txt-2);margin-top:4px}
+  .statusbar{height:28px;flex:0 0 28px;display:flex;align-items:center;gap:12px;padding:0 16px;
+             border-top:1px solid var(--line);background:var(--surface);font:10px/1 var(--mono);color:var(--muted)}
+  .statusbar .right{margin-left:auto}
+
+  /* 空态 */
+  .empty-head{padding:24px 24px 0;max-width:860px}
+  .empty-head .eyebrow{font:10px/1 var(--mono);color:var(--muted)}
+  .empty-head h1{font-size:22px;font-weight:600;letter-spacing:-.01em;margin:10px 0 6px}
+  .empty-head p{margin:0;color:var(--txt-2);font-size:13px;line-height:1.7;max-width:62ch}
+  .start{margin:20px 24px 0;max-width:860px;padding:16px;background:var(--surface);
+         border:1px solid var(--line);border-radius:var(--r-panel)}
+  .start .field{background:var(--bg);border:1px solid var(--line-soft);border-radius:var(--r-ctl);padding:12px}
+  .start .ph{font:12px/1.8 var(--mono);color:var(--muted)}
+  .start .ph b{display:block;color:var(--txt-2);font-weight:400}
+  .start .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+  .start .chips button{background:none;border:1px solid var(--line-soft);border-radius:3px;padding:3px 7px;
+                       color:var(--muted);font-size:11px;cursor:pointer}
+  .start .chips button:hover{border-color:var(--muted);color:var(--txt-2)}
+  .start .go{display:flex;align-items:center;gap:8px;margin-top:12px}
+  .start .hint{font-size:11px;color:var(--muted);margin-top:10px}
+  .steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0;margin:20px 24px 0;max-width:860px;
+         border-top:1px solid var(--line-soft);border-bottom:1px solid var(--line-soft)}
+  .steps div{padding:14px 16px}
+  .steps div + div{border-left:1px solid var(--line-soft)}
+  .steps .no{font:10px/1 var(--mono);color:var(--muted)}
+  .steps b{display:block;font-size:12px;font-weight:500;margin-top:6px}
+  .steps span{display:block;font-size:11px;color:var(--muted);margin-top:3px;line-height:1.6}
+  .bounds{margin-top:20px}
+  .bounds .row{display:flex;gap:8px;align-items:flex-start;padding:9px 0;border-bottom:1px solid var(--line-soft);
+               font-size:11px;color:var(--txt-2);line-height:1.6}
+  .bounds .row .lamp{margin-top:5px}
+
+  /* 手机 */
+  .phone{width:390px;height:844px;position:relative;background:var(--bg);color:var(--txt);
+         border:1px solid var(--line);border-radius:24px;overflow:hidden;display:flex;flex-direction:column}
+  .m-bar{height:48px;flex:0 0 48px;display:flex;align-items:center;gap:10px;padding:0 12px;
+         border-bottom:1px solid var(--line);background:var(--surface)}
+  .m-bar .brand b{font-size:14px}
+  .m-bar .brand .mark{width:16px;height:16px}
+  .m-bar .status{font-size:10px}
+  .m-bar .right{margin-left:auto;display:flex;align-items:center;gap:8px}
+  .m-sub{height:40px;flex:0 0 40px;display:flex;align-items:stretch;gap:12px;padding:0 12px;
+         border-bottom:1px solid var(--line-soft);background:var(--surface)}
+  .m-switch{flex:1;display:flex;align-items:center;gap:8px;background:none;border:0;color:var(--txt-2);
+            font-size:11px;padding:0;text-align:left;cursor:pointer}
+  .m-switch b{font-weight:500;color:var(--txt)}
+  .m-sub .tabs{height:40px;gap:14px}
+  .m-sub .tabs button{font-size:11px}
+  .m-body{flex:1;overflow:auto;padding:12px 12px 72px}
+  .m-crumb{font:10px/1 var(--mono);color:var(--muted)}
+  .m-title{font-size:18px;font-weight:600;line-height:1.35;margin:8px 0 0;letter-spacing:-.005em}
+  .m-row{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:11px;color:var(--txt-2)}
+  .m-row .right{margin-left:auto;display:flex;gap:4px}
+  .m-actions{display:flex;gap:8px;margin-top:12px}
+  .m-actions .btn{height:30px;padding:0 10px;font-size:11px}
+  .m-query{margin-top:12px;padding:8px 10px;background:var(--surface);border:1px solid var(--line-soft);border-radius:var(--r-ctl)}
+  .m-query .l{font:9px/1 var(--mono);color:var(--muted)}
+  .m-query .q{font-size:11px;color:var(--txt-2);margin-top:4px;display:-webkit-box;-webkit-line-clamp:2;
+              -webkit-box-orient:vertical;overflow:hidden;line-height:1.6}
+  .m-query a{float:right;font-size:10px;color:var(--link);text-decoration:none;margin-top:4px}
+  .m-meta{display:grid;grid-template-columns:1fr 1fr;gap:10px 12px;margin-top:12px;padding:12px;
+          background:var(--surface);border:1px solid var(--line-soft);border-radius:var(--r-ctl)}
+  .m-meta dt{font-size:9px;color:var(--muted)}
+  .m-meta dd{margin:2px 0 0;font-size:11px;color:var(--txt-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .m-meta dd.mono{font:10px/1.4 var(--mono)}
+  .m-panel{margin-top:12px}
+  .m-panel .readout{padding:12px;border-left-width:2px}
+  .m-panel .verdict{font-size:15px;margin:8px 0 12px}
+  .m-panel .instr .v{font-size:13px}
+  .m-panel .sec{padding:12px}
+  .m-panel .prose{font-size:13px;line-height:1.72}
+  .m-panel .cmdrow{padding:11px 12px;font-size:11px}
+  .m-panel .refrow{grid-template-columns:18px minmax(0,1fr) 56px;padding:0 12px;min-height:34px;font-size:11px}
+  .m-panel .refrow .svc{display:none}
+  .m-panel .refrow.head{grid-template-columns:18px minmax(0,1fr) 56px}
+  .m-facts{margin-top:12px;border:1px solid var(--line-soft);border-radius:var(--r-ctl);background:var(--surface)}
+  .m-facts summary{list-style:none;display:flex;align-items:center;gap:8px;padding:10px 12px;
+                   font-size:11px;color:var(--txt-2);cursor:pointer}
+  .m-facts summary::-webkit-details-marker{display:none}
+  .m-facts summary .right{margin-left:auto;color:var(--muted);font:10px/1 var(--mono)}
+  .m-facts .in{padding:0 12px 12px}
+  .m-bottom{position:absolute;left:0;right:0;bottom:0;height:56px;display:flex;align-items:center;gap:8px;
+            padding:8px 12px;background:var(--surface);border-top:1px solid var(--line)}
+  .m-bottom .btn.pri{flex:1;justify-content:center;height:38px}
+  .m-bottom .iconbtn{width:38px;height:38px;border:1px solid var(--line);background:var(--surface-2)}
+
+  @media (max-width:900px){
+    .brief{padding:28px 20px 20px}
+    .direction{grid-template-columns:1fr 1fr}
+    .audit{grid-template-columns:1fr}
+    .stage{padding:8px 20px 48px}
+  }
+</style>
+</head>
+<body>
+
+<svg style="display:none" aria-hidden="true">
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 6.3"/><path d="M20 4v7h-7"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+</svg>
+
+<header class="brief">
+  <div class="eyebrow">OpsShield · 界面精修阅览稿 · 2026-11-22</div>
+  <h1>夜班控制台，不是 GitHub 深色皮</h1>
+  <p class="lede">保留现有功能、信息与操作顺序，只重做气质与层级：把蓝色开发者面板换成夜班仪表台，把“每块都是同款卡片”换成“结论是读数，其余是记录”。</p>
+
+  <dl class="direction">
+    <div><dt>产品</dt><dd>给值班 SRE 的事件响应工作台：贴一条报错，得到有引用的结论、只读命令和可结单的事故记录。</dd></div>
+    <div><dt>性格</dt><dd><b>quiet · exact · alert</b><br>安静、精确、随时可接手。</dd></div>
+    <div><dt>世界</dt><dd>凌晨三点的控制室：石墨色仪表盘、蚀刻细线、方形信号灯、等宽日志。</dd></div>
+    <div><dt>时刻</dt><dd>诊断读数（结论 + 真实耗时刻度）；左栏事故时间脊。</dd></div>
+    <div><dt>签名</dt><dd>方形信号灯 + 带刻度的分区细线；只出现在状态、时间与读数上。</dd></div>
+  </dl>
+
+  <div class="audit">
+    <div>
+      <h2>当前页面的主要问题</h2>
+      <ul>
+        <li><b>气质是 GitHub 深色模板</b>：蓝紫双强调、五枚胶囊控件、纯灰蓝面板，和“夜班排障”没有关系。</li>
+        <li><b>层级靠卡片堆</b>：结论、分析、命令、来源同宽同色同圆角，最重要的结论没有压过参考列表。</li>
+        <li><b>空态是卡片套卡片</b>：大边框里再放输入框和三张步骤卡，主操作被说明文字压到中部。</li>
+        <li><b>字号失控</b>：9–19px 之间出现十余档，9/9.5px 低于可读下限；650/700 字重混用。</li>
+        <li><b>移动端真实断裂</b>：左栏占 46vh 把事故推到首屏外；顶栏文字重叠；标题折成“连续超 / 时”；元数据变成六个整行胶囊。</li>
+        <li><b>空卡占位</b>：“只读命令 0 条”仍渲染整张卡和标题，读者要读三行才知道没有内容。</li>
+      </ul>
+    </div>
+    <div>
+      <h2>这版怎么改</h2>
+      <ul>
+        <li><b>色彩</b>：石墨偏绿的中性阶梯；象牙白只做主动作与选中；蓝紫退场。绿/黄/红只表示状态。</li>
+        <li><b>层级</b>：结论变成“读数面板”，带真实 10ms / 69ms 刻度；分析是正文，命令与来源是记录。</li>
+        <li><b>空间</b>：4px 网格；左栏 264、事实栏 288、正文 68ch；同组小间距、异组大间距。</li>
+        <li><b>字</b>：11/12/14/16/20 五档，400/500/600 三档；数字全部等宽、右对齐。</li>
+        <li><b>移动</b>：左栏收成“事故 1 · 进行中”切换条；标题 18px；元数据两列定义表；结单固定底部。</li>
+        <li><b>空态</b>：去掉卡片套卡片；一条输入、一个主动作、一条三步刻度线。</li>
+      </ul>
+    </div>
+  </div>
+
+  <p class="ask"><b>待你确认：</b>方向（夜班仪表台 / 象牙白主动作 / 方形信号灯）与三屏版式是否接受。确认后我再改生产 <span class="mono">index.html</span>；若只想小步走，也可以只落“色彩 + 字号 + 空态 + 移动端”四项，保留现有单列卡片结构。</p>
+</header>
+
+<main class="stage">
+
+  <h2>01 · 诊断态（桌面 1360）</h2>
+  <section class="screen" id="desktop-diag">
+    <div class="app">
+      <header class="bar">
+        <div class="brand"><span class="mark"><i></i></span><b>OpsShield</b><span>事件响应</span></div>
+        <div class="crumbbar">事故 / <b>INC-1122-6844</b></div>
+        <nav class="tabs"><button class="on">排障</button><button>运行面板</button></nav>
+        <div class="topright">
+          <span class="status"><span class="lamp ok"></span>系统正常</span>
+          <span class="mock">MOCK</span>
+          <button class="ghost">运行态</button>
+          <button class="iconbtn" aria-label="更多"><svg class="i"><use href="#i-more"/></svg></button>
+          <span class="user"><span class="avatar">SF</span>sre-full</span>
+        </div>
+      </header>
+      <div class="body">
+        <aside class="rail">
+          <div class="rail-head"><h2>事故</h2><span class="cnt">1 进行中</span></div>
+          <div class="seg"><button class="on">进行中</button><button>已结单</button><button>全部</button></div>
+          <div class="search"><svg class="i"><use href="#i-search"/></svg><span>搜索事故单 / 服务 / 错误码</span></div>
+          <button class="new"><svg class="i"><use href="#i-plus"/></svg>新建事故单<span class="key">N</span></button>
+          <div class="list">
+            <button class="item on">
+              <div class="item-top"><span class="prio">P1</span><span class="item-title">支付网关 502 连续超时</span></div>
+              <div class="item-meta">payment-service · 50041_PAY_GATEWAY_502</div>
+              <div class="item-foot"><span class="st"><span class="lamp warn"></span>待处置</span><span>01:23 · sre-full</span></div>
+            </button>
+          </div>
+          <div class="rail-foot">
+            <div class="shift"><span>本班 03:00–11:00</span><span>2h 37m</span></div>
+            <div class="ticks"></div>
+            <div class="cov"><span><b>覆盖范围</b> · 14 服务</span><span>展开</span></div>
+            <div class="cov-line">411 错误码 · 407 语义块<br>重建于 01:23:45</div>
+          </div>
+        </aside>
+
+        <main class="work">
+          <div class="wk-head">
+            <div class="wk-main">
+              <div class="wk-crumb">事故 / <b>INC-1122-6844</b> / 诊断与处置</div>
+              <div class="wk-title">
+                <h1>支付网关 502 连续超时</h1>
+                <span class="wk-status"><span class="lamp warn"></span>待处置</span>
+                <span class="wk-status"><span class="prio">P1</span></span>
+              </div>
+              <div class="wk-meta">
+                <span>来源 <b>alert</b></span>
+                <span>创建 <b class="mono">11-22 01:23</b></span>
+                <span>负责人 <b class="mono">sre-full</b></span>
+                <span>告警 <b class="mono">ALERT-20261122-0042</b></span>
+              </div>
+            </div>
+            <div class="wk-actions">
+              <button class="btn"><svg class="i"><use href="#i-refresh"/></svg>重新诊断</button>
+              <button class="btn pri">结单并记录处置</button>
+            </div>
+          </div>
+
+          <div class="query">
+            <span class="lbl">排障输入</span>
+            <span class="q">支付网关返回 502，订单创建超时，错误码 50041_PAY_GATEWAY_502</span>
+            <a href="#">编辑</a>
+          </div>
+
+          <div class="canvas">
+            <section class="panel readout">
+              <div class="ro-head">
+                <span class="k">诊断结论</span>
+                <span class="st" style="font-size:11px"><span class="lamp ok"></span>完成</span>
+                <span class="k" style="margin-left:4px">cache none · L0</span>
+                <span class="right">
+                  <button><svg class="i"><use href="#i-copy"/></svg>复制为工单</button>
+                </span>
+              </div>
+              <div class="verdict">第三方支付网关抖动引发支付链路 502 复盘（50041_PAY_GATEWAY_502）</div>
+              <div class="instr">
+                <div><div class="l">引用</div><div class="v">3<small>条</small></div></div>
+                <div><div class="l">只读命令</div><div class="v">0<small>条</small></div></div>
+                <div><div class="l">总耗时</div><div class="v">69<small>ms</small></div></div>
+              </div>
+              <div class="stagebar">
+                <div class="bar-track"><i class="ret" style="width:14.5%"></i><i class="rest" style="width:85.5%"></i></div>
+                <div class="bar-labels">
+                  <span class="k"><span class="swatch ret"></span>检索 10ms</span>
+                  <span class="k"><span class="swatch rest"></span>其余 59ms</span>
+                  <span>总 69ms</span>
+                </div>
+              </div>
+            </section>
+
+            <section class="panel">
+              <div class="sec">
+                <div class="sec-head"><h3>诊断分析</h3><span class="meta">生成于 01:23</span></div>
+                <div class="prose">
+                  <p><strong>问题定位</strong></p>
+                  <p>第三方支付网关抖动引发支付链路 502 复盘（50041_PAY_GATEWAY_502）。<span class="sup">1</span></p>
+                  <p><strong>参考</strong> · 第三方支付网关抖动引发支付链路 502 复盘（50041_PAY_GATEWAY_502）&gt; 事故摘要<span class="sup">3</span></p>
+                  <p>（此处原文较长，不便逐字展示，请查看引用来源文档）</p>
+                </div>
+              </div>
+              <div class="cmdrow">
+                <svg class="i"><use href="#i-info"/></svg>
+                本轮引用不含可执行代码围栏 · 0 条只读命令
+                <a class="why" href="#">为什么</a>
+              </div>
+            </section>
+
+            <section class="panel">
+              <div class="sec-head" style="padding:14px 18px 0"><h3>参考来源</h3><span class="meta">3 条 · 编号与正文一一对应</span></div>
+              <div class="reftable">
+                <div class="refrow head"><span>#</span><span>文档</span><span>服务</span><span>类型</span></div>
+                <div class="refrow"><span class="idx">1</span><span class="doc">第三方支付网关抖动引发支付链路 502 复盘</span><span class="svc">payment-service</span><span class="kind">事故摘要</span></div>
+                <div class="refrow"><span class="idx">2</span><span class="doc">支付网关 5xx 排查清单</span><span class="svc">payment-service</span><span class="kind">runbook</span></div>
+                <div class="refrow"><span class="idx">3</span><span class="doc">错误码 50041_PAY_GATEWAY_502 定义</span><span class="svc">payment-service</span><span class="kind">错误码</span></div>
+              </div>
+            </section>
+          </div>
+        </main>
+
+        <aside class="facts">
+          <h2>本单事实</h2>
+          <dl style="margin:0">
+            <div class="fact"><dt>状态</dt><dd><span class="st"><span class="lamp warn"></span>待处置</span></dd></div>
+            <div class="fact"><dt>优先级</dt><dd>P1 · 人工判定</dd></div>
+            <div class="fact"><dt>来源</dt><dd>alert</dd></div>
+            <div class="fact"><dt>负责人</dt><dd class="mono">sre-full</dd></div>
+            <div class="fact"><dt>创建</dt><dd class="mono">11-22 01:23</dd></div>
+            <div class="fact"><dt>告警 ID</dt><dd class="mono">ALERT-20261122-0042</dd></div>
+            <div class="fact"><dt>服务</dt><dd class="mono">payment-service</dd></div>
+            <div class="fact"><dt>错误码</dt><dd class="mono">50041_PAY_GATEWAY_502</dd></div>
+          </dl>
+
+          <h3>处置记录</h3>
+          <div class="tl">
+            <div class="tl-item"><div class="t">事故单创建 · 来源 alert</div><div class="m">01:23 · sre-full</div></div>
+            <div class="tl-item"><div class="t">诊断完成 · 3 引用 / 69ms</div><div class="m">01:23 · L0 · cache none</div></div>
+            <div class="tl-item now"><div class="t">等待结单与处置结论</div><div class="m">当前</div></div>
+          </div>
+
+          <div class="covbox">
+            <div class="l">覆盖范围</div>
+            <div class="v">14 服务 · 411 错误码 · 407 语义块<br>重建于 2026/11/22 01:23:45</div>
+          </div>
+        </aside>
+      </div>
+      <footer class="statusbar"><span>轮询中 · 2s</span><span class="right">build 1.0.0 · jvm 21.0.12 · uptime 0h0m · pid 44308</span></footer>
+    </div>
+  </section>
+
+  <h2>02 · 空态（桌面 1360）</h2>
+  <section class="screen" id="desktop-empty">
+    <div class="app">
+      <header class="bar">
+        <div class="brand"><span class="mark"><i></i></span><b>OpsShield</b><span>事件响应</span></div>
+        <div class="crumbbar">事故 / <b>—</b></div>
+        <nav class="tabs"><button class="on">排障</button><button>运行面板</button></nav>
+        <div class="topright">
+          <span class="status"><span class="lamp ok"></span>系统正常</span>
+          <span class="mock">MOCK</span>
+          <button class="ghost">运行态</button>
+          <button class="iconbtn" aria-label="更多"><svg class="i"><use href="#i-more"/></svg></button>
+          <span class="user"><span class="avatar">SF</span>sre-full</span>
+        </div>
+      </header>
+      <div class="body">
+        <aside class="rail">
+          <div class="rail-head"><h2>事故</h2><span class="cnt">0 进行中</span></div>
+          <div class="seg"><button class="on">进行中</button><button>已结单</button><button>全部</button></div>
+          <div class="search"><svg class="i"><use href="#i-search"/></svg><span>搜索事故单 / 服务 / 错误码</span></div>
+          <button class="new"><svg class="i"><use href="#i-plus"/></svg>新建事故单<span class="key">N</span></button>
+          <div class="rail-empty"><b>本租户还没有事故单</b>发起诊断会自动建单，也可以从告警链接带入。<br><a href="#">从告警新建 →</a></div>
+          <div class="rail-foot">
+            <div class="shift"><span>本班 03:00–11:00</span><span>2h 37m</span></div>
+            <div class="ticks"></div>
+            <div class="cov"><span><b>覆盖范围</b> · 14 服务</span><span>展开</span></div>
+            <div class="cov-line">411 错误码 · 407 语义块<br>重建于 01:23:45</div>
+          </div>
+        </aside>
+
+        <main class="work">
+          <div class="empty-head">
+            <div class="eyebrow">排障台</div>
+            <h1>粘贴一条报错，开始处置</h1>
+            <p>先给结论，再给依据与只读命令。事故单保存到服务端，同租户多端可见。</p>
+          </div>
+          <div class="start">
+            <div class="field">
+              <div class="ph"><b>粘贴错误码、异常堆栈，或一句现象描述</b>例：支付网关 502 50041_PAY_GATEWAY_502 排查</div>
+            </div>
+            <div class="chips">
+              <button>MySQL 连接池耗尽</button><button>支付网关 502</button><button>订单创建超时 · 慢 SQL</button><button>模糊提问</button>
+            </div>
+            <div class="go">
+              <button class="btn pri">发起诊断</button>
+              <button class="btn">从告警新建</button>
+            </div>
+            <div class="hint">未接入时会先请你输入身份；本页只读，不执行任何命令。</div>
+          </div>
+          <div class="steps">
+            <div><div class="no">01</div><b>贴报错</b><span>错误码、堆栈或一句现象</span></div>
+            <div><div class="no">02</div><b>看结论</b><span>问题定位 + 可核对引用</span></div>
+            <div><div class="no">03</div><b>拿动作</b><span>复制只读命令或整段工单</span></div>
+          </div>
+        </main>
+
+        <aside class="facts">
+          <h2>能力边界</h2>
+          <div class="bounds">
+            <div class="row"><span class="lamp ok"></span><span><b style="color:var(--txt-2);font-weight:500">只读</b><br>网关不执行任何命令，只展示逐字抽取的只读命令。</span></div>
+            <div class="row"><span class="lamp warn"></span><span><b style="color:var(--txt-2);font-weight:500">L1 默认关闭</b><br>受控恢复动作需单独开启与确认。</span></div>
+            <div class="row"><span class="lamp"></span><span><b style="color:var(--txt-2);font-weight:500">当前 mock 后端</b><br>无 DashScope Key 时使用本地模板，指标仍来自真实字段。</span></div>
+          </div>
+          <div class="covbox">
+            <div class="l">覆盖范围</div>
+            <div class="v">14 服务 · 411 错误码 · 407 语义块<br>重建于 2026/11/22 01:23:45</div>
+          </div>
+        </aside>
+      </div>
+      <footer class="statusbar"><span>轮询中 · 2s</span><span class="right">build 1.0.0 · jvm 21.0.12 · uptime 0h0m · pid 44308</span></footer>
+    </div>
+  </section>
+
+  <h2>03 · 诊断态（移动 390）</h2>
+  <section class="phone" id="mobile">
+    <header class="m-bar">
+      <div class="brand"><span class="mark"><i></i></span><b>OpsShield</b></div>
+      <span class="status"><span class="lamp ok"></span>正常</span>
+      <div class="right"><span class="avatar">SF</span></div>
+    </header>
+    <div class="m-sub">
+      <button class="m-switch"><b>事故 1 · 进行中</b><svg class="i" style="width:14px;height:14px"><use href="#i-chev"/></svg></button>
+      <nav class="tabs"><button class="on">排障</button><button>面板</button></nav>
+    </div>
+    <div class="m-body">
+      <div class="m-crumb">INC-1122-6844</div>
+      <h1 class="m-title">支付网关 502 连续超时</h1>
+      <div class="m-row"><span class="lamp warn"></span>待处置<span class="prio" style="margin-left:2px">P1</span><span class="right"><button class="iconbtn" style="width:28px;height:28px"><svg class="i"><use href="#i-more"/></svg></button></span></div>
+      <div class="m-actions"><button class="btn"><svg class="i"><use href="#i-refresh"/></svg>重新诊断</button><button class="btn">编辑输入</button></div>
+
+      <div class="m-query"><div class="l">排障输入</div><div class="q">支付网关返回 502，订单创建超时，错误码 50041_PAY_GATEWAY_502</div><a href="#">编辑</a></div>
+
+      <div class="m-panel panel readout">
+        <div class="ro-head"><span class="k">诊断结论</span><span class="st" style="font-size:10px"><span class="lamp ok"></span>完成</span><span class="right"><button style="font-size:10px"><svg class="i" style="width:14px;height:14px"><use href="#i-copy"/></svg>复制</button></span></div>
+        <div class="verdict">第三方支付网关抖动引发支付链路 502 复盘（50041_PAY_GATEWAY_502）</div>
+        <div class="instr">
+          <div><div class="l">引用</div><div class="v">3<small>条</small></div></div>
+          <div><div class="l">命令</div><div class="v">0<small>条</small></div></div>
+          <div><div class="l">总耗时</div><div class="v">69<small>ms</small></div></div>
+        </div>
+        <div class="stagebar">
+          <div class="bar-track"><i class="ret" style="width:14.5%"></i><i class="rest" style="width:85.5%"></i></div>
+          <div class="bar-labels"><span class="k"><span class="swatch ret"></span>检索 10ms</span><span>总 69ms</span></div>
+        </div>
+      </div>
+
+      <details class="m-facts">
+        <summary>本单事实<span class="right">6 项</span><svg class="i" style="width:14px;height:14px"><use href="#i-chev"/></svg></summary>
+        <div class="in">
+          <dl class="m-meta" style="margin:0;padding:0;border:0;background:none">
+            <div><dt>来源</dt><dd>alert</dd></div><div><dt>负责人</dt><dd class="mono">sre-full</dd></div>
+            <div><dt>创建</dt><dd class="mono">11-22 01:23</dd></div><div><dt>服务</dt><dd class="mono">payment-service</dd></div>
+            <div><dt>错误码</dt><dd class="mono">50041_PAY_GATEWAY_502</dd></div><div><dt>告警</dt><dd class="mono">ALERT-…-0042</dd></div>
+          </dl>
+        </div>
+      </details>
+
+      <div class="m-panel panel">
+        <div class="sec">
+          <div class="sec-head"><h3>诊断分析</h3><span class="meta">01:23</span></div>
+          <div class="prose">
+            <p><strong>问题定位</strong></p>
+            <p>第三方支付网关抖动引发支付链路 502 复盘（50041_PAY_GATEWAY_502）。<span class="sup">1</span></p>
+            <p>（此处原文较长，不便逐字展示，请查看引用来源文档）</p>
+          </div>
+        </div>
+        <div class="cmdrow"><svg class="i"><use href="#i-info"/></svg>本轮引用不含可执行代码围栏 · 0 条<a class="why" href="#">为什么</a></div>
+      </div>
+
+      <div class="m-panel panel">
+        <div class="sec-head" style="padding:12px 12px 0"><h3>参考来源</h3><span class="meta">3 条</span></div>
+        <div class="reftable">
+          <div class="refrow head"><span>#</span><span>文档</span><span>类型</span></div>
+          <div class="refrow"><span class="idx">1</span><span class="doc">第三方支付网关抖动引发支付链路 502 复盘</span><span class="kind">事故摘要</span></div>
+          <div class="refrow"><span class="idx">2</span><span class="doc">支付网关 5xx 排查清单</span><span class="kind">runbook</span></div>
+          <div class="refrow"><span class="idx">3</span><span class="doc">错误码 50041_PAY_GATEWAY_502 定义</span><span class="kind">错误码</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="m-bottom"><button class="btn pri">结单并记录处置</button><button class="iconbtn" aria-label="更多"><svg class="i"><use href="#i-more"/></svg></button></div>
+  </section>
+
+</main>
+</body>
+</html>
