@@ -260,6 +260,31 @@ best-effort 写入（改坏表名后诊断仍 200 且日志有 warn）；`(tenan
 未以改/删/弱化断言换通过、未跳测试不记录、未关检查消警、实现方未自宣通过、
 未绕过人审、未为告警桥新开无 JWT 端点。本次签收不含合并授权，分支保留。
 
+### 整链收尾复验（2026-11-23，独立 Verifier）
+
+三条切片不是顺序堆叠：后两条从实现提交分叉，导致两个分支各有一个 `V8` 迁移。
+集成修复把本切片 rebase 到 `codex/incident-collaboration` 的签收 HEAD（`eed5ae1`），
+`alert_intake` 顺延为 V9（详见 R1/R2 与「登记的偏离与边界」）。
+
+独立 Verifier 在整链 HEAD 上复验并裁决 **PASS**，要点：
+
+- **绑定**：HEAD `51a92ad071f0ef250077a258f27baca7d95d0804`；`git status --short` 仅未跟踪的
+  `.verifier-task.md`（作业说明，未入提交）。
+- **迁移链**：V1..V9 连续无重复；空库一次跑完 9 个迁移；逐级 `target=5→6→7→8→9` 每步仅新增 1 个，
+  `body_width` 在 V8 由 2000 变 4000，`alert_intake` 在 V9 出现；V6/V7/V8/V9 checksum 升级前后不变
+  （`363696204 / 1280945997 / 1324435601 / 1191400765`）；反向加入重复 V8 时 Flyway 拒绝启动。
+- **交叉干扰**：`IncidentView` 21 字段 = main 的 19 + `dueAt` + `slaState`，无字段丢失；
+  `FlywayMigrationTest` 6 个用例（V6/V7/V8/V9 + 空库 + 已有库）全在，断言删除行 0；
+  `index.html` 的转交弹层、讨论卡片、告警入口三块并存。
+- **最终窄复验**：`git diff --name-only decb886..HEAD` 仅 `docs/repo-map.md`（+2/−1），
+  无代码/测试/迁移变更；`docs/repo-map.md` 已登记 `alert` 包、逐包职责与 ADR-0035；
+  `doc_numbers --check` 退 0（33 条 / 49 处）。
+- **门闩反向验证**：把 README 第二处 `35 篇` 改回 `34` → 门闩 exit 1 并点名该行；
+  复原后 exit 0、无残留 diff。
+- **签收留痕**：三份契约在 HEAD 上均为「Lead 已书面签收（2026-11-22）」；
+  `incident-responsibility-accept.md` 的 HEAD blob `618585a…` 与 `dbaf82c` 逐字一致
+  （cherry-pick 后该提交非 HEAD 祖先——签收记录不得声称祖先关系）。
+
 ## 契约修订记录
 
 ### R1（2026-11-22，Lead 批准）：一键建单补 `tenant` 维度
