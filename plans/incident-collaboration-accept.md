@@ -2,7 +2,7 @@
 
 > 来源：2026-11-22 用户指令「接着按这个顺序起契约」——第 2 条：
 > 诊断结果的团队协作（评论与 @）。
-> **状态：已冻结（2026-11-22）。** 冻结点 `636bb5c`；实现分支 `codex/incident-collaboration`。
+> **状态：已冻结（2026-11-22）。** 冻结点 `0c50ff9`（main 基线；契约文件随 `93d44be` 带入）；实现分支 `codex/incident-collaboration`。
 > 用户已确认：评论**完全不可变**（不做作者撤回），依赖第 1 条 `incident-responsibility` 的语义。
 
 ## Task ID
