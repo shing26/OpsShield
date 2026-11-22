@@ -44,6 +44,7 @@
 ```
 plans/incident-collaboration-accept.md
 src/main/resources/db/migration/V7__incident_comments.sql
+src/main/resources/db/migration/V8__incident_comments_body_width.sql   # AC1 括注：版本号按实际合入顺序顺延
 src/main/java/com/opspilot/incident/**
 src/main/resources/static/index.html
 src/test/java/com/opspilot/incident/**
@@ -125,4 +126,96 @@ Playwright（Edge，临时脚本，验完即删）：
 
 ## 人审签收
 
-**状态：待签收。** 签收前不得开始实现；实现者与 Verifier 不得为同一会话。
+**状态：Lead 已书面签收（2026-11-22）。** 签收人：shing26；签收语：“签收 PR #93”/“继续任务”后的书面确认。
+
+### Verifier 证据包
+
+- **独立 Verifier**：`/root/verify_incident_collaboration`（另一模型、独立 detached worktree），**三轮**复验。
+- **首轮 FAIL（head `0cc2ab6`）**：2 个 P1，均在 AC4——
+  P1-1 合法长度含 emoji 的评论返回 500（code point 校验 vs `VARCHAR(2000)` 码元计量）；
+  P1-2 并发下 200 条上限被突破（"先查再写"无锁）。
+- **次轮 FAIL（head `a473dd6`）**：两个 P1 关闭，但**就地修改已发布的 V7** 引入新 P1——
+  已应用旧 V7 的库在 `validate-on-migrate: true` 下启动即 `checksum mismatch` 退出（exit 1）。
+  该做法违背 `OPS.md:46`「加列/改约束必须新增 V2+，禁止再改」。
+- **终轮 PASS（head `a13e2b2`）**：V7 逐字还原（`git diff 0cc2ab6 -- V7` 为空），
+  新增 `V8__incident_comments_body_width.sql`；升级路径实测只补 V8、无 checksum 冲突。
+
+### 命令结果（Verifier 亲跑）
+
+`mvn -o clean test` → `Tests run: 543, Failures: 0, Errors: 0, Skipped: 0`；
+`pytest offline/tests -q` → 670 passed；`check_panel_contract.sh` 十层一致；
+`check_public_copy --check`、`doc_numbers --check` 均退 0；`FlywayMigrationTest` 5/5。
+
+### 升级路径实测（Verifier 亲自复现）
+
+| 步骤 | 结果 |
+|---|---|
+| `0cc2ab6` jar 建临时库 | 应用 7 个迁移，health 200，V7 `checksum=1280945997`、`body_width=2000` |
+| `a13e2b2` jar 指向同一库 | `Current version: 7` → 迁移到 `8` → `now at version v8`，health 200 |
+| checksum 错误 | **零命中**；V7 历史 checksum 未被改写，新增 V8 `1324435601`、`body_width=4000` |
+
+方言：`ALTER TABLE incident_comments ALTER COLUMN body TYPE VARCHAR(4000)` 在
+H2 `MODE=PostgreSQL` 与**真实 PostgreSQL 16**（一次性容器，用完即删）上均实测通过；
+PG 写入 2000 个 emoji 得 `length=2000` / `octet_length=8000`。
+
+### 三个 P1 的关闭证据
+
+- **P1-1（emoji 500）**：8 组载荷 0 个 500（1999 汉字+1 emoji、2000 emoji、
+  1000 emoji+1000 汉字、2000 plane-2 字符均 201；2001 汉字、4001 ASCII 均 400）。
+- **P1-2（并发破 200）**：5 组场景最终条数均 ≤200——
+  199+10 → `{201:1, 409:9}` 落 200；200+10 → 全 409；190+10 → 全 201 落 200；
+  199+30 → `{201:1, 409:29}`；198+50 → `{201:2, 409:48}`。
+  锁范围正确：同单 40 并发 0.106s（串行），40 个不同单各 1 条 0.101s（并行）。
+- **P1-3（V7 就地改）**：见上表，旧库升级无 checksum 冲突。
+
+### 反向验证（证明测试非恒真）
+
+| 实验 | 改法 | 结果 | 复原 |
+|---|---|---|---|
+| A | `lockIncident` 去掉 `FOR UPDATE` | **1 failed**：199+10 → `expected:<1> but was:<10>`（最终 209 条） | 全绿 |
+| B | 去掉 UTF-16 兜底 + 列宽回 2000 | **1 error**：`Value too long`（复现 22001 根因） | 全绿 |
+| C | 只去掉 `addComment` 的 `@Transactional` | **1 failed**：199+10 → `expected:<1> but was:<10>` | 全绿 |
+| D | `insertComment` 改"先查再写" | **4 errors**：并发用例 `DuplicateKeyException` | 全绿 |
+| E | `resolveMentions` 信任客户端数组 | **4 failed**：@ 用例全红 | 全绿 |
+| F | 去掉 200 条上限判定 | **1 failed**：上限用例 | 全绿 |
+| G | V8 改成 `SELECT 1;` 空操作 | **2 failed**：升级用例 + 空库用例 | 5/5 绿 |
+
+### AC1–AC9
+
+全部**满足**。要点：V7 建表 + V8 加宽（空库 V1..V8 与 V7→V8 两条路径均测）；
+单条 INSERT 追加，真线程池 10/40 并发不丢话；`since` 增量、`nextSince` 单调、跨租户 404；
+正文 1..2000 code point + UTF-16 兜底，200 条上限由行锁保证；服务端 @ 解析
+（`a@b.com` 不误判、`@sre-limited` 可解析、客户端数组被忽略、`@ghost` 400 带用户名）；
+`authLevel>=1` 可评论、跨租户 404、评论不改事故任何字段；
+`DELETE`/`PATCH /comments` → 405；讨论卡片位于诊断与处置记录之间、倒序 20、
+`@` 补全复用 `/assignees`、失败保留草稿、`opspilot.comments.seen` 水位；
+评论未进入检索/LLM/指纹/缓存键。
+
+### 人审四问（Lead 签收即表示无异议）
+
+1. **证据充分性**：无异议——三轮独立 Verifier 亲跑，实现方日志与自评未作为证据；
+   升级路径与 PostgreSQL 方言由 Verifier 亲自复现。
+2. **判据纪律**：无异议——无改/删/弱化断言、无跳测试、无自宣；
+   7 组反向实验均"改坏必红、复原全绿"。
+3. **变更面封闭**：无异议——15 个文件全部在 Allowed paths 内；本轮补登 V8 一行，
+   使契约与实际交付一致（AC1 括注已允许版本号顺延）。
+4. **遗留边界**：**接受为已知项**——见下。
+
+### 登记的偏离与边界
+
+- **AC1 括注允许版本号顺延**：实际交付为 V7（建表）+ V8（加宽），而非单一 V7。
+  原因：P1-1 修复需要加宽列，而 V7 已作为独立 commit 发布，就地改会让已迁移库启动失败。
+  已在 Allowed paths 补登 V8，ADR-0034 记明「V7 不可再改，加宽走 V8」。
+- **`body` 列宽 4000 而非 2000**：2000 code point 最坏 = 4000 UTF-16 码元；
+  H2 按码元、PostgreSQL 按字符计量，取 4000 后两边都能装下契约允许的正文。
+  校验仍是 1..2000 code point，另有 UTF-16 兜底。
+- **未做 Playwright 入库**：契约只要求"临时脚本，验完即删"；
+  Verifier 做了静态核对 + HTTP 等价验证，未做浏览器级 E2E。登记为已知项。
+- **README 徽章曾滞后一版**（542 vs 543）：已在本轮修到 543。
+  `doc_numbers.py` 只校验正文与 repo-map、不校验徽章——登记为门闩覆盖缺口，
+  后续可把徽章纳入 `cited_in`。
+
+### 禁令复核
+
+未以改/删/弱化断言换通过、未跳测试不记录、未关检查消警、实现方未自宣通过、
+未绕过人审。本次签收不含合并授权，分支保留。

@@ -12,7 +12,7 @@
   <a href="https://openjdk.org/"><img src="https://img.shields.io/badge/Java-21-ED8B00?style=flat&amp;logo=openjdk&amp;logoColor=white" alt="Java 21"></a>
   <a href="https://spring.io/projects/spring-boot"><img src="https://img.shields.io/badge/Spring_Boot-4.1.2-6DB33F?style=flat&amp;logo=springboot&amp;logoColor=white" alt="Spring Boot 4.1.2"></a>
   <br>
-  <a href="#-测试体系与安全回归测试"><img src="https://img.shields.io/badge/Java_Tests-542_Passed-4CAF50?style=flat&amp;logo=openjdk&amp;logoColor=white" alt="Java Tests: 542 passed"></a>
+  <a href="#-测试体系与安全回归测试"><img src="https://img.shields.io/badge/Java_Tests-543_Passed-4CAF50?style=flat&amp;logo=openjdk&amp;logoColor=white" alt="Java Tests: 543 passed"></a>
   <a href="#-测试体系与安全回归测试"><img src="https://img.shields.io/badge/Probes-606_Passed-3776AB?style=flat&amp;logo=python&amp;logoColor=white" alt="Python Probes: 606 passed"></a>
   <a href="docs/benchmark.md"><img src="https://img.shields.io/badge/Benchmark-Regression_Gated-4CAF50?style=flat&amp;logo=githubactions&amp;logoColor=white" alt="Benchmark: regression gated"></a>
   <a href="https://prometheus.io/"><img src="https://img.shields.io/badge/Metrics-Micrometer_%7C_Prometheus-498BA3?style=flat&amp;logo=prometheus&amp;logoColor=white" alt="Metrics: Micrometer and Prometheus"></a>
