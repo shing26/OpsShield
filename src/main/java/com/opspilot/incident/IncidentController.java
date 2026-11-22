@@ -41,8 +41,15 @@ public class IncidentController {
     public Map<String, Object> list(HttpServletRequest http,
                                     @RequestParam(name = "mine", required = false) String mine,
                                     @RequestParam(name = "status", required = false) String status) {
-        List<Map<String, Object>> rows = service.list(user(http), mine, status).stream()
-                .map(this::view).toList();
+        UserContext user = user(http);
+        Map<String, Long> lastComments = service.lastCommentIds(user);
+        List<Map<String, Object>> rows = service.list(user, mine, status).stream()
+                .map(i -> {
+                    Map<String, Object> m = view(i);
+                    // 左栏未读角标只消费这个单调水位；评论正文不进入列表响应。
+                    m.put("lastCommentId", lastComments.getOrDefault(i.id(), 0L));
+                    return m;
+                }).toList();
         return Map.of("incidents", rows);
     }
 
@@ -70,6 +77,25 @@ public class IncidentController {
     @GetMapping("/{id}/assignments")
     public Map<String, Object> assignments(@PathVariable String id, HttpServletRequest http) {
         return Map.of("assignments", service.assignments(user(http), id));
+    }
+
+    /**
+     * 追加评论。刻意只有 GET / POST 两个映射：没有编辑/删除端点（ADR-0034）。
+     * 对同一路径发 DELETE 会由 Spring 报 405（GlobalExceptionHandler 保留 405 语义），
+     * 不会被任何兜底映射变成静默成功。
+     */
+    @PostMapping("/{id}/comments")
+    public ResponseEntity<Map<String, Object>> addComment(@PathVariable String id,
+                                                          @RequestBody(required = false) IncidentRequests.Comment req,
+                                                          HttpServletRequest http) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(service.addComment(user(http), id, req));
+    }
+
+    @GetMapping("/{id}/comments")
+    public Map<String, Object> comments(@PathVariable String id,
+                                        @RequestParam(name = "since", required = false) Long since,
+                                        HttpServletRequest http) {
+        return service.listComments(user(http), id, since);
     }
 
     @PostMapping("/{id}/transfer")

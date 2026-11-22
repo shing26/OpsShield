@@ -153,6 +153,10 @@
   .inc .meta code{font-size:10px;color:var(--txt-2);background:none;padding:0}
   .inc .foot{display:flex;align-items:center;gap:5px;margin-top:5px;font-size:10px;color:var(--muted);
              white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  /* 未读角标（ADR-0034）：只表示「这条单的 commentId 水位比我上次打开时更高」，不做推送 */
+  .inc-unread{flex:0 0 auto;margin-left:auto;font-size:9px;line-height:1;font-family:var(--mono);
+              color:var(--on-accent);background:var(--accent);border-radius:999px;padding:2px 6px;
+              font-weight:600;letter-spacing:.2px}
   .st{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
   .st .dot{width:6px;height:6px}
   .st.open{color:#e3b341} .st.open .dot{background:var(--warn)}
@@ -341,6 +345,31 @@
   .tl-c{min-width:0}
   .tl-c .t{font-size:11.5px;color:var(--txt);line-height:1.5;word-break:break-word}
   .tl-c .m{font-size:10px;color:var(--muted);font-family:var(--mono);margin-top:2px;word-break:break-all}
+
+  /* 讨论（ADR-0034）：append-only 的对话事实，视觉上排在诊断之后、处置记录之前 */
+  .cm-list{display:flex;flex-direction:column}
+  .cm{padding:9px 16px;border-bottom:1px solid var(--line-soft)}
+  .cm:last-child{border-bottom:0}
+  .cm.own{background:rgba(88,166,255,.05);box-shadow:inset 2px 0 0 rgba(88,166,255,.45)}
+  .cm.mentioned{background:rgba(210,153,34,.06);box-shadow:inset 2px 0 0 rgba(210,153,34,.5)}
+  .cm.own.mentioned{box-shadow:inset 2px 0 0 rgba(88,166,255,.45),inset 4px 0 0 rgba(210,153,34,.4)}
+  .cm-hd{display:flex;align-items:center;gap:7px;font-size:10.5px;color:var(--muted);font-family:var(--mono)}
+  .cm-hd b{color:var(--txt-2);font-weight:500}
+  .cm-bd{margin-top:4px;font-size:11.5px;line-height:1.65;color:var(--txt-2);
+         white-space:pre-wrap;overflow-wrap:anywhere}
+  .cm-form{padding:11px 16px;border-top:1px solid var(--line-soft);position:relative}
+  .cm-form textarea{width:100%;box-sizing:border-box;min-height:62px;resize:vertical;
+                    background:var(--bg);border:1px solid var(--line);border-radius:7px;
+                    color:var(--txt);font:inherit;font-size:11.5px;line-height:1.6;padding:7px 9px;outline:0}
+  .cm-form textarea:focus{border-color:var(--accent)}
+  .cm-actions{display:flex;align-items:center;gap:8px;margin-top:7px}
+  .cm-actions .hint{font-size:10px;color:var(--muted);flex:1;min-width:0}
+  .mention-pop{position:absolute;left:16px;right:16px;bottom:52px;max-height:150px;overflow:auto;
+               background:var(--surface-3);border:1px solid var(--line);border-radius:7px;
+               box-shadow:0 8px 24px rgba(0,0,0,.35);z-index:8;padding:3px}
+  .mention-item{display:block;width:100%;text-align:left;background:none;border:0;border-radius:5px;
+                padding:5px 8px;color:var(--txt-2);font-family:var(--mono);font-size:11px}
+  .mention-item:hover,.mention-item.on{background:var(--surface-2);color:var(--txt)}
 
   /* 双身份对照 */
   .cmp-col{min-width:0;display:flex;flex-direction:column;gap:12px}
@@ -865,6 +894,7 @@ const $ = id => document.getElementById(id);
 const CAP = 200;
 const SS = k => 'opspilot.session.jwt.' + k;
 const ACTIVE_KEY = 'opspilot.incidents.active';
+const SEEN_KEY = 'opspilot.comments.seen';
 
 try { localStorage.removeItem('opspilot.jwt'); } catch (e) { /* 非致命 */ }
 
@@ -879,6 +909,7 @@ const S = {
   coverage: null, covErr: null, covOpen: false,
   a: side('sre-full'), b: side('sre-limited'),
   incidents: [], activeId: null, filter: 'open', search: '',
+  comments: [], commentsFor: null, commentDraft: {}, commentBusy: false, assignees: null,
   quick: '', drawerOpen: false, mfactsOpen: false
 };
 
@@ -1062,10 +1093,156 @@ async function refreshIncidents() {
     if (inc && inc.status === 'closed' && S.filter === 'open') S.filter = 'closed';
     S.a.r = inc ? (inc.diagnosis || null) : null;
     if (inc) { try { localStorage.setItem(ACTIVE_KEY, inc.id); } catch (e) { /* 非致命 */ } }
+    // 评论与事故单列表分开拉取：列表只带 lastCommentId 水位，正文只在当前单上读。
+    if (inc) loadComments(inc, false);
     return true;
   } catch (e) {
     toast('事故单列表加载失败：' + e.message, 'err');
     return false;
+  }
+}
+
+/* ==================== 评论（ADR-0034） ==================== */
+/** 未读水位只活在这个标签页会话里：键名固定 opspilot.comments.seen，不落 localStorage。 */
+function seenMap() {
+  try { return JSON.parse(sessionStorage.getItem(SEEN_KEY) || '{}') || {}; } catch (e) { return {}; }
+}
+function markCommentsSeen(inc, watermark) {
+  if (!inc || !inc.id) return;
+  const map = seenMap();
+  map[inc.id] = Math.max(Number(map[inc.id]) || 0, Number(watermark) || 0,
+    Number(inc.lastCommentId) || 0);
+  try { sessionStorage.setItem(SEEN_KEY, JSON.stringify(map)); } catch (e) { /* 非致命 */ }
+}
+function commentUnread(inc) {
+  if (!inc || !inc.id || !(Number(inc.lastCommentId) > 0)) return false;
+  return Number(inc.lastCommentId) > (Number(seenMap()[inc.id]) || 0);
+}
+
+/**
+ * 按 commentId 水位增量读取；单次上限 100，最多翻 3 页（服务端单张事故单上限 200）。
+ * markSeen=true 只在用户显式打开事故单时使用——登录后的自动选中不算「已读」，
+ * 否则左栏角标会在用户还没看到之前就消失。
+ */
+async function loadComments(inc, markSeen) {
+  if (!inc || !S.a.token) { S.comments = []; S.commentsFor = inc ? inc.id : null; return; }
+  const token = S.a.token, id = inc.id;
+  let since = 0, all = [];
+  try {
+    for (let guard = 0; guard < 3; guard++) {
+      const page = await incidentApi('GET',
+        '/api/v1/copilot/incidents/' + encodeURIComponent(id) + '/comments?since=' + since);
+      if (S.a.token !== token) return;
+      const rows = Array.isArray(page.comments) ? page.comments : [];
+      all = all.concat(rows);
+      const next = Number(page.nextSince || since);
+      if (!rows.length || next <= since) break;
+      since = next;
+    }
+  } catch (e) {
+    if (S.a.token === token) toast('评论加载失败：' + e.message, 'err');
+    return;
+  }
+  if (S.a.token !== token || S.activeId !== id) return;
+  S.comments = all;
+  S.commentsFor = id;
+  const maxId = all.reduce((m, c) => Math.max(m, Number(c.commentId) || 0), 0);
+  if (maxId > 0) inc.lastCommentId = Math.max(Number(inc.lastCommentId) || 0, maxId);
+  if (markSeen) markCommentsSeen(inc, inc.lastCommentId);
+  renderWorkspace();
+  renderIncidentList();
+}
+
+/** 客户端解析只用于给服务端一个提示数组；授权依据始终是正文，服务端会重新解析。 */
+function clientMentions(body) {
+  const out = [];
+  const re = /(?:^|[^A-Za-z0-9_.])@([A-Za-z0-9][A-Za-z0-9_-]*)/g;
+  let m;
+  while ((m = re.exec(body))) if (!out.includes(m[1])) out.push(m[1]);
+  return out;
+}
+
+/** @ 补全：只认光标前最后一个 @token；候选来自 GET /assignees（同租户启用用户）。 */
+function mentionToken(text) {
+  const m = String(text || '').match(/(?:^|[\s，。；：、,.;:])@([A-Za-z0-9_-]*)$/);
+  return m ? { term: m[1], start: text.length - m[1].length - 1 } : null;
+}
+async function ensureAssignees() {
+  if (S.assignees) return S.assignees;
+  const data = await incidentApi('GET', '/api/v1/copilot/incidents/assignees');
+  S.assignees = data.users || [];
+  return S.assignees;
+}
+async function updateMentionPop(box) {
+  const pop = $('mentionPop');
+  if (!pop || !box) return;
+  const caret = box.selectionStart == null ? box.value.length : box.selectionStart;
+  const tok = mentionToken(box.value.slice(0, caret));
+  if (!tok) { pop.hidden = true; pop.innerHTML = ''; return; }
+  let users = [];
+  try { users = await ensureAssignees(); } catch (e) {
+    pop.hidden = true;
+    toast('@ 候选加载失败：' + e.message, 'err');
+    return;
+  }
+  const hits = users.filter(u => String(u.sub || '').toLowerCase()
+    .startsWith(tok.term.toLowerCase())).slice(0, 8);
+  if (!hits.length) { pop.hidden = true; pop.innerHTML = ''; return; }
+  pop.innerHTML = hits.map((u, i) => '<button type="button" class="mention-item'
+      + (i === 0 ? ' on' : '') + '" data-mention="' + esc(u.sub) + '">@' + esc(u.sub)
+      + '<span class="muted"> · ' + esc(u.role) + ' · L' + esc(u.authLevel) + '</span></button>').join('');
+  pop.hidden = false;
+}
+function insertMention(sub) {
+  const box = $('commentBox');
+  const inc = activeIncident();
+  if (!box || !inc) return;
+  const caret = box.selectionStart == null ? box.value.length : box.selectionStart;
+  const before = box.value.slice(0, caret);
+  const tok = mentionToken(before);
+  if (!tok) return;
+  const next = before.slice(0, tok.start) + '@' + sub + ' ' + box.value.slice(caret);
+  box.value = next;
+  S.commentDraft[inc.id] = next;
+  box.focus();
+  const pos = tok.start + sub.length + 2;
+  try { box.setSelectionRange(pos, pos); } catch (e) { /* 非致命 */ }
+  const pop = $('mentionPop');
+  if (pop) { pop.hidden = true; pop.innerHTML = ''; }
+}
+
+async function sendComment() {
+  const inc = activeIncident();
+  if (!inc || S.commentBusy) return;
+  const box = $('commentBox');
+  if (!box) return;
+  const draft = box.value;
+  const body = draft.trim();
+  if (!body) { toast('评论不能为空', 'warn'); box.focus(); return; }
+  S.commentBusy = true;
+  const btn = document.querySelector('[data-act="sendcomment"]');
+  if (btn) btn.disabled = true;
+  try {
+    const saved = await incidentApi('POST',
+      '/api/v1/copilot/incidents/' + encodeURIComponent(inc.id) + '/comments',
+      { body, mentions: clientMentions(body) });
+    if (S.commentsFor !== inc.id) { S.comments = []; S.commentsFor = inc.id; }
+    S.comments = (S.comments || []).concat([saved]);
+    inc.lastCommentId = Math.max(Number(inc.lastCommentId) || 0, Number(saved.commentId) || 0);
+    delete S.commentDraft[inc.id];
+    markCommentsSeen(inc, inc.lastCommentId);
+    S.commentBusy = false;
+    toast('评论已发送', 'ok');
+    renderAll();
+  } catch (e) {
+    // 硬要求：发送失败必须保留草稿。用户改两个字就能重发，不能让一段现场描述凭空消失。
+    S.commentDraft[inc.id] = draft;
+    S.commentBusy = false;
+    if (btn) btn.disabled = false;
+    toast('评论发送失败：' + e.message, 'err');
+    const again = $('commentBox');
+    if (again) { again.value = draft; again.focus(); }
+    else renderAll();
   }
 }
 
@@ -1173,7 +1350,11 @@ function selectIncident(id) {
   S.a.r = inc.diagnosis || null;
   S.b.r = null;
   try { localStorage.setItem(ACTIVE_KEY, inc.id); } catch (e) { /* 非致命 */ }
+  // 显式打开才清未读角标；自动选中（刷新后）不算已读。
+  markCommentsSeen(inc, inc.lastCommentId);
+  S.comments = []; S.commentsFor = inc.id;
   renderAll();
+  loadComments(inc, true);
   // 窄屏下左栏在文档流上方：选中事故单后把工作区带到视口，避免用户以为"点了没反应"。
   if (window.matchMedia && window.matchMedia('(max-width:900px)').matches) {
     const ws = document.querySelector('.workspace');
@@ -1223,6 +1404,8 @@ async function login(k) {
         S.platform = null;
         // 切换账号时先丢掉上一身份的事故单缓存（含 activeId），再由服务端按新 token 重新拉取。
         S.incidents = []; S.activeId = null;
+        // 评论正文、已读水位与 @ 候选都带租户边界：换身份必须整块失效，防止旧租户名字漏进补全。
+        S.comments = []; S.commentsFor = null; S.commentDraft = {}; S.assignees = null;
         try { localStorage.removeItem(ACTIVE_KEY); } catch (e) { /* 非致命 */ }
         await refreshIncidents();
         startPoll();
@@ -1683,6 +1866,46 @@ function timelineCard(inc) {
     }).join('') + '</div></section>';
 }
 
+/**
+ * 讨论卡片（ADR-0034）：倒序显示最近 20 条，自己的评论与被 @ 到的评论各有视觉标记。
+ * 评论是 append-only 的对话事实；它与「处置记录」（客户端整段覆盖的时间线快照）刻意分开。
+ */
+function discussionCard(inc) {
+  if (!inc) return '';
+  const all = S.commentsFor === inc.id ? S.comments : [];
+  const recent = all.slice(-20).reverse();
+  const me = S.a.tokenUser || S.a.user;
+  const draft = S.commentDraft[inc.id] || '';
+  const rows = recent.map(c => {
+    const mentions = Array.isArray(c.mentions) ? c.mentions : [];
+    const own = c.author === me;
+    const mentioned = mentions.includes(me);
+    const cls = 'cm' + (own ? ' own' : '') + (mentioned ? ' mentioned' : '');
+    return '<div class="' + cls + '"><div class="cm-hd"><b>' + esc(c.author) + '</b>'
+      + '<span>' + esc(fmtDT(c.createdAt)) + '</span>'
+      + (own ? '<span class="pill acc">我</span>' : '')
+      + (mentioned ? '<span class="pill warn">@我</span>' : '')
+      + '<span class="spacer"></span><span>#' + esc(c.commentId) + '</span></div>'
+      + '<div class="cm-bd">' + esc(c.body) + '</div>'
+      + (mentions.length ? '<div class="cm-hd" style="margin-top:4px">@ '
+          + mentions.map(x => esc(x)).join(' · ') + '</div>' : '')
+      + '</div>';
+  }).join('');
+  return '<section class="card"><div class="card-hd"><span class="k">讨论</span>'
+    + '<span class="pill">' + all.length + ' 条</span>'
+    + '<span class="spacer"></span><span class="vsub">最近 20 条 · 倒序</span></div>'
+    + '<div class="cm-list">' + (rows
+      || '<div class="empty" style="padding:14px 16px">还没有评论。输入 @ 可点名同租户同事。</div>')
+    + '</div>'
+    + '<div class="cm-form"><textarea id="commentBox" maxlength="2000" aria-label="写评论"'
+    + ' placeholder="补充处置进展；输入 @ 可点名同租户同事">' + esc(draft) + '</textarea>'
+    + '<div class="mention-pop" id="mentionPop" hidden></div>'
+    + '<div class="cm-actions"><span class="hint" id="commentHint">正文 1–2000 字；@ 后列出同租户启用用户。</span>'
+    + '<button type="button" class="btn pri" data-act="sendcomment"'
+    + (S.commentBusy ? ' disabled' : '') + '>发送</button></div>'
+    + '</div></section>';
+}
+
 function factsPanel(inc) {
   const box = $('facts');
   if (!box) return;
@@ -1964,7 +2187,9 @@ function incidentItem(inc) {
     ? '<span class="sev ' + inc.priority.toLowerCase() + '">' + inc.priority + '</span>'
     : '<span class="sev none">未定</span>';
   return '<button type="button" class="inc ' + (inc.id === S.activeId ? 'on' : '') + '" data-inc="' + esc(inc.id) + '">'
-    + '<div class="inc-x">' + pr + '<span class="t">' + esc(inc.title) + '</span></div>'
+    + '<div class="inc-x">' + pr + '<span class="t">' + esc(inc.title) + '</span>'
+    + (commentUnread(inc) ? '<span class="inc-unread" title="有新评论" aria-label="有新评论">新</span>' : '')
+    + '</div>'
     + '<div class="meta"><code>' + esc(inc.service || '未填服务') + '</code>'
     + (inc.errorCode ? '<span>·</span><code>' + esc(inc.errorCode) + '</code>' : '') + '</div>'
     + '<div class="foot"><span class="st ' + st.cls + '"><span class="dot"></span>' + st.label + '</span>'
@@ -2141,8 +2366,8 @@ function renderWorkspace() {
   }
   cv.className = 'canvas';
   $('diff').innerHTML = '';
-  if (!S.a.r) { cv.innerHTML = emptyDiagnosis(inc) + timelineCard(inc); return; }
-  cv.innerHTML = diagnosisSections(S.a.r, 'a', inc) + timelineCard(inc);
+  if (!S.a.r) { cv.innerHTML = emptyDiagnosis(inc) + discussionCard(inc) + timelineCard(inc); return; }
+  cv.innerHTML = diagnosisSections(S.a.r, 'a', inc) + discussionCard(inc) + timelineCard(inc);
 }
 
 /* ==================== 顶栏 / 弹层 ==================== */
@@ -3104,6 +3329,12 @@ document.addEventListener('input', e => {
   const id = e.target.id;
   if (id === 'incSearch') { S.search = e.target.value; renderIncidentList(); return; }
   if (id === 'quickq') { S.quick = e.target.value; return; }
+  if (id === 'commentBox') {
+    const inc = activeIncident();
+    if (inc) S.commentDraft[inc.id] = e.target.value;
+    updateMentionPop(e.target);
+    return;
+  }
   const b = e.target.dataset && e.target.dataset.bind;
   if (!b) return;
   const parts = b.split('.');
@@ -3129,7 +3360,7 @@ document.addEventListener('click', async e => {
   if (!(raw instanceof Element)) return;
   // 列表项/按钮内部通常还有 span/code；动作必须从实际点击位置的最近 data-* 祖先解析。
   const t = raw.closest('[data-act],[data-inc],[data-filter],[data-close],[data-view],'
-    + '[data-assign],[data-copy],[data-fill],[data-near],[data-preset],[data-contrast]') || raw;
+    + '[data-assign],[data-copy],[data-fill],[data-near],[data-preset],[data-contrast],[data-mention]') || raw;
 
   const closeId = t.dataset.close;
   if (closeId) { const d = $(closeId); if (d && d.open) d.close(); return; }
@@ -3157,6 +3388,8 @@ document.addEventListener('click', async e => {
   const incId = t.dataset.inc;
   if (incId) { selectIncident(incId); return; }
 
+  if (t.dataset.mention !== undefined) { insertMention(t.dataset.mention); return; }
+
   const act = t.dataset.act;
   if (act) {
     if (act === 'opendrawer') { openDrawer(); return; }
@@ -3168,6 +3401,7 @@ document.addEventListener('click', async e => {
     if (act === 'assign') { await openAssignPop(); return; }
     if (act === 'transfer') { await openTransferPop(); return; }
     if (act === 'dotransfer') { await submitTransfer(); return; }
+    if (act === 'sendcomment') { await sendComment(); return; }
     if (act === 'diag') { await ask(activeIncident()); return; }
     if (act === 'cmdwhy') { toast(EMPTY_CONTRACT_TIP, 'warn'); return; }
     if (act === 'closeinc') { openCloseDialog(); return; }

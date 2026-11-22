@@ -1,19 +1,25 @@
 package com.opspilot.incident;
 
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ThreadLocalRandom;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
+import org.springframework.jdbc.support.GeneratedKeyHolder;
+import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.stereotype.Repository;
 
 /**
@@ -61,6 +67,16 @@ public class IncidentStore {
                     rs.getString("reason"),
                     rs.getString("assigned_by"),
                     instant(rs, "assigned_at"));
+
+    private static final RowMapper<IncidentComment> COMMENT_MAPPER = (ResultSet rs, int i) ->
+            new IncidentComment(
+                    rs.getLong("comment_id"),
+                    rs.getString("tenant"),
+                    rs.getString("incident_id"),
+                    rs.getString("author"),
+                    rs.getString("body"),
+                    rs.getString("mentions_json"),
+                    instant(rs, "created_at"));
 
     private static Instant instant(ResultSet rs, String column) throws SQLException {
         Timestamp ts = rs.getTimestamp(column);
@@ -133,6 +149,61 @@ public class IncidentStore {
                         + "FROM incident_assignments WHERE tenant = ? AND incident_id = ? "
                         + "ORDER BY assigned_at DESC, id DESC LIMIT ?",
                 ASSIGNMENT_MAPPER, tenant, incidentId, limit);
+    }
+
+    /**
+     * 评论只做 INSERT：不读改写既有行，因此并发追加不会互相覆盖（ADR-0034）。
+     * 返回数据库生成的自增 id，作为前端未读水位的单调键。
+     */
+    public long insertComment(String tenant, String incidentId, String author, String body,
+                              String mentionsJson, Instant createdAt) {
+        KeyHolder keys = new GeneratedKeyHolder();
+        jdbc.update((java.sql.Connection con) -> {
+            PreparedStatement ps = con.prepareStatement(
+                    "INSERT INTO incident_comments (tenant, incident_id, author, body, mentions_json, "
+                            + "created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                    Statement.RETURN_GENERATED_KEYS);
+            ps.setString(1, tenant);
+            ps.setString(2, incidentId);
+            ps.setString(3, author);
+            ps.setString(4, body);
+            ps.setString(5, mentionsJson);
+            ps.setTimestamp(6, Timestamp.from(createdAt));
+            return ps;
+        }, keys);
+        // H2 会把带 DEFAULT 的列（created_at）也放进 generated keys，getKey() 因「多键」直接抛错；
+        // 这里按列名取主键，PostgreSQL 驱动返回单键时同样适用。
+        Map<String, Object> all = keys.getKeys();
+        Object generated = all.get("COMMENT_ID");
+        if (generated == null) generated = all.get("comment_id");
+        if (generated == null && all.size() == 1) generated = all.values().iterator().next();
+        if (!(generated instanceof Number n)) throw new IllegalStateException("评论插入未返回自增 id");
+        return n.longValue();
+    }
+
+    /** 单事故评论数：供 200 条上限判定；用聚合查询，不把正文读回内存。 */
+    public int countComments(String tenant, String incidentId) {
+        Integer n = jdbc.queryForObject("SELECT COUNT(*) FROM incident_comments "
+                + "WHERE tenant = ? AND incident_id = ?", Integer.class, tenant, incidentId);
+        return n == null ? 0 : n;
+    }
+
+    /** 增量读取：comment_id 是严格单调水位，按 (created_at, comment_id) 升序给出。 */
+    public List<IncidentComment> listComments(String tenant, String incidentId, long since, int limit) {
+        return jdbc.query("SELECT comment_id, tenant, incident_id, author, body, mentions_json, created_at "
+                        + "FROM incident_comments WHERE tenant = ? AND incident_id = ? AND comment_id > ? "
+                        + "ORDER BY created_at ASC, comment_id ASC LIMIT ?",
+                COMMENT_MAPPER, tenant, incidentId, since, limit);
+    }
+
+    /** 左栏未读角标用：每张单当前最大 commentId；只返回 id，不读正文。 */
+    public Map<String, Long> lastCommentIds(String tenant) {
+        Map<String, Long> out = new LinkedHashMap<>();
+        jdbc.query("SELECT incident_id, MAX(comment_id) AS max_id FROM incident_comments "
+                        + "WHERE tenant = ? GROUP BY incident_id",
+                (org.springframework.jdbc.core.RowCallbackHandler) rs ->
+                        out.put(rs.getString("incident_id"), rs.getLong("max_id")), tenant);
+        return out;
     }
 
     /**

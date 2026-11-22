@@ -239,3 +239,49 @@ def test_incident_rail_sorts_by_sla_urgency() -> None:
     assert "function slaRank" in html, "缺 SLA 紧迫度排序函数"
     assert "slaRank(a) - slaRank(b)" in html, "左栏未按 SLA 紧迫度排序"
     assert "已超时" in html and "临期" in html, "左栏缺 SLA 风险标记"
+
+
+def test_discussion_card_sits_between_diagnosis_and_timeline() -> None:
+    """ADR-0034：讨论卡片必须在「诊断分析」之后、「处置记录」之前。"""
+    html = _html()
+    assert "function discussionCard" in html, "缺讨论卡片渲染函数"
+    assert '<span class="k">讨论</span>' in html, "讨论卡片标题缺失"
+    ws = html.index("function renderWorkspace()")
+    block = html[ws:ws + 4000]
+    assert "diagnosisSections(S.a.r, 'a', inc) + discussionCard(inc) + timelineCard(inc)" in block, \
+        "有诊断时讨论必须夹在诊断分析与处置记录之间"
+    assert "emptyDiagnosis(inc) + discussionCard(inc) + timelineCard(inc)" in block, \
+        "无诊断时讨论也必须存在（评论不依赖诊断）"
+    assert ".cm.own{" in html and ".cm.mentioned{" in html, \
+        "自己的评论与 @ 到我的评论必须有可区分的视觉标记"
+
+
+def test_discussion_has_mention_completion_from_assignees() -> None:
+    """ADR-0034：@ 补全复用 GET /assignees，候选按钮走 data-mention。"""
+    html = _html()
+    assert 'id="commentBox"' in html and 'maxlength="2000"' in html, "评论输入框缺失或未限 2000 字"
+    assert "function mentionToken" in html and "function insertMention" in html, "缺 @ 补全逻辑"
+    assert "function updateMentionPop" in html and "data-mention=" in html, "缺 @ 候选列表"
+    assert "/api/v1/copilot/incidents/assignees" in html, "@ 候选必须复用 /assignees，不另造数据源"
+    assert "data-act=\"sendcomment\"" in html, "缺发送按钮"
+
+
+def test_unread_watermark_uses_session_storage_only() -> None:
+    """ADR-0034：未读角标基于 commentId 水位，只存 sessionStorage。"""
+    html = _html()
+    assert "opspilot.comments.seen" in html, "未读水位键名必须是 opspilot.comments.seen"
+    assert "sessionStorage.setItem(SEEN_KEY" in html, "未读水位必须写 sessionStorage"
+    assert "localStorage.setItem(SEEN_KEY" not in html, "未读水位不得写 localStorage（AC9）"
+    assert "function commentUnread" in html and 'class="inc-unread"' in html, \
+        "左栏缺未读角标渲染"
+
+
+def test_comment_failure_keeps_draft_and_clears_only_on_success() -> None:
+    """ADR-0034 硬要求：发送失败 toast 明示且保留草稿，不得先清空输入框。"""
+    html = _html()
+    assert "评论发送失败" in html, "发送失败必须 toast 明示"
+    assert "S.commentDraft[inc.id] = draft" in html, "失败路径必须把草稿写回状态"
+    assert "again.value = draft" in html, "失败路径必须恢复 textarea 内容"
+    cleared = html.index("delete S.commentDraft[inc.id]")
+    kept = html.index("S.commentDraft[inc.id] = draft")
+    assert cleared < kept, "草稿只能在成功路径清除；失败路径必须保留"

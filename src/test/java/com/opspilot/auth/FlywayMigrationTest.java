@@ -78,6 +78,15 @@ class FlywayMigrationTest {
                 assertTrue(rs.next());
                 assertEquals(1, rs.getInt(1), "已有 V5 库升级后必须留下 V6 版本记录");
             }
+            try (ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM incident_comments")) {
+                assertTrue(rs.next());
+                assertEquals(0, rs.getInt(1), "V7 必须建出 append-only 评论表");
+            }
+            try (ResultSet rs = st.executeQuery(
+                    "SELECT COUNT(*) FROM \"flyway_schema_history\" WHERE \"version\" = '7' AND \"success\"")) {
+                assertTrue(rs.next());
+                assertEquals(1, rs.getInt(1), "已有库升级后必须留下 V7 版本记录");
+            }
         }
     }
 
@@ -95,6 +104,60 @@ class FlywayMigrationTest {
                     "SELECT \"version\", \"success\" FROM \"flyway_schema_history\" WHERE \"version\" = '1'")) {
                 assertTrue(rs.next(), "空库必须由 V1 建表并留下版本记录");
                 assertEquals(1, rs.getInt("success"));
+            }
+            try (ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM incident_comments")) {
+                assertTrue(rs.next());
+                assertEquals(0, rs.getInt(1), "空库必须由 V7 建出评论表");
+            }
+            try (ResultSet rs = st.executeQuery(
+                    "SELECT COUNT(*) FROM \"flyway_schema_history\" WHERE \"version\" = '7' AND \"success\"")) {
+                assertTrue(rs.next());
+                assertEquals(1, rs.getInt(1), "空库必须留下 V7 版本记录");
+            }
+        }
+    }
+
+    /** V6 库升级到 V7：只新增一张表，既有事故与转交数据必须原样保留。 */
+    @Test
+    void v7UpgradesExistingV6DatabaseWithoutDataLoss() throws Exception {
+        DataSource ds = ds("v6-to-v7");
+        Flyway.configure()
+                .dataSource(ds)
+                .locations("classpath:db/migration")
+                .baselineOnMigrate(true)
+                .baselineVersion("1")
+                .target("6")
+                .load()
+                .migrate();
+
+        try (Connection c = ds.getConnection(); Statement st = c.createStatement()) {
+            st.execute("INSERT INTO incidents (incident_id, tenant, client_id, title, query, source, status,"
+                    + " created_by) VALUES ('INC-V6-1', 'tenant-1', 'cid-v6', 'V6 旧单', '排查', 'manual',"
+                    + " 'open', 't1-alice')");
+            st.execute("INSERT INTO incident_assignments (tenant, incident_id, from_owner, to_owner, reason,"
+                    + " assigned_by) VALUES ('tenant-1', 'INC-V6-1', 't1-alice', 't1-bob', '交接', 't1-alice')");
+        }
+
+        flyway(ds).migrate();
+
+        try (Connection c = ds.getConnection(); Statement st = c.createStatement()) {
+            try (ResultSet rs = st.executeQuery(
+                    "SELECT title FROM incidents WHERE incident_id = 'INC-V6-1'")) {
+                assertTrue(rs.next(), "V7 升级不得丢已有事故行");
+                assertEquals("V6 旧单", rs.getString("title"));
+            }
+            try (ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM incident_assignments")) {
+                assertTrue(rs.next());
+                assertEquals(1, rs.getInt(1), "V7 升级不得丢已有转交事实");
+            }
+            try (ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM incident_comments")) {
+                assertTrue(rs.next());
+                assertEquals(0, rs.getInt(1), "V7 必须建出空的评论表");
+            }
+            try (ResultSet rs = st.executeQuery(
+                    "SELECT COUNT(*) FROM \"flyway_schema_history\" WHERE \"version\" = '7' AND \"success\"")) {
+                assertTrue(rs.next());
+                assertEquals(1, rs.getInt(1), "已有 V6 库升级后必须留下 V7 版本记录");
             }
         }
     }

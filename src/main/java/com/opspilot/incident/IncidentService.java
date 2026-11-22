@@ -7,15 +7,19 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -36,6 +40,18 @@ public class IncidentService {
     private static final int MAX_ASSIGNMENTS = 50;
     private static final int MAX_REASON = 200;
     private static final String NO_REASON = "—";
+
+    /** 评论约束（ADR-0034）：正文 1..2000 字、单事故 200 条、单条 @ 最多 10 人。 */
+    private static final int MAX_COMMENT_BODY = 2000;
+    private static final int MAX_COMMENTS = 200;
+    private static final int MAX_MENTIONS = 10;
+    private static final int COMMENT_PAGE = 100;
+
+    /**
+     * @ 用户名：以正文为准服务端解析。前置字符不是「词字符 / 点」才认作 @——
+     * 否则 email（{@code a@b.com}）会被误认成点名。用户名允许 {@code -}（如 {@code sre-limited}）。
+     */
+    private static final Pattern MENTION = Pattern.compile("(?<![A-Za-z0-9_.])@([A-Za-z0-9][A-Za-z0-9_-]*)");
 
     private final IncidentStore store;
     private final UserStore users;
@@ -95,6 +111,121 @@ public class IncidentService {
     public List<UserStore.User> assignees(UserContext user) {
         requireUser(user);
         return users.listActiveByTenant(user.tenantId());
+    }
+
+    // ---- 评论（ADR-0034）：append-only 的对话事实，独立于时间线快照 ----
+
+    /**
+     * 追加一条评论。任何同租户、authLevel>=1 的用户都可写（与「协作者可写诊断」同口径）；
+     * 不需要 created_by / owner / platform，也不改变事故状态、负责人、优先级或时间线。
+     *
+     * <p>@ 只从正文解析：请求体里的 {@code mentions} 数组是客户端提示，不参与授权，
+     * 也不落库——否则前端一改数组就能伪造点名。
+     */
+    public Map<String, Object> addComment(UserContext user, String id, IncidentRequests.Comment req) {
+        requireUser(user);
+        get(user, id); // 跨租户在这里就是 404，不泄漏事故是否存在
+
+        String body = req == null || req.body() == null ? "" : req.body().trim();
+        if (body.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "评论正文不能为空");
+        }
+        if (body.codePointCount(0, body.length()) > MAX_COMMENT_BODY) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "评论正文超长（上限 " + MAX_COMMENT_BODY + " 字）");
+        }
+        if (store.countComments(user.tenantId(), id) >= MAX_COMMENTS) {
+            // 上限是「单事故」的：继续堆会让讨论区失去可读性，也会把真正的结单信息淹没。
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "单条事故评论已达上限（" + MAX_COMMENTS + " 条），请在结单备注里汇总");
+        }
+
+        List<String> mentions = resolveMentions(user, body, id);
+        String mentionsJson = writeMentions(mentions);
+        Instant now = Instant.now();
+        long commentId = store.insertComment(user.tenantId(), id, user.sub(), body, mentionsJson, now);
+        audit.logIncident(user, id, "comment", "ok", "commentId=" + commentId);
+        return commentView(new IncidentComment(commentId, user.tenantId(), id, user.sub(), body,
+                mentionsJson, now));
+    }
+
+    /** 增量读取：{@code since} 是 commentId 水位；按 (created_at, comment_id) 升序，单次上限 100。 */
+    public Map<String, Object> listComments(UserContext user, String id, Long since) {
+        requireUser(user);
+        get(user, id);
+        long from = since == null ? 0L : Math.max(0L, since);
+        List<IncidentComment> rows = store.listComments(user.tenantId(), id, from, COMMENT_PAGE);
+        long nextSince = rows.isEmpty() ? from : rows.get(rows.size() - 1).commentId();
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("comments", rows.stream().map(this::commentView).toList());
+        out.put("nextSince", nextSince);
+        return out;
+    }
+
+    /**
+     * 左栏未读角标所需的每单最大 commentId。只读聚合列，不读正文；
+     * 它不进检索/LLM/指纹/缓存键（AC9），只是会话内的计数水位。
+     */
+    public Map<String, Long> lastCommentIds(UserContext user) {
+        requireUser(user);
+        return store.lastCommentIds(user.tenantId());
+    }
+
+    private List<String> resolveMentions(UserContext user, String body, String incidentId) {
+        Matcher m = MENTION.matcher(body);
+        LinkedHashSet<String> unique = new LinkedHashSet<>();
+        while (m.find()) unique.add(m.group(1));
+        if (unique.size() > MAX_MENTIONS) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "单条评论最多 @ " + MAX_MENTIONS + " 人（当前 " + unique.size() + " 人）");
+        }
+        List<String> out = new ArrayList<>(unique.size());
+        for (String sub : unique) {
+            UserStore.User target = users.find(sub);
+            if (target == null || target.disabled() || !user.tenantId().equals(target.tenant())) {
+                audit.logIncident(user, incidentId, "comment", "invalid", "@" + sub + " 不在本租户或已禁用");
+                // 不静默丢弃：被 @ 的人永远不知道，发评论的人也以为叫到了人。
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "被 @ 的用户不是本租户的启用用户：@" + sub);
+            }
+            out.add(sub);
+        }
+        return out;
+    }
+
+    private String writeMentions(List<String> mentions) {
+        try {
+            return json.writeValueAsString(mentions);
+        } catch (RuntimeException e) {
+            throw new IllegalStateException("评论 mentions 序列化失败", e);
+        }
+    }
+
+    private Map<String, Object> commentView(IncidentComment c) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("commentId", c.commentId());
+        m.put("incidentId", c.incidentId());
+        m.put("author", c.author());
+        m.put("body", c.body());
+        m.put("mentions", readMentions(c.mentionsJson()));
+        m.put("createdAt", c.createdAt());
+        return m;
+    }
+
+    private List<String> readMentions(String raw) {
+        if (raw == null || raw.isBlank()) return List.of();
+        try {
+            JsonNode node = json.readTree(raw);
+            if (node == null || !node.isArray()) return List.of();
+            List<String> out = new ArrayList<>();
+            for (JsonNode item : node) {
+                if (item != null && item.isString()) out.add(item.asString());
+            }
+            return out;
+        } catch (RuntimeException e) {
+            // 存储损坏不该把整页讨论打挂；点名信息缺失仍可读正文。
+            return List.of();
+        }
     }
 
     /** 创建结果带 {@code created} 标记：幂等重放也要能如实回 200 而不是假装新建。 */

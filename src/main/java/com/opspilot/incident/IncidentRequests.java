@@ -35,6 +35,15 @@ public final class IncidentRequests {
             @Size(max = 200, message = "reason 超长（上限 200）") String reason) {}
 
     /**
+     * 评论：{@code body} 由服务端 trim 后校验 1..2000 字。
+     * {@code mentions} 只是客户端的输入提示——**授权依据永远是正文里的 @**，
+     * 服务端不采信这个数组（ADR-0034）；保留字段是为了客户端不必在发送前先解析正文。
+     */
+    public record Comment(
+            String body,
+            java.util.List<String> mentions) {}
+
+    /**
      * 补丁语义：**null = 不改**；空串 = 清空（owner 即取消分配，status 会按空串拒绝）。
      * 这样前端可以只发变化字段，而不用把整行回传（回传会放大并发覆盖窗口）。
      */
