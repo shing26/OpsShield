@@ -2,7 +2,6 @@ package com.opspilot.incident;
 
 import com.opspilot.auth.JwtAuthFilter;
 import com.opspilot.auth.UserContext;
-import com.opspilot.auth.UserStore;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.util.LinkedHashMap;
@@ -16,6 +15,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.JsonNode;
@@ -38,8 +38,11 @@ public class IncidentController {
     }
 
     @GetMapping
-    public Map<String, Object> list(HttpServletRequest http) {
-        List<Map<String, Object>> rows = service.list(user(http)).stream().map(this::view).toList();
+    public Map<String, Object> list(HttpServletRequest http,
+                                    @RequestParam(name = "mine", required = false) String mine,
+                                    @RequestParam(name = "status", required = false) String status) {
+        List<Map<String, Object>> rows = service.list(user(http), mine, status).stream()
+                .map(this::view).toList();
         return Map.of("incidents", rows);
     }
 
@@ -62,6 +65,18 @@ public class IncidentController {
     @GetMapping("/{id}")
     public Map<String, Object> get(@PathVariable String id, HttpServletRequest http) {
         return view(service.get(user(http), id));
+    }
+
+    @GetMapping("/{id}/assignments")
+    public Map<String, Object> assignments(@PathVariable String id, HttpServletRequest http) {
+        return Map.of("assignments", service.assignments(user(http), id));
+    }
+
+    @PostMapping("/{id}/transfer")
+    public Map<String, Object> transfer(@PathVariable String id,
+                                        @Valid @RequestBody IncidentRequests.Transfer req,
+                                        HttpServletRequest http) {
+        return view(service.transfer(user(http), id, req));
     }
 
     @PatchMapping("/{id}")
@@ -93,6 +108,8 @@ public class IncidentController {
         m.put("createdBy", i.createdBy());
         m.put("createdAt", i.createdAt());
         m.put("updatedAt", i.updatedAt());
+        m.put("dueAt", i.dueAt());
+        m.put("slaState", i.slaState());
         m.put("closedAt", i.closedAt());
         m.put("closedBy", i.closedBy());
         m.put("closeNote", i.closeNote());

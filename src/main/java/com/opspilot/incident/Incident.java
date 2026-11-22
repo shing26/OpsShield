@@ -27,10 +27,16 @@ public record Incident(
         String closedBy,
         String closeNote,
         String diagnosisJson,
-        String timelineJson) {
+        String timelineJson,
+        Instant dueAt,
+        String slaState) {
 
     public static final String STATUS_OPEN = "open";
     public static final String STATUS_CLOSED = "closed";
+
+    public static final String SLA_OK = "ok";
+    public static final String SLA_DUE_SOON = "due_soon";
+    public static final String SLA_BREACHED = "breached";
 
     public boolean closed() {
         return STATUS_CLOSED.equals(status);

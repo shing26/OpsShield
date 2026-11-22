@@ -117,6 +117,9 @@
   .fact dt{color:var(--muted)}
   .fact dd{margin:0;color:var(--txt-2);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .fact dd.mono{font-size:10.5px;font-family:var(--mono)}
+  /* SLA：沿用既有 warn/err 语义色（ADR-0033）；只染「时限」这一行，不改变其它事实的层级 */
+  .fact dd.warn{color:var(--warn)}
+  .fact dd.err{color:var(--err)}
 
   /* 左栏：事故单列表 */
   .rail-hd{display:flex;align-items:center;justify-content:space-between;padding:0 3px}
@@ -192,6 +195,14 @@
   .assign-item:hover{border-color:var(--muted);color:var(--txt)}
   .assign-item.on{border-color:var(--accent)}
   .assign-item .who{flex:1;color:var(--txt);font-family:var(--mono)}
+  /* 转交弹层：选择负责人 + 理由 + 最近 3 条事实（复用既有弹层/表单语言） */
+  .xfer .fld + .fld{margin-top:8px}
+  .xfer .btn.pri{width:100%;justify-content:center;margin-top:9px}
+  .xfer-h{margin:12px 0 5px;font-size:10.5px;color:var(--muted)}
+  .xfer-row{padding:6px 0;border-top:1px solid var(--line-soft);font-size:10.5px;
+            color:var(--txt-2);line-height:1.55}
+  .xfer-row b{font-family:var(--mono);color:var(--txt);font-weight:500}
+  .xfer-row.why{color:var(--muted);overflow-wrap:anywhere}
   .sel{background:var(--surface-2);color:var(--txt);border:1px solid var(--line);border-radius:6px;
        padding:3px 6px;font:inherit;font-size:10.5px}
   .queryline{display:flex;align-items:center;gap:7px;margin-top:8px;min-width:0;font-size:11px;color:var(--muted)}
@@ -663,11 +674,13 @@
 <div class="pop" id="acctpop" data-pop role="dialog" aria-label="身份接入" hidden></div>
 <div class="pop" id="advpop" data-pop role="dialog" aria-label="高级 · 权限隔离演练" hidden></div>
 <div class="pop" id="assignpop" data-pop role="dialog" aria-label="分配负责人" hidden></div>
+<div class="pop" id="transferpop" data-pop role="dialog" aria-label="转交负责人" hidden></div>
 
 <div id="v-trouble" class="shell" role="tabpanel" aria-labelledby="tab-trouble">
   <aside class="rail" aria-label="事故单列表">
     <div class="rail-hd"><b>我的事故单</b><span class="cnt" id="incCount">0 进行中</span></div>
     <div class="seg" id="incFilter" role="group" aria-label="事故单筛选">
+      <button type="button" data-filter="mine">我的</button>
       <button type="button" data-filter="open" class="on">进行中</button>
       <button type="button" data-filter="closed">已结单</button>
       <button type="button" data-filter="all">全部</button>
@@ -1020,8 +1033,11 @@ async function incidentApi(method, path, body) {
 async function refreshIncidents() {
   if (!S.a.token) { S.incidents = []; return false; }
   const token = S.a.token;
+  // 「我的」是服务端筛选（owner = 调用者 sub），不是把本租户列表在前端过滤一遍。
+  const mine = S.filter === 'mine';
   try {
-    const data = await incidentApi('GET', '/api/v1/copilot/incidents');
+    const data = await incidentApi('GET',
+      '/api/v1/copilot/incidents' + (mine ? '?mine=true' : ''));
     // 登录/切换身份可能发生在这个请求飞行途中；旧身份的响应绝不能落进新身份的列表。
     if (S.a.token !== token) return false;
     const serverRows = (data.incidents || []).map(x => Object.assign({}, x, {
@@ -1035,9 +1051,11 @@ async function refreshIncidents() {
       const serverAt = Date.parse(row.updatedAt || '');
       return Number.isFinite(localAt) && (!Number.isFinite(serverAt) || localAt > serverAt) ? local : row;
     });
+    // mine=true 时禁用 localOnly 回填：刚被转交出去的单已不属于调用者，
+    // 用本地缓存把它塞回来会让「我的」筛选形同虚设（ADR-0033 的回归判据）。
     const localOnly = S.incidents.filter(x => x && x.id &&
       !serverRows.some(y => y.id === x.id));
-    S.incidents = localOnly.concat(merged).slice(0, 60);
+    S.incidents = mine ? merged.slice(0, 60) : localOnly.concat(merged).slice(0, 60);
     const keep = S.activeId && findIncident(S.activeId);
     const inc = keep || S.incidents[0] || null;
     S.activeId = inc ? inc.id : null;
@@ -1685,7 +1703,7 @@ function factsPanel(inc) {
   const rows = factRows(inc);
   box.innerHTML = '<h2>本单事实</h2><dl style="margin:0">'
     + rows.map(([k, v]) => '<div class="fact"><dt>' + esc(k) + '</dt><dd'
-      + (k === '状态' ? '' : ' class="mono"') + '>' + esc(v) + '</dd></div>').join('')
+      + factClass(inc, k) + '>' + esc(v) + '</dd></div>').join('')
     + '</dl>'
     + '<h3>处置记录</h3>'
     + ((inc.timeline || []).length
@@ -1698,10 +1716,43 @@ function factsPanel(inc) {
       : '<div class="empty">尚无处置记录</div>');
 }
 
+/* SLA 显示层（ADR-0033）：剩余时间现算；阈值由服务端配置派生，前端不写死任何分钟数。 */
+function fmtSpan(ms) {
+  const s = Math.max(0, Math.round(ms / 1000));
+  if (s < 60) return s + ' 秒';
+  const m = Math.floor(s / 60);
+  if (m < 60) return m + ' 分';
+  const h = Math.floor(m / 60);
+  if (h < 24) return h + ' 小时' + (m % 60 ? ' ' + (m % 60) + ' 分' : '');
+  return Math.floor(h / 24) + ' 天' + (h % 24 ? ' ' + (h % 24) + ' 小时' : '');
+}
+function slaTone(inc) {
+  if (!inc || inc.status === 'closed') return '';
+  if (inc.slaState === 'breached') return 'err';
+  if (inc.slaState === 'due_soon') return 'warn';
+  return '';
+}
+function slaFact(inc) {
+  if (!inc || !inc.dueAt) return '未设时限';
+  const left = Date.parse(inc.dueAt) - Date.now();
+  return fmtDT(inc.dueAt) + ' · ' + (left >= 0
+    ? '剩余 ' + fmtSpan(left)
+    : '已超时 ' + fmtSpan(-left));
+}
+function factClass(inc, k) {
+  if (k === '状态') return '';
+  if (k === '时限') {
+    const tone = slaTone(inc);
+    return ' class="mono' + (tone ? ' ' + tone : '') + '"';
+  }
+  return ' class="mono"';
+}
+
 function factRows(inc) {
   return [
     ['状态', incidentStatus(inc).label],
     ['优先级', inc.priority || '未定'],
+    ['时限', slaFact(inc)],
     ['来源', inc.source || '—'],
     ['负责人', inc.owner || '未分配'],
     ['创建', fmtDT(inc.createdAt)],
@@ -1722,7 +1773,7 @@ function mobileFacts(inc) {
     + '<summary>本单事实<span class="right">' + rows.length + ' 项</span></summary>'
     + '<div class="in"><dl style="margin:0">'
     + rows.map(([k, v]) => '<div class="fact"><dt>' + esc(k) + '</dt><dd'
-      + (k === '状态' ? '' : ' class="mono"') + '>' + esc(v) + '</dd></div>').join('')
+      + factClass(inc, k) + '>' + esc(v) + '</dd></div>').join('')
     + '</dl></div></details>';
   box.querySelector('details').addEventListener('toggle', e => { S.mfactsOpen = e.target.open; });
 }
@@ -1918,7 +1969,17 @@ function incidentItem(inc) {
     + (inc.errorCode ? '<span>·</span><code>' + esc(inc.errorCode) + '</code>' : '') + '</div>'
     + '<div class="foot"><span class="st ' + st.cls + '"><span class="dot"></span>' + st.label + '</span>'
     + '<span>·</span><span>' + esc(relTime(inc.updatedAt || inc.createdAt)) + '</span>'
+    + (slaTone(inc) ? '<span>·</span><span class="' + slaTone(inc) + '">'
+        + (inc.slaState === 'breached' ? '已超时' : '临期') + '</span>' : '')
     + (inc.owner ? '<span>·</span><span>' + esc(inc.owner) + '</span>' : '') + '</div></button>';
+}
+
+/** 左栏排序（ADR-0033）：先按 SLA 紧迫度，再按最近更新；已结单不抢占前排。 */
+function slaRank(inc) {
+  if (inc.status === 'closed') return 2;
+  if (inc.slaState === 'breached') return 0;
+  if (inc.slaState === 'due_soon') return 1;
+  return 2;
 }
 
 function renderIncidentList() {
@@ -1926,7 +1987,8 @@ function renderIncidentList() {
   if (!box) return;
   const q = S.search.trim().toLowerCase();
   let list = S.incidents.slice().sort((a, b) =>
-    String(b.updatedAt || b.createdAt).localeCompare(String(a.updatedAt || a.createdAt)));
+    slaRank(a) - slaRank(b)
+    || String(b.updatedAt || b.createdAt).localeCompare(String(a.updatedAt || a.createdAt)));
   if (S.filter === 'open') list = list.filter(x => x.status !== 'closed');
   if (S.filter === 'closed') list = list.filter(x => x.status === 'closed');
   if (q) {
@@ -2003,7 +2065,8 @@ function incidentHeader(inc) {
     + '</div><div class="wk-actions">'
     + (inc.status === 'closed'
         ? '<button type="button" class="btn gho" data-act="reopen">重新打开</button>'
-        : '<button type="button" class="btn gho" data-act="diag">' + (S.a.token ? '↻ 重新诊断' : '接入并诊断') + '</button>'
+        : '<button type="button" class="btn gho" data-act="transfer">转交</button>'
+          + '<button type="button" class="btn gho" data-act="diag">' + (S.a.token ? '↻ 重新诊断' : '接入并诊断') + '</button>'
           + '<button type="button" class="btn pri" data-act="closeinc">结单并记录处置</button>')
     + '</div></div>';
 }
@@ -2248,6 +2311,80 @@ async function assignTo(sub) {
   closePops();
   renderAll();
   if (ok) toast(sub ? '负责人已改为 ' + sub : '已取消负责人', 'ok');
+}
+
+/* ==================== 责任转交（ADR-0033） ==================== */
+/**
+ * 转交弹层：负责人选择 + 理由 + 最近 3 条不可变转交事实。
+ * 历史只来自 `/assignments`（append-only 表），不从客户端时间线拼。
+ */
+async function openTransferPop() {
+  const inc = activeIncident();
+  if (!inc) return;
+  if (!S.a.token) { openPop('acctpop'); return; }
+  if (inc.status === 'closed') { toast('事故单已结单；重新打开后再转交', 'warn'); return; }
+  const box = $('transferpop');
+  box.innerHTML = '<div class="pop-hd">转交 · ' + esc(inc.id) + '</div>'
+    + '<div class="note">加载负责人与转交历史…</div>';
+  openPop('transferpop');
+  let users = [], history = [];
+  try {
+    const [u, h] = await Promise.all([
+      incidentApi('GET', '/api/v1/copilot/incidents/assignees'),
+      incidentApi('GET', '/api/v1/copilot/incidents/' + encodeURIComponent(inc.id) + '/assignments')
+    ]);
+    users = (u.users || []).filter(x => x.sub !== inc.owner);
+    history = (h.assignments || []).slice(0, 3);
+  } catch (e) {
+    box.innerHTML = '<div class="pop-hd">转交 · ' + esc(inc.id) + '</div>'
+      + '<div class="note">' + esc(e.message) + '</div>';
+    return;
+  }
+  box.innerHTML = '<div class="pop-hd">转交 · ' + esc(inc.id) + '</div>'
+    + '<div class="xfer">'
+    + '<div class="fld"><label for="xferTo">负责人</label>'
+    + (users.length
+      ? '<select id="xferTo">' + users.map(u =>
+          '<option value="' + esc(u.sub) + '">' + esc(u.sub) + ' · ' + esc(u.role) + '</option>').join('')
+        + '</select>'
+      : '<div class="hint">本租户没有其他启用用户可转交。</div>')
+    + '<div class="hint">当前负责人 ' + esc(inc.owner || '未分配') + '；只能转交给本租户的启用用户。</div></div>'
+    + '<div class="fld"><label for="xferReason">理由（可选，200 字）</label>'
+    + '<textarea id="xferReason" maxlength="200" placeholder="例如：夜班交接 / 需要支付域同学跟进"></textarea></div>'
+    + '<button type="button" class="btn pri" data-act="dotransfer"' + (users.length ? '' : ' disabled')
+    + '>确认转交</button></div>'
+    + '<div class="xfer-h">最近 3 条转交</div>'
+    + (history.length
+      ? history.map(x => '<div class="xfer-row"><b>' + esc(x.fromOwner || '—') + ' → '
+          + esc(x.toOwner || '—') + '</b> · ' + esc(fmtDT(x.assignedAt)) + '</div>'
+          + '<div class="xfer-row why">' + esc(x.reason || '—') + ' · 操作人 '
+          + esc(x.assignedBy || '—') + '</div>').join('')
+      : '<div class="note">本单还没有转交记录。</div>')
+    + '<div class="note">转交会同时改写负责人并追加一条不可变记录；失败的转交不会留下任何记录。</div>';
+}
+
+async function submitTransfer() {
+  const inc = activeIncident();
+  if (!inc) return;
+  const to = $('xferTo') ? $('xferTo').value : '';
+  const reason = $('xferReason') ? $('xferReason').value.trim() : '';
+  if (!to) { toast('请选择转交负责人', 'warn'); return; }
+  try {
+    const saved = await incidentApi('POST',
+      '/api/v1/copilot/incidents/' + encodeURIComponent(inc.id) + '/transfer',
+      { toOwner: to, reason });
+    Object.assign(inc, saved);
+    inc.diagnosis = saved.diagnosis || null;
+    inc.timeline = Array.isArray(saved.timeline) ? saved.timeline : inc.timeline;
+    closePops();
+    // 「我的」是服务端筛选：转交出去后必须重拉，不能只改本地内存。
+    await refreshIncidents();
+    renderAll();
+    toast('已转交给 ' + to, 'ok');
+  } catch (e) {
+    // 失败必须明示：转交是责任动作，静默失败会让值班人以为单子已经交出去了。
+    toast('转交失败：' + e.message, 'err');
+  }
 }
 
 /* ==================== 运行态抽屉 ==================== */
@@ -3005,7 +3142,17 @@ document.addEventListener('click', async e => {
   if (view) { setView(view); return; }
 
   const filter = t.dataset.filter;
-  if (filter) { S.filter = filter; renderIncidentList(); return; }
+  if (filter) {
+    const wasMine = S.filter === 'mine';
+    S.filter = filter;
+    // 「我的」是服务端筛选：进出这个筛选都要重拉，否则列表会残留上一视图的单子。
+    if ((filter === 'mine' || wasMine) && S.a.token) {
+      refreshIncidents().then(() => renderAll());
+    } else {
+      renderIncidentList();
+    }
+    return;
+  }
 
   const incId = t.dataset.inc;
   if (incId) { selectIncident(incId); return; }
@@ -3019,6 +3166,8 @@ document.addEventListener('click', async e => {
     if (act === 'newinc') { openIncidentDialog({ mode: 'create' }); return; }
     if (act === 'editinc') { openIncidentDialog({ mode: 'edit', inc: activeIncident() }); return; }
     if (act === 'assign') { await openAssignPop(); return; }
+    if (act === 'transfer') { await openTransferPop(); return; }
+    if (act === 'dotransfer') { await submitTransfer(); return; }
     if (act === 'diag') { await ask(activeIncident()); return; }
     if (act === 'cmdwhy') { toast(EMPTY_CONTRACT_TIP, 'warn'); return; }
     if (act === 'closeinc') { openCloseDialog(); return; }

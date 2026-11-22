@@ -196,3 +196,46 @@ def test_mobile_facts_and_action_bar_exist() -> None:
         "缺窄屏底部结单操作条"
     assert "body.has-mbar{padding-bottom:60px}" in html, \
         "底部操作条必须给 body 留出安全区，避免遮住最后一行内容"
+
+
+def test_my_filter_is_server_side_and_drops_local_backfill() -> None:
+    """ADR-0033：「我的」必须走服务端 ?mine=true，且不得用 localOnly 回填。"""
+    html = _html()
+    assert 'data-filter="mine"' in html, "左栏缺「我的」筛选按钮"
+    assert "?mine=true" in html, "「我的」必须请求服务端 ?mine=true"
+    assert "(mine ? '?mine=true' : '')" in html, "mine 参数必须由筛选状态驱动"
+    assert "S.incidents = mine ? merged.slice(0, 60) : localOnly.concat(merged)" in html, \
+        "mine=true 时必须关闭 localOnly 回填（否则刚转交出去的单会回来）"
+
+
+def test_transfer_entry_popover_and_failure_toast() -> None:
+    """ADR-0033：页头转交入口、弹层（负责人/理由/最近 3 条）、失败必须 toast。"""
+    html = _html()
+    assert 'data-act="transfer"' in html, "页头操作区缺「转交」按钮"
+    assert 'id="transferpop"' in html, "缺转交弹层容器"
+    assert "function openTransferPop" in html and "function submitTransfer" in html, \
+        "转交弹层与提交逻辑缺失"
+    assert "/transfer" in html, "缺少 POST /{id}/transfer 调用"
+    assert "最近 3 条转交" in html, "弹层必须列出最近 3 条转交历史"
+    assert "转交失败：" in html, "转交失败必须 toast 明示，不得静默"
+    assert "xferReason" in html and "maxlength=\"200\"" in html, "理由输入必须限制 200 字"
+
+
+def test_sla_fact_and_semantic_colors() -> None:
+    """ADR-0033：右栏事实显示「时限 / 剩余」，due_soon 用 warn、breached 用 err。"""
+    html = _html()
+    assert "['时限', slaFact(inc)]" in html, "右栏本单事实缺「时限」行"
+    assert "剩余 " in html, "时限必须显示剩余时间"
+    assert "未设时限" in html, "空优先级必须显示未设时限"
+    assert "function slaTone" in html and "return 'warn'" in html and "return 'err'" in html, \
+        "SLA 状态必须映射到既有 warn/err 语义"
+    assert ".fact dd.warn{color:var(--warn)}" in html, "due_soon 必须用 warn 色"
+    assert ".fact dd.err{color:var(--err)}" in html, "breached 必须用 err 色"
+
+
+def test_incident_rail_sorts_by_sla_urgency() -> None:
+    """ADR-0033：左栏排序把已超时/临期排在前面，已结单不抢前排。"""
+    html = _html()
+    assert "function slaRank" in html, "缺 SLA 紧迫度排序函数"
+    assert "slaRank(a) - slaRank(b)" in html, "左栏未按 SLA 紧迫度排序"
+    assert "已超时" in html and "临期" in html, "左栏缺 SLA 风险标记"

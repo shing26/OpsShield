@@ -219,14 +219,14 @@ public class AuditService {
     }
 
     /**
-     * 事故动作留痕：create / update / close / reopen / assign / denied。
+     * 事故动作留痕：create / update / close / reopen / assign / transfer / sla / denied。
      *
      * <p>为什么单独一族：事故是跨会话、跨设备的业务对象，权限判定（created_by/owner/platform）
      * 与分配动作都必须可复核；把它塞进 admin 事件会让"谁改了事故"与"谁动了平台"混在一起。
      *
      * @param incidentId 事故 ID（服务端生成）
-     * @param action     {@code create|update|close|reopen|assign|denied}
-     * @param outcome    {@code ok|forbidden|invalid}
+     * @param action     {@code create|update|close|reopen|assign|transfer|sla|denied}
+     * @param outcome    {@code ok|forbidden|invalid|due_soon|breached}
      */
     public void logIncident(UserContext user, String incidentId, String action, String outcome, String detail) {
         Map<String, Object> ev = new LinkedHashMap<>();

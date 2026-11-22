@@ -12,8 +12,8 @@
   <a href="https://openjdk.org/"><img src="https://img.shields.io/badge/Java-21-ED8B00?style=flat&amp;logo=openjdk&amp;logoColor=white" alt="Java 21"></a>
   <a href="https://spring.io/projects/spring-boot"><img src="https://img.shields.io/badge/Spring_Boot-4.1.2-6DB33F?style=flat&amp;logo=springboot&amp;logoColor=white" alt="Spring Boot 4.1.2"></a>
   <br>
-  <a href="#-测试体系与安全回归测试"><img src="https://img.shields.io/badge/Java_Tests-505_Passed-4CAF50?style=flat&amp;logo=openjdk&amp;logoColor=white" alt="Java Tests: 505 passed"></a>
-  <a href="#-测试体系与安全回归测试"><img src="https://img.shields.io/badge/Probes-598_Passed-3776AB?style=flat&amp;logo=python&amp;logoColor=white" alt="Python Probes: 598 passed"></a>
+  <a href="#-测试体系与安全回归测试"><img src="https://img.shields.io/badge/Java_Tests-516_Passed-4CAF50?style=flat&amp;logo=openjdk&amp;logoColor=white" alt="Java Tests: 516 passed"></a>
+  <a href="#-测试体系与安全回归测试"><img src="https://img.shields.io/badge/Probes-602_Passed-3776AB?style=flat&amp;logo=python&amp;logoColor=white" alt="Python Probes: 602 passed"></a>
   <a href="docs/benchmark.md"><img src="https://img.shields.io/badge/Benchmark-Regression_Gated-4CAF50?style=flat&amp;logo=githubactions&amp;logoColor=white" alt="Benchmark: regression gated"></a>
   <a href="https://prometheus.io/"><img src="https://img.shields.io/badge/Metrics-Micrometer_%7C_Prometheus-498BA3?style=flat&amp;logo=prometheus&amp;logoColor=white" alt="Metrics: Micrometer and Prometheus"></a>
   <a href="#-系统架构与流量管道"><img src="https://img.shields.io/badge/Action_Contract-read--only-0EA5E9?style=flat" alt="Action contract: read-only"></a>
@@ -362,7 +362,7 @@ OpsShield 把"系统活着"做成了结构化的入口矩阵（默认端口 `808
 | **SSE 排障流** | `POST /api/v1/copilot/chat/stream` | `meta/delta/done` 三帧；`done` 帧恒带引用来源与只读命令清单 |
 | **覆盖范围** | `GET /api/v1/copilot/coverage` | 提问前可见的知识库边界：按调用者身份现算的**服务数 / 错误码数 / 语义块数 + 最近重建时间**，外加可点的服务名与错误码清单（点一下填进输入框）。拒答时同源给出"最接近的标识符"，让答不出来读成**边界**而非故障（[ADR-0023](docs/adr/0023-public-surface-terminology.md)） |
 | **管理快照 / 审计流** | `GET /api/v1/admin/state` · `/api/v1/admin/audit/recent` | 运行面板视图与右上角健康抽屉的数据源；`role=platform ∧ auth_level≥3` 门禁，非平台身份渲染锁定态 |
-| **事故单记录** | `GET/POST /api/v1/copilot/incidents` · `/assignees` · `GET/PATCH /{id}` | 服务端持久化（ADR-0032，Flyway V5）；登录锁 429 响应带 `Retry-After` |
+| **事故单记录** | `GET/POST /api/v1/copilot/incidents` · `/assignees` · `GET/PATCH /{id}` · `POST /{id}/transfer` · `GET /{id}/assignments` · `?mine=true&status=` | 服务端持久化（ADR-0032，Flyway V5）；转交是 append-only 事实、与 `owner` 同事务，`PATCH owner` 走同一路径（ADR-0033，V6）；`?mine=true` 在服务端按调用者筛选；`due_at` / SLA 状态由配置派生，60s 扫描幂等跃迁；登录锁 429 响应带 `Retry-After` |
 
 #### 核心指标定义（`aiops.*` 层级名，Prometheus 侧点号转下划线）
 
@@ -379,8 +379,8 @@ OpsShield 把"系统活着"做成了结构化的入口矩阵（默认端口 `808
 
 防线不只靠单测——关键判据全部经"改坏必红、复原必绿"的安全回归测试，文档数字由门闩每次现算比对产物：
 
-* **Java 505 单测**（`mvn test` 实跑全绿）：并发合并、状态机无损跃迁、AST 词法解析、双出口指标一致性、覆盖范围聚合、内存存储后端与身份过滤的跨后端对照、事故单租户隔离与分配权限；
-* **Python 598 条 test 函数**（`pytest offline/tests/`；参数化展开后执行例数更多）：含 `action_contract_probe.py` 的 **AC-1..AC-9 九组形式化不变式**——帧形状 / 逐字性 / 契约⊆引用闭包 / 段名闸 / 红线绊线 / 回放一致性 / 租户围栏 / 指标单调 / 反假绿覆盖；以及 `preset_probe.py` 的 **P-1..P-3 三组**——左栏预设与页面同源、预设形状（不锁产额）、覆盖范围与语料逐项相等；
+* **Java 516 单测**（`mvn test` 实跑全绿）：并发合并、状态机无损跃迁、AST 词法解析、双出口指标一致性、覆盖范围聚合、内存存储后端与身份过滤的跨后端对照、事故单租户隔离与分配权限、转交原子性与 append-only 历史、服务端「我的」筛选、SLA 派生与扫描跃迁幂等；
+* **Python 602 条 test 函数**（`pytest offline/tests/`；参数化展开后执行例数更多）：含 `action_contract_probe.py` 的 **AC-1..AC-9 九组形式化不变式**——帧形状 / 逐字性 / 契约⊆引用闭包 / 段名闸 / 红线绊线 / 回放一致性 / 租户围栏 / 指标单调 / 反假绿覆盖；以及 `preset_probe.py` 的 **P-1..P-3 三组**——左栏预设与页面同源、预设形状（不锁产额）、覆盖范围与语料逐项相等；
 * **安全回归测试**：契约探针 5 路（段名闸恒真、逐字恒真、红线恒空、闭包前置 None、AC-7 租户恒真——每条都有"改坏后 N failed / 复原后全绿"的实测记录）；文档门闩另有 A/B/C 三路（改文档数字、改产物、改写措辞，各须红）；
 * **CI 全部 job**（java / static-gate / panel-contract / provenance / python / shell / security / sbom / smoke / benchmark / redteam）零 key 零中间件可跑；`doc_numbers` 门闩现算比对 **33 条文档数字 / 48 处引用**，数字与产物分叉即 CI 红；评测报告与语料的同代性用内容摘要钉死（`provenance`，不用 checkout 会刷平的 mtime）；对外面用词由 `check_public_copy` 钉住（内部 canonical 词不得漏到本 README 与页面文案，词表从 `docs/CONTEXT.md` 现取）。
 
@@ -413,7 +413,7 @@ $PY load/l1_latency.py       # L1 回放延迟（热点命中口径）→ load/r
 
 ## 📐 架构决策记录
 
-系统的演进过程严格遵从 ADR 机制，每篇含否决项与后果。关键决策索引如下（完整 **32 篇**见 [docs/adr/](docs/adr/)）：
+系统的演进过程严格遵从 ADR 机制，每篇含否决项与后果。关键决策索引如下（完整 **33 篇**见 [docs/adr/](docs/adr/)）：
 
 | # | 决策 | 一句话理由 |
 | --- | --- | --- |
@@ -439,6 +439,7 @@ $PY load/l1_latency.py       # L1 回放延迟（热点命中口径）→ load/r
 | [0030](docs/adr/0030-telemetry-consumption-and-baseline-alerting.md) | 遥测消费与统计基线预警：只经 Prometheus HTTP API 读既有时序，中位数 + MAD 双阈值，预警复用既有编排链 | 谱系表 ①② 从「永久非目标」修订为「消费侧已覆盖」，底座零改动 |
 | [0031](docs/adr/0031-second-reference-implementation.md) | 第二个参考实现：数据库值班领域包（薄切片） | rule of three 的第二个用例，验证可复用边界 |
 | [0032](docs/adr/0032-incident-persistence.md) | 事故单服务端持久化：`GET/POST /api/v1/copilot/incidents`、`/assignees`、`GET/PATCH /{id}`，Flyway V5 | 事故单从前端状态升级为可审计的服务端记录；429 登录锁补 `Retry-After` |
+| [0033](docs/adr/0033-incident-responsibility.md) | 事故单责任流转：转交 append-only、服务端「我的」、优先级派生 SLA（Flyway V6） | 责任变更可追溯；SLA 阈值全走配置，60s 扫描幂等跃迁且不重复落审计 |
 
 ---
 

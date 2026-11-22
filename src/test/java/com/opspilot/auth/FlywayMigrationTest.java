@@ -42,6 +42,46 @@ class FlywayMigrationTest {
     }
 
     @Test
+    void v6UpgradesExistingV5DataAndAddsAssignmentTable() throws Exception {
+        DataSource ds = ds("v5-to-v6");
+        Flyway.configure()
+                .dataSource(ds)
+                .locations("classpath:db/migration")
+                .baselineOnMigrate(true)
+                .baselineVersion("1")
+                .target("5")
+                .load()
+                .migrate();
+
+        try (Connection c = ds.getConnection(); Statement st = c.createStatement()) {
+            st.execute("INSERT INTO incidents (incident_id, tenant, client_id, title, query, source, status,"
+                    + " created_by) VALUES ('INC-V5-1', 'tenant-1', 'cid-v5', '旧单', '排查', 'manual',"
+                    + " 'open', 't1-alice')");
+        }
+
+        flyway(ds).migrate();
+
+        try (Connection c = ds.getConnection(); Statement st = c.createStatement()) {
+            // V6 只新增表与可空/有默认值的列：旧行必须保留且自动获得 sla_state='ok'。
+            try (ResultSet rs = st.executeQuery(
+                    "SELECT due_at, sla_state FROM incidents WHERE incident_id = 'INC-V5-1'")) {
+                assertTrue(rs.next(), "V6 升级不得丢已有事故行");
+                assertNull(rs.getTimestamp("due_at"));
+                assertEquals("ok", rs.getString("sla_state"));
+            }
+            try (ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM incident_assignments")) {
+                assertTrue(rs.next());
+                assertEquals(0, rs.getInt(1), "V6 必须建出 append-only 转交表");
+            }
+            try (ResultSet rs = st.executeQuery(
+                    "SELECT COUNT(*) FROM \"flyway_schema_history\" WHERE \"version\" = '6' AND \"success\"")) {
+                assertTrue(rs.next());
+                assertEquals(1, rs.getInt(1), "已有 V5 库升级后必须留下 V6 版本记录");
+            }
+        }
+    }
+
+    @Test
     void emptyDatabaseGetsUsersTableAndHistory() throws Exception {
         DataSource ds = ds("empty");
         flyway(ds).migrate();
