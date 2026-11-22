@@ -81,6 +81,50 @@ class IncidentCommentTest {
         return new IncidentRequests.Comment(body, clientMentions);
     }
 
+    /** 并发追加的结果：成功，或服务端给出的 HTTP 状态（409 表示撞上 200 条上限）。 */
+    private record Outcome(boolean ok, int status) {}
+
+    private void seedComments(Incident inc, int n) {
+        for (int i = 0; i < n; i++) {
+            store.insertComment(ALICE.tenantId(), inc.id(), ALICE.sub(), "占位 " + i, "[]", Instant.now());
+        }
+    }
+
+    /** 10 线程同一时刻开始追加；不加断言，由调用方按场景判断成功/冲突的分布。 */
+    private List<Outcome> raceAppends(Incident inc, int n) throws Exception {
+        ExecutorService pool = Executors.newFixedThreadPool(n);
+        CountDownLatch start = new CountDownLatch(1);
+        List<Future<Outcome>> futures = new ArrayList<>();
+        try {
+            for (int i = 0; i < n; i++) {
+                final int idx = i;
+                futures.add(pool.submit(() -> {
+                    start.await(5, TimeUnit.SECONDS);
+                    try {
+                        service.addComment(ALICE, inc.id(), comment("并发追加 " + idx));
+                        return new Outcome(true, 201);
+                    } catch (ResponseStatusException e) {
+                        return new Outcome(false, e.getStatusCode().value());
+                    }
+                }));
+            }
+            start.countDown();
+            List<Outcome> out = new ArrayList<>();
+            for (Future<Outcome> f : futures) out.add(f.get(20, TimeUnit.SECONDS));
+            return out;
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    private static long successes(List<Outcome> out) {
+        return out.stream().filter(Outcome::ok).count();
+    }
+
+    private static long conflicts(List<Outcome> out) {
+        return out.stream().filter(o -> !o.ok() && o.status() == 409).count();
+    }
+
     @SuppressWarnings("unchecked")
     private static List<Map<String, Object>> rows(Map<String, Object> page) {
         return (List<Map<String, Object>>) page.get("comments");
@@ -188,6 +232,46 @@ class IncidentCommentTest {
         assertEquals(HttpStatus.BAD_REQUEST, tooLong.getStatusCode());
     }
 
+    /**
+     * 校验按 code point（1..2000），落库列宽按 UTF-16 码元（4000）。
+     * 回归 AC4 的 P1：合法长度的 emoji 评论不得在 INSERT 处炸成 500。
+     */
+    @Test
+    void emojiBodyWithinCodePointLimitIsAcceptedAndNeverBecomes500() {
+        Incident inc = create("cid-body-emoji");
+
+        // 2000 汉字 = 2000 code points / 2000 码元 → 创建成功
+        String han = "字".repeat(2000);
+        assertEquals(han, service.addComment(ALICE, inc.id(), comment(han)).get("body"));
+
+        // 2000 emoji = 2000 code points / 4000 码元（全是代理对）→ 创建成功
+        String emojis = "😀".repeat(2000);
+        assertEquals(2000, emojis.codePointCount(0, emojis.length()));
+        assertEquals(4000, emojis.length());
+        assertEquals(emojis, service.addComment(ALICE, inc.id(), comment(emojis)).get("body"),
+                "HTTP 201：2000 个 emoji 必须能落进 VARCHAR(4000)，不得 500");
+
+        // 1999 汉字 + 1 emoji = 2000 code points / 2001 码元 → 创建成功
+        String mixed = "字".repeat(1999) + "😀";
+        assertEquals(2000, mixed.codePointCount(0, mixed.length()));
+        assertEquals(2001, mixed.length());
+        assertEquals(mixed, service.addComment(ALICE, inc.id(), comment(mixed)).get("body"),
+                "HTTP 201：混合正文的码元数超过旧列宽但不能 500");
+
+        // 2001 汉字 = 2001 code points → 400
+        var overCodePoints = assertThrows(ResponseStatusException.class,
+                () -> service.addComment(ALICE, inc.id(), comment("字".repeat(2001))));
+        assertEquals(HttpStatus.BAD_REQUEST, overCodePoints.getStatusCode());
+
+        // 4001 ASCII：code point 口径先挡，同样 400（绝不到 JDBC 层）
+        var overUtf16 = assertThrows(ResponseStatusException.class,
+                () -> service.addComment(ALICE, inc.id(), comment("a".repeat(4001))));
+        assertEquals(HttpStatus.BAD_REQUEST, overUtf16.getStatusCode());
+
+        assertEquals(3, store.countComments(ALICE.tenantId(), inc.id()),
+                "只有三条合法评论落库，超长请求不得留下半条");
+    }
+
     @Test
     void perIncidentCapIs200AndNamesTheFallback() {
         Incident inc = create("cid-cap");
@@ -201,6 +285,44 @@ class IncidentCommentTest {
         assertTrue(ex.getReason() != null && ex.getReason().contains("请在结单备注里汇总"),
                 "409 必须提示「请在结单备注里汇总」，不能只说超限");
         assertEquals(200, store.countComments(ALICE.tenantId(), inc.id()));
+    }
+
+    // ---- 200 条上限的并发判据（行锁串行化「计数 + 插入」） ----
+
+    @Test
+    void concurrentAppendsAt199AllowExactlyOneAndKeepTheCap() throws Exception {
+        Incident inc = create("cid-race-199");
+        seedComments(inc, 199);
+
+        List<Outcome> out = raceAppends(inc, 10);
+
+        assertEquals(1, successes(out), "已有 199 条时并发 10 条只能成功 1 条");
+        assertEquals(9, conflicts(out), "其余 9 条必须 409，而不是静默突破上限");
+        assertEquals(200, store.countComments(ALICE.tenantId(), inc.id()), "最终恰好 200 条");
+    }
+
+    @Test
+    void concurrentAppendsAt200AllConflict() throws Exception {
+        Incident inc = create("cid-race-200");
+        seedComments(inc, 200);
+
+        List<Outcome> out = raceAppends(inc, 10);
+
+        assertEquals(0, successes(out), "已有 200 条时任何并发追加都必须失败");
+        assertEquals(10, conflicts(out));
+        assertEquals(200, store.countComments(ALICE.tenantId(), inc.id()), "上限后不得再多出任何一条");
+    }
+
+    @Test
+    void concurrentAppendsAt190AllSucceedAndLandExactlyAt200() throws Exception {
+        Incident inc = create("cid-race-190");
+        seedComments(inc, 190);
+
+        List<Outcome> out = raceAppends(inc, 10);
+
+        assertEquals(10, successes(out), "锁只能保护上限，不能误伤正常并发");
+        assertEquals(0, conflicts(out));
+        assertEquals(200, store.countComments(ALICE.tenantId(), inc.id()), "10 条都必须落库");
     }
 
     // ---- @ 解析 ----
@@ -331,5 +453,22 @@ class IncidentCommentTest {
         Map<String, Long> ids = service.lastCommentIds(ALICE);
         assertEquals(((Number) second.get("commentId")).longValue(), ids.get(mine.id()));
         assertFalse(ids.containsKey(other.id()), "未读水位不得看到其他租户的事故");
+    }
+
+    /**
+     * 绕过 Service 的前置 get() 直接打 Store：即使有人拿掉了 get() 的租户校验，
+     * {@code listComments} / {@code lockIncident} 自己的 {@code tenant = ?} 仍是第二道防线。
+     */
+    @Test
+    void storeListCommentsAndLockAreTenantScopedEvenWithoutServiceCheck() {
+        Incident inc = create("cid-store-tenant");
+        service.addComment(ALICE, inc.id(), comment("本租户可见"));
+
+        assertEquals(1, store.listComments(ALICE.tenantId(), inc.id(), 0L, 100).size());
+        assertEquals(0, store.listComments("tenant-2", inc.id(), 0L, 100).size(),
+                "直接打 Store：跨租户读不得看到任何评论");
+        assertFalse(store.lockIncident("tenant-2", inc.id()),
+                "跨租户锁不到事故行，Service 据此回 404 而不是 500");
+        assertTrue(store.lockIncident(ALICE.tenantId(), inc.id()));
     }
 }

@@ -181,6 +181,20 @@ public class IncidentStore {
         return n.longValue();
     }
 
+    /**
+     * 事务内对事故行加排他锁，把「计数 + 插入」串行化，200 条上限才真正成立。
+     *
+     * <p>用行锁而不是进程内 {@code synchronized}：多实例部署下进程锁无效。H2 与 PostgreSQL
+     * 都支持 {@code SELECT ... FOR UPDATE}；返回 {@code false} 表示事故不存在或跨租户，
+     * 调用方按既有口径 404，不泄漏存在性。
+     */
+    public boolean lockIncident(String tenant, String incidentId) {
+        List<String> rows = jdbc.queryForList(
+                "SELECT incident_id FROM incidents WHERE tenant = ? AND incident_id = ? FOR UPDATE",
+                String.class, tenant, incidentId);
+        return !rows.isEmpty();
+    }
+
     /** 单事故评论数：供 200 条上限判定；用聚合查询，不把正文读回内存。 */
     public int countComments(String tenant, String incidentId) {
         Integer n = jdbc.queryForObject("SELECT COUNT(*) FROM incident_comments "

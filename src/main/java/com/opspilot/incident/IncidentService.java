@@ -43,6 +43,8 @@ public class IncidentService {
 
     /** 评论约束（ADR-0034）：正文 1..2000 字、单事故 200 条、单条 @ 最多 10 人。 */
     private static final int MAX_COMMENT_BODY = 2000;
+    /** 正文的 UTF-16 码元兜底：2000 个 code point 最坏是 4000 个码元（全是代理对）。 */
+    private static final int MAX_COMMENT_UTF16 = 4000;
     private static final int MAX_COMMENTS = 200;
     private static final int MAX_MENTIONS = 10;
     private static final int COMMENT_PAGE = 100;
@@ -121,7 +123,11 @@ public class IncidentService {
      *
      * <p>@ 只从正文解析：请求体里的 {@code mentions} 数组是客户端提示，不参与授权，
      * 也不落库——否则前端一改数组就能伪造点名。
+     *
+     * <p>「计数 + 插入」在事故行锁内完成（{@link IncidentStore#lockIncident}）：
+     * 事务把同一事故的追加串行化，200 条上限在并发下也成立。
      */
+    @Transactional
     public Map<String, Object> addComment(UserContext user, String id, IncidentRequests.Comment req) {
         requireUser(user);
         get(user, id); // 跨租户在这里就是 404，不泄漏事故是否存在
@@ -133,6 +139,17 @@ public class IncidentService {
         if (body.codePointCount(0, body.length()) > MAX_COMMENT_BODY) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "评论正文超长（上限 " + MAX_COMMENT_BODY + " 字）");
+        }
+        if (body.length() > MAX_COMMENT_UTF16) {
+            // 兜底：code point 口径合法但 UTF-16 码元超出列宽时直接 400，
+            // 绝不让它走到 JDBC 层变成 500（H2 按码元计量，PostgreSQL 按字符计量）。
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "评论正文超长（上限 " + MAX_COMMENT_BODY + " 字，最多 " + MAX_COMMENT_UTF16 + " 码元）");
+        }
+
+        // 锁在计数之前：否则两个请求会同时读到 199 再各自插入，突破 200 上限。
+        if (!store.lockIncident(user.tenantId(), id)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "事故单不存在");
         }
         if (store.countComments(user.tenantId(), id) >= MAX_COMMENTS) {
             // 上限是「单事故」的：继续堆会让讨论区失去可读性，也会把真正的结单信息淹没。
