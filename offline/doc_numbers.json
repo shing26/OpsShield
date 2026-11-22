@@ -41,6 +41,10 @@
         {
           "file": "README.md",
           "pattern": "完整 \\*\\*(\\d+) 篇\\*\\*"
+        },
+        {
+          "file": "README.md",
+          "pattern": "（(\\d+) 篇，每篇含否决项与后果）"
         }
       ]
     },

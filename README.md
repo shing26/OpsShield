@@ -382,7 +382,7 @@ OpsShield 把"系统活着"做成了结构化的入口矩阵（默认端口 `808
 * **Java 560 单测**（`mvn test` 实跑全绿）：并发合并、状态机无损跃迁、AST 词法解析、双出口指标一致性、覆盖范围聚合、内存存储后端与身份过滤的跨后端对照、事故单租户隔离与分配权限、转交原子性与 append-only 历史、服务端「我的」筛选、SLA 派生与扫描跃迁幂等、评论追加语义与并发不丢话、200 条上限的行锁并发判据、服务端 @ 解析与租户边界；
 * **Python 610 条 test 函数**（`pytest offline/tests/`；参数化展开后执行例数更多）：含 `action_contract_probe.py` 的 **AC-1..AC-9 九组形式化不变式**——帧形状 / 逐字性 / 契约⊆引用闭包 / 段名闸 / 红线绊线 / 回放一致性 / 租户围栏 / 指标单调 / 反假绿覆盖；以及 `preset_probe.py` 的 **P-1..P-3 三组**——左栏预设与页面同源、预设形状（不锁产额）、覆盖范围与语料逐项相等；
 * **安全回归测试**：契约探针 5 路（段名闸恒真、逐字恒真、红线恒空、闭包前置 None、AC-7 租户恒真——每条都有"改坏后 N failed / 复原后全绿"的实测记录）；文档门闩另有 A/B/C 三路（改文档数字、改产物、改写措辞，各须红）；
-* **CI 全部 job**（java / static-gate / panel-contract / provenance / python / shell / security / sbom / smoke / benchmark / redteam）零 key 零中间件可跑；`doc_numbers` 门闩现算比对 **33 条文档数字 / 48 处引用**，数字与产物分叉即 CI 红；评测报告与语料的同代性用内容摘要钉死（`provenance`，不用 checkout 会刷平的 mtime）；对外面用词由 `check_public_copy` 钉住（内部 canonical 词不得漏到本 README 与页面文案，词表从 `docs/CONTEXT.md` 现取）。
+* **CI 全部 job**（java / static-gate / panel-contract / provenance / python / shell / security / sbom / smoke / benchmark / redteam）零 key 零中间件可跑；`doc_numbers` 门闩现算比对 **33 条文档数字 / 49 处引用**，数字与产物分叉即 CI 红；评测报告与语料的同代性用内容摘要钉死（`provenance`，不用 checkout 会刷平的 mtime）；对外面用词由 `check_public_copy` 钉住（内部 canonical 词不得漏到本 README 与页面文案，词表从 `docs/CONTEXT.md` 现取）。
 
 <details>
 <summary><b>评测与压测：复现命令</b>（需活体栈 + 活体 key；数字底稿即各自产物）</summary>
@@ -441,6 +441,7 @@ $PY load/l1_latency.py       # L1 回放延迟（热点命中口径）→ load/r
 | [0032](docs/adr/0032-incident-persistence.md) | 事故单服务端持久化：`GET/POST /api/v1/copilot/incidents`、`/assignees`、`GET/PATCH /{id}`，Flyway V5 | 事故单从前端状态升级为可审计的服务端记录；429 登录锁补 `Retry-After` |
 | [0033](docs/adr/0033-incident-responsibility.md) | 事故单责任流转：转交 append-only、服务端「我的」、优先级派生 SLA（Flyway V6） | 责任变更可追溯；SLA 阈值全走配置，60s 扫描幂等跃迁且不重复落审计 |
 | [0034](docs/adr/0034-incident-comments.md) | 事故单评论：append-only 讨论、服务端 @ 解析、会话内未读水位（Flyway V7） | 评论是对话事实，不能塞进后写赢的时间线；评论不喂检索/LLM，未读只在会话内 |
+| [0035](docs/adr/0035-alert-intake.md) | 告警入口：告警落表（`(tenant, alert_id)`）、一键建单幂等、有界留存（Flyway V9） | 面板要能回答"今天进了哪些告警、有没有人接手"；`alertId` 不含租户，建单必须显式带 `tenant` |
 
 ---
 
@@ -456,7 +457,7 @@ $PY load/l1_latency.py       # L1 回放延迟（热点命中口径）→ load/r
 | 日常运维、脚本索引、**债务触发线** | [OPS.md](OPS.md)（脚本按"服务生命周期 / 门禁检查 / 故障注入与演示"分组索引） |
 | 领域词汇 | [docs/CONTEXT.md](docs/CONTEXT.md) |
 | 目录地图 / 逐包职责 / 维护者向内容 | [docs/repo-map.md](docs/repo-map.md) |
-| 架构决策与否决理由 | [docs/adr/](docs/adr/)（34 篇，每篇含否决项与后果） |
+| 架构决策与否决理由 | [docs/adr/](docs/adr/)（35 篇，每篇含否决项与后果） |
 
 ---
 
