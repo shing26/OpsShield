@@ -3,6 +3,7 @@ package com.opspilot.auth;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
 import java.sql.Statement;
 import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
@@ -39,6 +40,16 @@ class FlywayMigrationTest {
                 .baselineOnMigrate(true)
                 .baselineVersion("1")
                 .load();
+    }
+
+    /** 读 incident_comments.body 的声明长度：不用 INFORMATION_SCHEMA，免踩 H2/PG 大小写与 schema 差异。 */
+    private static int bodyColumnWidth(DataSource ds) throws Exception {
+        try (Connection c = ds.getConnection();
+             Statement st = c.createStatement();
+             ResultSet rs = st.executeQuery("SELECT body FROM incident_comments WHERE 1 = 0")) {
+            ResultSetMetaData md = rs.getMetaData();
+            return md.getPrecision(1);
+        }
     }
 
     @Test
@@ -113,6 +124,58 @@ class FlywayMigrationTest {
                     "SELECT COUNT(*) FROM \"flyway_schema_history\" WHERE \"version\" = '7' AND \"success\"")) {
                 assertTrue(rs.next());
                 assertEquals(1, rs.getInt(1), "空库必须留下 V7 版本记录");
+            }
+            try (ResultSet rs = st.executeQuery(
+                    "SELECT COUNT(*) FROM \"flyway_schema_history\" WHERE \"version\" = '8' AND \"success\"")) {
+                assertTrue(rs.next());
+                assertEquals(1, rs.getInt(1), "空库一次跑完必须留下 V8 版本记录");
+            }
+        }
+        assertEquals(4000, bodyColumnWidth(ds), "空库跑完 V1..V8 后 body 应为 VARCHAR(4000)");
+    }
+
+    /**
+     * 升级路径（Verifier 复现的那条）：库已由 0cc2ab6 跑到 V1..V7（body VARCHAR(2000)），
+     * 新 HEAD 再启动时只能补 V8——不得因 V7 checksum 变化抛 mismatch，且列宽要从 2000 变 4000。
+     */
+    @Test
+    void v8WidensBodyOnDatabaseAlreadyMigratedToOldV7() throws Exception {
+        DataSource ds = ds("v7-old-width-to-v8");
+        Flyway.configure()
+                .dataSource(ds)
+                .locations("classpath:db/migration")
+                .baselineOnMigrate(true)
+                .baselineVersion("1")
+                .target("7")
+                .load()
+                .migrate();
+
+        assertEquals(2000, bodyColumnWidth(ds), "旧版 V7 建出的 body 应为 VARCHAR(2000)");
+
+        // V7 文件与 0cc2ab6 逐字一致，所以这里不会撞 checksum；只应多应用 V8。
+        flyway(ds).migrate();
+
+        assertEquals(4000, bodyColumnWidth(ds), "V8 必须把 body 加宽到 4000");
+        try (Connection c = ds.getConnection(); Statement st = c.createStatement()) {
+            try (ResultSet rs = st.executeQuery(
+                    "SELECT COUNT(*) FROM \"flyway_schema_history\" WHERE \"version\" = '7' AND \"success\"")) {
+                assertTrue(rs.next());
+                assertEquals(1, rs.getInt(1), "升级后 V7 历史必须保留并通过校验");
+            }
+            try (ResultSet rs = st.executeQuery(
+                    "SELECT COUNT(*) FROM \"flyway_schema_history\" WHERE \"version\" = '8' AND \"success\"")) {
+                assertTrue(rs.next());
+                assertEquals(1, rs.getInt(1), "升级路径必须留下 V8 版本记录");
+            }
+            // 真正写一条最坏情况正文：2000 个表情 = 4000 个 UTF-16 码元。
+            String body = "😀".repeat(2000);
+            assertEquals(4000, body.length(), "构造的正文应为 4000 个 UTF-16 码元");
+            st.execute("INSERT INTO incident_comments (tenant, incident_id, author, body)"
+                    + " VALUES ('tenant-1', 'INC-V7-1', 't1-alice', '" + body + "')");
+            try (ResultSet rs = st.executeQuery("SELECT body FROM incident_comments"
+                    + " WHERE tenant = 'tenant-1' AND incident_id = 'INC-V7-1'")) {
+                assertTrue(rs.next(), "加宽后必须能写入 2000 个表情的正文");
+                assertEquals(body, rs.getString(1));
             }
         }
     }

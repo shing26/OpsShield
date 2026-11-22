@@ -12,9 +12,7 @@ CREATE TABLE IF NOT EXISTS incident_comments (
     tenant        VARCHAR(64)   NOT NULL,
     incident_id   VARCHAR(64)   NOT NULL,
     author        VARCHAR(64)   NOT NULL,
-    -- 正文上限是 2000 个 code point（服务端口径）；2000 个表情最坏是 4000 个 UTF-16 码元。
-    -- 列宽按码元数取 4000：H2 按 UTF-16 码元计量、PostgreSQL 按字符计量，两边都装得下。
-    body          VARCHAR(4000) NOT NULL,
+    body          VARCHAR(2000) NOT NULL,
     mentions_json CLOB,
     created_at    TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
