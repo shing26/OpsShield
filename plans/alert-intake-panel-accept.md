@@ -240,6 +240,12 @@ best-effort 写入（改坏表名后诊断仍 200 且日志有 warn）；`(tenan
 
 - **AC1 的 V9 与 R1/R2 修订**：契约原文的 AC5 缺少租户维度、AC7 与 AC5 在跨租户路径冲突，
   均已通过 R1/R2 书面修订并由 Verifier 按新判据验收。修订只补判据、未放宽安全语义。
+- **迁移号由 V8 顺延为 V9（集成修复）**：本切片最初基于 `0cc2ab6` 起分支，
+  而评论切片的 P1 修复新增了 `V8__incident_comments_body_width.sql`，
+  两条分支各有一个 V8 → 合并时 Flyway 会因版本号重复直接拒绝启动。
+  已把本分支 rebase 到 `codex/incident-collaboration` 的签收 HEAD（`eed5ae1`），
+  迁移改名为 `V9__alert_intake.sql`，并补 `v9AddsAlertIntakeOnExistingV8Database`
+  覆盖 V8→V9 升级路径。契约 AC1 的括注允许"按实际合入顺序顺延"。
 - **`errorCode` / `alertStatus` 当前落空**：桥的 `ChatRequest` 只发
   `query/source/service/env/alertId`，台账不从文案反推、不伪造，面板显示 `—`。
   如需真实值应先扩展 ChatRequest 契约，不在本切片处理。
