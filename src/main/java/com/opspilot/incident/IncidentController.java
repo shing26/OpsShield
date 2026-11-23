@@ -2,10 +2,8 @@ package com.opspilot.incident;
 
 import com.opspilot.auth.JwtAuthFilter;
 import com.opspilot.auth.UserContext;
-import com.opspilot.auth.UserStore;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
@@ -16,9 +14,9 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
-import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -38,8 +36,18 @@ public class IncidentController {
     }
 
     @GetMapping
-    public Map<String, Object> list(HttpServletRequest http) {
-        List<Map<String, Object>> rows = service.list(user(http)).stream().map(this::view).toList();
+    public Map<String, Object> list(HttpServletRequest http,
+                                    @RequestParam(name = "mine", required = false) String mine,
+                                    @RequestParam(name = "status", required = false) String status) {
+        UserContext user = user(http);
+        Map<String, Long> lastComments = service.lastCommentIds(user);
+        List<Map<String, Object>> rows = service.list(user, mine, status).stream()
+                .map(i -> {
+                    Map<String, Object> m = view(i);
+                    // 左栏未读角标只消费这个单调水位；评论正文不进入列表响应。
+                    m.put("lastCommentId", lastComments.getOrDefault(i.id(), 0L));
+                    return m;
+                }).toList();
         return Map.of("incidents", rows);
     }
 
@@ -64,6 +72,37 @@ public class IncidentController {
         return view(service.get(user(http), id));
     }
 
+    @GetMapping("/{id}/assignments")
+    public Map<String, Object> assignments(@PathVariable String id, HttpServletRequest http) {
+        return Map.of("assignments", service.assignments(user(http), id));
+    }
+
+    /**
+     * 追加评论。刻意只有 GET / POST 两个映射：没有编辑/删除端点（ADR-0034）。
+     * 对同一路径发 DELETE 会由 Spring 报 405（GlobalExceptionHandler 保留 405 语义），
+     * 不会被任何兜底映射变成静默成功。
+     */
+    @PostMapping("/{id}/comments")
+    public ResponseEntity<Map<String, Object>> addComment(@PathVariable String id,
+                                                          @RequestBody(required = false) IncidentRequests.Comment req,
+                                                          HttpServletRequest http) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(service.addComment(user(http), id, req));
+    }
+
+    @GetMapping("/{id}/comments")
+    public Map<String, Object> comments(@PathVariable String id,
+                                        @RequestParam(name = "since", required = false) Long since,
+                                        HttpServletRequest http) {
+        return service.listComments(user(http), id, since);
+    }
+
+    @PostMapping("/{id}/transfer")
+    public Map<String, Object> transfer(@PathVariable String id,
+                                        @Valid @RequestBody IncidentRequests.Transfer req,
+                                        HttpServletRequest http) {
+        return view(service.transfer(user(http), id, req));
+    }
+
     @PatchMapping("/{id}")
     public Map<String, Object> patch(@PathVariable String id,
                                      @Valid @RequestBody IncidentRequests.Patch req,
@@ -78,35 +117,6 @@ public class IncidentController {
     }
 
     private Map<String, Object> view(Incident i) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("id", i.id());
-        m.put("title", i.title());
-        m.put("query", i.query());
-        m.put("service", i.service());
-        m.put("errorCode", i.errorCode());
-        m.put("env", i.env());
-        m.put("alertId", i.alertId());
-        m.put("source", i.source());
-        m.put("priority", i.priority());
-        m.put("status", i.status());
-        m.put("owner", i.owner());
-        m.put("createdBy", i.createdBy());
-        m.put("createdAt", i.createdAt());
-        m.put("updatedAt", i.updatedAt());
-        m.put("closedAt", i.closedAt());
-        m.put("closedBy", i.closedBy());
-        m.put("closeNote", i.closeNote());
-        m.put("diagnosis", parse(i.diagnosisJson()));
-        m.put("timeline", parse(i.timelineJson()));
-        return m;
-    }
-
-    private JsonNode parse(String raw) {
-        if (raw == null || raw.isBlank()) return null;
-        try {
-            return json.readTree(raw);
-        } catch (RuntimeException e) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "事故单 JSON 字段损坏");
-        }
+        return IncidentView.of(i, json);
     }
 }

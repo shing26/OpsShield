@@ -158,3 +158,171 @@ def test_reopen_sends_status_only() -> None:
     html = _html()
     assert "patchIncident(inc, { status: 'open' }, null, null, null, { content: false })" in html, \
         "重开必须剥离内容字段，只发 {\"status\":\"open\"}"
+
+
+def test_right_rail_facts_do_not_inherit_panel_flex_layout() -> None:
+    """右栏 `.facts` 曾命中运行面板的 flex 规则，把「处置记录」挤到标题右侧。"""
+    html = _html()
+    assert re.search(r"\.facts\{display:flex", html) is None, \
+        "禁止用 .facts 选择器做 flex 行布局（会污染右栏本单事实）"
+    assert "#degfacts{display:flex" in html, "降级状态机的行内事实应挂在 #degfacts 上"
+
+
+def test_narrow_layout_can_grow_past_viewport() -> None:
+    """≤900px 若 body 仍是 100% 高，底部状态栏会压住正文。"""
+    html = _html()
+    m = re.search(r"@media\(max-width:900px\)\{(.*?)\.rail\{", html, re.S)
+    assert m, "缺 ≤900px 断点"
+    assert "body{height:auto" in m.group(1), "窄屏 body 必须允许随文档增高"
+
+
+def test_right_rail_survives_tablet_width() -> None:
+    """1024px 曾把右栏压成 0 宽却保留内边距，内容溢出到视口外。"""
+    html = _html()
+    m = re.search(r"@media\(max-width:1180px\)\{(.*?)\n  \}", html, re.S)
+    assert m, "缺 ≤1180px 断点"
+    block = m.group(1)
+    assert "minmax(0,1fr) 0}" not in block, "≤1180px 不能把第三列压成 0 宽还留内边距"
+    assert re.search(r"grid-template-columns:[^;]*236px", block), \
+        "≤1180px 右栏应保留可读宽度（236px）"
+
+
+def test_mobile_facts_and_action_bar_exist() -> None:
+    """≤900px 隐藏右栏后，事实与结单入口不能一起消失。"""
+    html = _html()
+    assert 'id="mfacts"' in html and "function mobileFacts" in html, \
+        "缺窄屏「本单事实」折叠块"
+    assert 'id="mbar"' in html and "function mobileBar" in html, \
+        "缺窄屏底部结单操作条"
+    assert "body.has-mbar{padding-bottom:60px}" in html, \
+        "底部操作条必须给 body 留出安全区，避免遮住最后一行内容"
+
+
+def test_my_filter_is_server_side_and_drops_local_backfill() -> None:
+    """ADR-0033：「我的」必须走服务端 ?mine=true，且不得用 localOnly 回填。"""
+    html = _html()
+    assert 'data-filter="mine"' in html, "左栏缺「我的」筛选按钮"
+    assert "?mine=true" in html, "「我的」必须请求服务端 ?mine=true"
+    assert "(mine ? '?mine=true' : '')" in html, "mine 参数必须由筛选状态驱动"
+    assert "S.incidents = mine ? merged.slice(0, 60) : localOnly.concat(merged)" in html, \
+        "mine=true 时必须关闭 localOnly 回填（否则刚转交出去的单会回来）"
+
+
+def test_transfer_entry_popover_and_failure_toast() -> None:
+    """ADR-0033：页头转交入口、弹层（负责人/理由/最近 3 条）、失败必须 toast。"""
+    html = _html()
+    assert 'data-act="transfer"' in html, "页头操作区缺「转交」按钮"
+    assert 'id="transferpop"' in html, "缺转交弹层容器"
+    assert "function openTransferPop" in html and "function submitTransfer" in html, \
+        "转交弹层与提交逻辑缺失"
+    assert "/transfer" in html, "缺少 POST /{id}/transfer 调用"
+    assert "最近 3 条转交" in html, "弹层必须列出最近 3 条转交历史"
+    assert "转交失败：" in html, "转交失败必须 toast 明示，不得静默"
+    assert "xferReason" in html and "maxlength=\"200\"" in html, "理由输入必须限制 200 字"
+
+
+def test_sla_fact_and_semantic_colors() -> None:
+    """ADR-0033：右栏事实显示「时限 / 剩余」，due_soon 用 warn、breached 用 err。"""
+    html = _html()
+    assert "['时限', slaFact(inc)]" in html, "右栏本单事实缺「时限」行"
+    assert "剩余 " in html, "时限必须显示剩余时间"
+    assert "未设时限" in html, "空优先级必须显示未设时限"
+    assert "function slaTone" in html and "return 'warn'" in html and "return 'err'" in html, \
+        "SLA 状态必须映射到既有 warn/err 语义"
+    assert ".fact dd.warn{color:var(--warn)}" in html, "due_soon 必须用 warn 色"
+    assert ".fact dd.err{color:var(--err)}" in html, "breached 必须用 err 色"
+
+
+def test_incident_rail_sorts_by_sla_urgency() -> None:
+    """ADR-0033：左栏排序把已超时/临期排在前面，已结单不抢前排。"""
+    html = _html()
+    assert "function slaRank" in html, "缺 SLA 紧迫度排序函数"
+    assert "slaRank(a) - slaRank(b)" in html, "左栏未按 SLA 紧迫度排序"
+    assert "已超时" in html and "临期" in html, "左栏缺 SLA 风险标记"
+
+
+def test_discussion_card_sits_between_diagnosis_and_timeline() -> None:
+    """ADR-0034：讨论卡片必须在「诊断分析」之后、「处置记录」之前。"""
+    html = _html()
+    assert "function discussionCard" in html, "缺讨论卡片渲染函数"
+    assert '<span class="k">讨论</span>' in html, "讨论卡片标题缺失"
+    ws = html.index("function renderWorkspace()")
+    block = html[ws:ws + 4000]
+    assert "diagnosisSections(S.a.r, 'a', inc) + discussionCard(inc) + timelineCard(inc)" in block, \
+        "有诊断时讨论必须夹在诊断分析与处置记录之间"
+    assert "emptyDiagnosis(inc) + discussionCard(inc) + timelineCard(inc)" in block, \
+        "无诊断时讨论也必须存在（评论不依赖诊断）"
+    assert ".cm.own{" in html and ".cm.mentioned{" in html, \
+        "自己的评论与 @ 到我的评论必须有可区分的视觉标记"
+
+
+def test_discussion_has_mention_completion_from_assignees() -> None:
+    """ADR-0034：@ 补全复用 GET /assignees，候选按钮走 data-mention。"""
+    html = _html()
+    assert 'id="commentBox"' in html and 'maxlength="2000"' in html, "评论输入框缺失或未限 2000 字"
+    assert "function mentionToken" in html and "function insertMention" in html, "缺 @ 补全逻辑"
+    assert "function updateMentionPop" in html and "data-mention=" in html, "缺 @ 候选列表"
+    assert "/api/v1/copilot/incidents/assignees" in html, "@ 候选必须复用 /assignees，不另造数据源"
+    assert "data-act=\"sendcomment\"" in html, "缺发送按钮"
+
+
+def test_unread_watermark_uses_session_storage_only() -> None:
+    """ADR-0034：未读角标基于 commentId 水位，只存 sessionStorage。"""
+    html = _html()
+    assert "opspilot.comments.seen" in html, "未读水位键名必须是 opspilot.comments.seen"
+    assert "sessionStorage.setItem(SEEN_KEY" in html, "未读水位必须写 sessionStorage"
+    assert "localStorage.setItem(SEEN_KEY" not in html, "未读水位不得写 localStorage（AC9）"
+    assert "function commentUnread" in html and 'class="inc-unread"' in html, \
+        "左栏缺未读角标渲染"
+
+
+def test_comment_failure_keeps_draft_and_clears_only_on_success() -> None:
+    """ADR-0034 硬要求：发送失败 toast 明示且保留草稿，不得先清空输入框。"""
+    html = _html()
+    assert "评论发送失败" in html, "发送失败必须 toast 明示"
+    assert "S.commentDraft[inc.id] = draft" in html, "失败路径必须把草稿写回状态"
+    assert "again.value = draft" in html, "失败路径必须恢复 textarea 内容"
+    cleared = html.index("delete S.commentDraft[inc.id]")
+    kept = html.index("S.commentDraft[inc.id] = draft")
+    assert cleared < kept, "草稿只能在成功路径清除；失败路径必须保留"
+
+
+def test_alert_intake_block_is_before_results_and_uses_row_tenant() -> None:
+    """ADR-0035：运行面板「告警入口」区块必须真实取数、带行租户、空态不摆样例。"""
+    html = _html()
+    assert "<h2>告警入口" in html, "缺「告警入口」区块"
+    assert 'id="alerts"' in html, "告警入口缺渲染容器"
+    assert html.index("<h2>告警入口") < html.index("排障成果流"), \
+        "告警入口必须排在「排障成果流」之前（契约 AC7）"
+    assert "/api/v1/admin/alerts/recent" in html, "面板必须读 /admin/alerts/recent"
+    assert "alertSince" in html and "&limit=50" in html, "增量水位与单页上限必须存在"
+
+    # R1：建单请求的 tenant 只能来自该告警行，不得自行猜测。
+    assert 'data-act="alertinc"' in html, "缺「建事故单」按钮"
+    assert 'data-tenant="' in html, "建单按钮必须携带该行的 tenant"
+    assert "/incident?tenant=" in html, "建单请求必须带 tenant 查询参数"
+    assert "encodeURIComponent(tenant)" in html, "tenant 必须按 URL 组件编码"
+    assert "打开事故单" in html, "已有 incident_id 的行必须显示「打开事故单」"
+
+    # 空态：写明数据源与保留窗口，且明确不是样例数字。
+    assert "尚无告警记录" in html, "缺空态文案"
+    assert "不是示例数据" in html, "空态必须说明没有摆样例"
+    assert "retention_days" in html and "max_per_tenant" in html, \
+        "保留窗口必须来自接口字段，不得在前端写死"
+    assert "建事故单失败：" in html, "建单失败必须 toast 明示"
+
+
+def test_alert_truncated_is_consumed_and_labelled() -> None:
+    """ADR-0035 / R2：since 是新告警水位不是游标；truncated=true 必须显式告知只看到一部分。"""
+    html = _html()
+    assert "仅显示最近 " in html, "truncated=true 时面板必须显示「仅显示最近 N 条」"
+    assert "meta.truncated" in html, "renderAlerts 必须读取响应里的 truncated"
+    assert "S.alertTruncated" in html, "增量轮询不得把首屏的 truncated 事实覆盖掉"
+    assert "仅显示最近 ' + S.alerts.length" in html, "N 必须取当前渲染行数（与表体同口径）"
+
+
+def test_cross_tenant_incident_toast_names_tenant_and_id() -> None:
+    """ADR-0035 / R2：跨租户建单不静默、不跨租户展示，toast 必须带租户与本单号。"""
+    html = _html()
+    assert "已为 ' + tenant + ' 建单 ' + inc.id + '，切换到该租户身份可查看', 'warn')" in html, \
+        "跨租户建单必须 toast「已为 <tenant> 建单 <id>，切换到该租户身份可查看」"

@@ -26,6 +26,24 @@ public final class IncidentRequests {
             @Pattern(regexp = "|P1|P2|P3", message = "priority 只能是空 / P1 / P2 / P3") String priority) {}
 
     /**
+     * 转交：责任变更是事实，必须带目标与理由。{@code reason} 上限 200 字（迁移列同宽），
+     * 空理由由服务端归一为 "—"，前端不得替用户编造理由。
+     */
+    public record Transfer(
+            @NotBlank(message = "toOwner 不能为空")
+            @Size(max = 64, message = "toOwner 超长（上限 64）") String toOwner,
+            @Size(max = 200, message = "reason 超长（上限 200）") String reason) {}
+
+    /**
+     * 评论：{@code body} 由服务端 trim 后校验 1..2000 字。
+     * {@code mentions} 只是客户端的输入提示——**授权依据永远是正文里的 @**，
+     * 服务端不采信这个数组（ADR-0034）；保留字段是为了客户端不必在发送前先解析正文。
+     */
+    public record Comment(
+            String body,
+            java.util.List<String> mentions) {}
+
+    /**
      * 补丁语义：**null = 不改**；空串 = 清空（owner 即取消分配，status 会按空串拒绝）。
      * 这样前端可以只发变化字段，而不用把整行回传（回传会放大并发覆盖窗口）。
      */

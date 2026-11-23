@@ -76,6 +76,22 @@ opspilot:
   # ADR-0031 薄切片：领域是部署期的单值选择，默认 sre、未知即启动失败、不自动回退。
   # 生产由 DomainRegistry 解析并构造器注入，没有全局回落；领域不是租户/权限维度。
   domain: ${OPSPILOT_DOMAIN:}
+  # ADR-0033 事故 SLA：按优先级的响应时限，全部走配置（代码/前端不写死分钟数）。
+  # 空优先级不设时限；扫描间隔与首启延迟同样可覆写（@Scheduled 占位符读取）。
+  # due-soon-ratio 是"提前多久进入 due_soon"的窗口占比：0.2 = 到期前 20% 时提醒。
+  incident:
+    sla:
+      p1-minutes: ${INCIDENT_SLA_P1_MINUTES:30}
+      p2-minutes: ${INCIDENT_SLA_P2_MINUTES:120}
+      p3-minutes: ${INCIDENT_SLA_P3_MINUTES:480}
+      due-soon-ratio: ${INCIDENT_SLA_DUE_SOON_RATIO:0.2}
+      scan-interval-ms: ${INCIDENT_SLA_SCAN_INTERVAL_MS:60000}
+      scan-initial-delay-ms: ${INCIDENT_SLA_SCAN_INITIAL_DELAY_MS:60000}
+  # ADR-0035 告警台账：有界留存。面板读同一组数字（/admin/alerts/recent 的
+  # retention_days / max_per_tenant）；清理任务 @Scheduled 每日一次，阈值只从这里取。
+  alert:
+    retention-days: ${ALERT_RETENTION_DAYS:30}
+    max-per-tenant: ${ALERT_MAX_PER_TENANT:500}
   storage:
     # live=真中间件（缺则启动失败，与历史行为一致）| memory=内存实现，零外部依赖（ADR-0022）。
     # **不自动回退**：探不到中间件只打印一条可执行的提示，然后照常失败——配置期事实不该

@@ -1,0 +1,12 @@
+-- 加宽事故评论正文列（2026-11-22，ADR-0034；契约 plans/incident-collaboration-accept.md）。
+-- 为什么必须新增 V8 而不是改 V7：
+--   V7 已在独立 commit（0cc2ab6）发布过，任何已迁移库的 flyway_schema_history 都记下了它的
+--   checksum。仓库开启 validate-on-migrate，改动已发布的 V7 会让这些库在启动时直接
+--   "Migration checksum mismatch" 退出。OPS.md 的约定是「加列/改约束必须新增 V2+，禁止再改」。
+-- 为什么列宽是 4000：
+--   服务端按 code point 校验正文 1..2000。单条评论最坏情况是 2000 个表情（代理对），
+--   即 2000 × 2 = 4000 个 UTF-16 码元。H2 的 VARCHAR 长度按 UTF-16 码元计，PostgreSQL
+--   按字符（code point）计；取 4000 后两边都能装下最坏的 2000-code-point 正文。
+-- 方言说明：
+--   ALTER TABLE ... ALTER COLUMN ... TYPE ... 在 H2（含 MODE=PostgreSQL）与 PostgreSQL 均成立。
+ALTER TABLE incident_comments ALTER COLUMN body TYPE VARCHAR(4000);

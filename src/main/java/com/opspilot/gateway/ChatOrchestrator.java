@@ -1,6 +1,7 @@
 package com.opspilot.gateway;
 
 import tools.jackson.databind.ObjectMapper;
+import com.opspilot.alert.AlertIntakeService;
 import com.opspilot.auth.UserContext;
 import com.opspilot.common.ClientAbortedException;
 import com.opspilot.action.Action;
@@ -70,6 +71,8 @@ public class ChatOrchestrator {
     private final AuditService audit;
     private final QuotaService quota;
     private final ReadOnlyActionExtractor actionExtractor;
+    /** 告警台账（ADR-0035）：只有 source=alert ∧ alertId≠null 时做一次 best-effort upsert。 */
+    private final AlertIntakeService alertIntake;
     private final ObjectMapper mapper = new ObjectMapper();
 
     /** G1：在途编排数（@PreDestroy 优雅排空用；与降级状态机的 inflight 口径不同——后者含等待中的 leader/follower 语义）。 */
@@ -85,12 +88,28 @@ public class ChatOrchestrator {
                             OpsMetrics metrics, ExecutorService virtualThreadExecutor,
                             OpsPilotProperties props, AuditService audit, QuotaService quota,
                             ReadOnlyActionExtractor actionExtractor) {
+        this(l1, l2, fingerprintService, slidingWindow, singleFlight, searchService, embedding, llm,
+                promptAssembler, degrade, sopFallback, metrics, virtualThreadExecutor, props, audit,
+                quota, actionExtractor, null);
+    }
+
+    /** Spring 装配入口：比兼容构造多一个告警台账依赖（单测按 17 参构造，不关心台账）。 */
+    @org.springframework.beans.factory.annotation.Autowired
+    public ChatOrchestrator(L1CacheService l1, L2SemanticCacheService l2,
+                            FingerprintService fingerprintService, SlidingWindow slidingWindow,
+                            SingleFlight singleFlight, HybridSearchService searchService,
+                            EmbeddingClient embedding, LlmClient llm, PromptAssembler promptAssembler,
+                            DegradationState degrade, SopFallbackService sopFallback,
+                            OpsMetrics metrics, ExecutorService virtualThreadExecutor,
+                            OpsPilotProperties props, AuditService audit, QuotaService quota,
+                            ReadOnlyActionExtractor actionExtractor, AlertIntakeService alertIntake) {
         this.l1 = l1; this.l2 = l2; this.fingerprintService = fingerprintService;
         this.slidingWindow = slidingWindow; this.singleFlight = singleFlight;
         this.searchService = searchService; this.embedding = embedding; this.llm = llm;
         this.promptAssembler = promptAssembler; this.degrade = degrade; this.sopFallback = sopFallback;
         this.metrics = metrics; this.vt = virtualThreadExecutor; this.props = props;
         this.audit = audit; this.quota = quota; this.actionExtractor = actionExtractor;
+        this.alertIntake = alertIntake;
     }
 
     /** 同步前置（必须在 servlet 线程调用）：配额 429 与请求计数要能在 HTTP 响应面上抛出。 */
@@ -216,6 +235,19 @@ public class ChatOrchestrator {
         String fp = alertId != null
                 ? fingerprintService.identity(alertId)
                 : fingerprintService.fingerprint(req.service(), req.env(), query);
+
+        // 告警台账（ADR-0035 / 契约 AC2）：只记真实告警请求，且**必须 best-effort**——
+        // 台账坏了不能拖垮排障。errorCode/alertStatus 不在 ChatRequest 里（桥不发送），
+        // 故如实落空，不从前端文案猜测。
+        if ("alert".equals(source) && alertId != null && alertIntake != null) {
+            try {
+                alertIntake.record(user.tenantId(), alertId,
+                        org.slf4j.MDC.get(com.opspilot.metrics.RequestIdFilter.TRACE_KEY),
+                        query, req.service(), req.env(), null, null);
+            } catch (Exception e) {
+                log.warn("alert intake record failed (best-effort): {}", e.toString());
+            }
+        }
         long t0 = System.nanoTime();
 
         // Single-Flight 为主闸门：同 (tenant, fingerprint, authLevel) 并发仅 1 个 leader 穿透，
