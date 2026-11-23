@@ -413,7 +413,7 @@ $PY load/l1_latency.py       # L1 回放延迟（热点命中口径）→ load/r
 
 ## 📐 架构决策记录
 
-系统的演进过程严格遵从 ADR 机制，每篇含否决项与后果。关键决策索引如下（完整 **35 篇**见 [docs/adr/](docs/adr/)）：
+系统的演进过程严格遵从 ADR 机制，每篇含否决项与后果。关键决策索引如下（完整 **36 篇**见 [docs/adr/](docs/adr/)）：
 
 | # | 决策 | 一句话理由 |
 | --- | --- | --- |
@@ -442,6 +442,7 @@ $PY load/l1_latency.py       # L1 回放延迟（热点命中口径）→ load/r
 | [0033](docs/adr/0033-incident-responsibility.md) | 事故单责任流转：转交 append-only、服务端「我的」、优先级派生 SLA（Flyway V6） | 责任变更可追溯；SLA 阈值全走配置，60s 扫描幂等跃迁且不重复落审计 |
 | [0034](docs/adr/0034-incident-comments.md) | 事故单评论：append-only 讨论、服务端 @ 解析、会话内未读水位（Flyway V7） | 评论是对话事实，不能塞进后写赢的时间线；评论不喂检索/LLM，未读只在会话内 |
 | [0035](docs/adr/0035-alert-intake.md) | 告警入口：告警落表（`(tenant, alert_id)`）、一键建单幂等、有界留存（Flyway V9） | 面板要能回答"今天进了哪些告警、有没有人接手"；`alertId` 不含租户，建单必须显式带 `tenant` |
+| [0036](docs/adr/0036-single-instance-scheduled-jobs.md) | 定时任务与审计环沿用单实例假设；多副本前补分布式锁或拆独立 worker | 单实例下所有验收成立，但审计局部视图与 LLM 成本随副本数放大；触发线必须可判定，不能靠"压测没出问题" |
 
 ---
 
@@ -457,7 +458,7 @@ $PY load/l1_latency.py       # L1 回放延迟（热点命中口径）→ load/r
 | 日常运维、脚本索引、**债务触发线** | [OPS.md](OPS.md)（脚本按"服务生命周期 / 门禁检查 / 故障注入与演示"分组索引） |
 | 领域词汇 | [docs/CONTEXT.md](docs/CONTEXT.md) |
 | 目录地图 / 逐包职责 / 维护者向内容 | [docs/repo-map.md](docs/repo-map.md) |
-| 架构决策与否决理由 | [docs/adr/](docs/adr/)（35 篇，每篇含否决项与后果） |
+| 架构决策与否决理由 | [docs/adr/](docs/adr/)（36 篇，每篇含否决项与后果） |
 
 ---
 
