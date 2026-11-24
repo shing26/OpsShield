@@ -4,6 +4,9 @@
 > **状态：已冻结（2026-11-25）。** 冻结点 `aa05c84`（origin/main）；
 > 本分支只承载契约，实现分支为 `codex/incident-notification-impl`（契约合并后从 main 切出）。
 > 用户已签收三项默认值：收件人按「判定口径」、60 秒去重桶、`22:00–08:00` 非 P1 只落站内。
+> **R1（2026-11-25，Verifier 发现）：** 面板契约第 7 层的 `copilot_map` 未纳入新增通知控制器，
+> 且面板用字符串拼接规避了字面量门禁。Allowed paths 增加 `scripts/check_panel_contract.sh`；
+> 实现必须用字面量 `/api/v1/copilot/notifications`，并让第 7 层真正覆盖该端点。
 > 本契约不覆盖评论 @ 的跨端通知：ADR-0034 的会话水位（`opspilot.comments.seen`）保持不变，
 > @ 的服务端通知另开切片并先改 ADR。
 
@@ -59,6 +62,7 @@ src/main/java/com/opspilot/incident/**
 src/main/java/com/opspilot/gateway/**                     # 仅在需要注册调度/配置绑定时
 src/main/resources/application.yml
 src/main/resources/static/index.html
+scripts/check_panel_contract.sh                          # R1：第 7 层纳入通知控制器
 src/test/java/com/opspilot/incident/**
 src/test/java/com/opspilot/auth/FlywayMigrationTest.java  # 仅新增 V10 断言
 offline/tests/test_console_contract.py
@@ -106,7 +110,9 @@ offline/doc_numbers.json                                  # 仅当测试计数�
     `aiops_incident_notify_webhook_total{result=ok|fail|suppressed|dropped}`；
     审计不新增事件类型（通知是派生数据，事故审计已覆盖事实来源）。
 11. **不回归**：事故列表 / 详情 / 评论 / 转交 / SLA 扫描的既有语义与响应字段不变；
-    面板契约十层一致；`check_public_copy.py --check` 与 `doc_numbers.py --check` 通过。
+    面板契约十层一致，且第 7 层的 `copilot_map` 必须实际包含
+    `IncidentNotificationController`，面板侧必须使用字面量路径、不得拼接规避；
+    `check_public_copy.py --check` 与 `doc_numbers.py --check` 通过。
 
 ## Verification commands（Verifier 亲自重跑）
 
