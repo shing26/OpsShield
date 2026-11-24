@@ -326,3 +326,43 @@ def test_cross_tenant_incident_toast_names_tenant_and_id() -> None:
     html = _html()
     assert "已为 ' + tenant + ' 建单 ' + inc.id + '，切换到该租户身份可查看', 'warn')" in html, \
         "跨租户建单必须 toast「已为 <tenant> 建单 <id>，切换到该租户身份可查看」"
+
+
+def test_notification_bell_panel_and_read_all() -> None:
+    """ADR-0037：顶栏铃铛 + 未读角标 + 下拉面板 + 全部已读，缺一即静默失明。"""
+    html = _html()
+    assert 'id="notifybtn"' in html, "顶栏缺通知铃铛"
+    assert 'data-popbtn="notifypop"' in html, "铃铛必须打开通知面板"
+    assert 'id="notifybadge"' in html and "notifyUnread" in html, "缺未读角标"
+    assert 'id="notifypop"' in html, "缺通知下拉面板"
+    assert "function renderNotifications" in html and "data-notify=" in html, "面板缺通知行渲染"
+    assert 'data-act="notifyreadall"' in html and "全部已读" in html, "缺「全部已读」入口"
+    assert "async function openNotification" in html, "点击通知的跳转逻辑缺失"
+    assert "const NOTIFY_API = '/api/v1/copilot/notifications';" in html, \
+        "通知端点必须是字面量，禁止拼接规避面板契约第 7 层"
+    assert "'/api/v1/' + 'copilot/notifications'" not in html, \
+        "不得用字符串拼接绕开面板契约的路径字面量比对"
+    assert "'/' + encodeURIComponent(id) + '/read'" in html, "点击通知必须调用 /{id}/read"
+    assert "function focusIncidentById" in html, "点击通知必须跳转对应事故"
+    assert "暂无通知" in html, "空态必须有说明，不能摆样例"
+
+
+def test_notification_polling_is_30s_and_refreshes_on_focus() -> None:
+    """ADR-0037：30s 轮询 + 窗口重新聚焦刷新；切回来看到的是当前未读。"""
+    html = _html()
+    assert "setInterval(refreshNotifications, 30000)" in html, "通知轮询必须是 30s"
+    assert "window.addEventListener('focus'" in html, "窗口聚焦时必须刷新通知"
+    assert "document.visibilityState === 'visible'" in html, "标签页重新可见时必须刷新"
+    assert "startNotifyPoll()" in html, "登录/启动路径必须启动通知轮询"
+    assert "stopNotifyPoll()" in html, "身份失效时必须停止通知轮询"
+
+
+def test_notification_keeps_existing_storage_keys_and_hides_on_404() -> None:
+    """ADR-0037：不新增 localStorage 键、不动既有两键；接口 404 时铃铛隐藏。"""
+    html = _html()
+    assert "const ACTIVE_KEY = 'opspilot.incidents.active';" in html
+    assert "const SEEN_KEY = 'opspilot.comments.seen';" in html
+    assert "localStorage.setItem('opspilot.notif" not in html, "通知不得新增 localStorage 键"
+    assert "sessionStorage.setItem('opspilot.notif" not in html, "通知不得新增 sessionStorage 键"
+    assert "S.notifyHidden = true" in html and "btn.hidden = !show" in html, \
+        "灰度/回滚期接口 404 时铃铛必须隐藏，不阻塞事故页"

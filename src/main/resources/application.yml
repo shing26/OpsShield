@@ -87,6 +87,18 @@ opspilot:
       due-soon-ratio: ${INCIDENT_SLA_DUE_SOON_RATIO:0.2}
       scan-interval-ms: ${INCIDENT_SLA_SCAN_INTERVAL_MS:60000}
       scan-initial-delay-ms: ${INCIDENT_SLA_SCAN_INITIAL_DELAY_MS:60000}
+    # ADR-0037 事故通知：站内持久化始终开启；群机器人默认关闭（webhook-url 为空）。
+    # 外发只在事务提交后异步进行，单次尝试、3s 超时、不重试；队列有界，溢出丢弃并计数。
+    # 静默期只约束外发（默认 22:00–08:00 仅 P1 外发），站内记录照常；时区随配置。
+    notify:
+      webhook-url: ${INCIDENT_NOTIFY_WEBHOOK_URL:}
+      webhook-format: ${INCIDENT_NOTIFY_WEBHOOK_FORMAT:generic}
+      queue-capacity: ${INCIDENT_NOTIFY_QUEUE_CAPACITY:256}
+      webhook-timeout-ms: ${INCIDENT_NOTIFY_WEBHOOK_TIMEOUT_MS:3000}
+      quiet-hours: ${INCIDENT_NOTIFY_QUIET_HOURS:22:00-08:00}
+      timezone: ${INCIDENT_NOTIFY_TIMEZONE:Asia/Shanghai}
+      retention-days: ${INCIDENT_NOTIFY_RETENTION_DAYS:90}
+      retention-cron: ${INCIDENT_NOTIFY_RETENTION_CRON:0 17 4 * * *}
   # ADR-0035 告警台账：有界留存。面板读同一组数字（/admin/alerts/recent 的
   # retention_days / max_per_tenant）；清理任务 @Scheduled 每日一次，阈值只从这里取。
   alert:

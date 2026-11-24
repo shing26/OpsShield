@@ -71,6 +71,12 @@
            border-radius:999px;padding:4px 11px;font-size:11.5px;display:inline-flex;align-items:center;
            gap:6px;white-space:nowrap;max-width:190px;overflow:hidden;text-overflow:ellipsis}
   .pillbtn:hover{border-color:var(--muted);color:var(--txt)}
+  .notifbtn{position:relative;display:inline-flex;align-items:center;justify-content:center;
+            width:32px;height:28px;padding:0;border-radius:8px}
+  .notifbtn svg{width:15px;height:15px}
+  .notifbadge{position:absolute;top:-5px;right:-5px;min-width:15px;height:15px;padding:0 4px;
+              border-radius:999px;background:var(--err);color:#fff;font-size:9.5px;line-height:15px;
+              text-align:center;font-weight:600;font-variant-numeric:tabular-nums}
   .btn{border:1px solid var(--line);background:var(--surface-2);color:var(--txt-2);
        border-radius:6px;padding:6px 12px;font-size:12px;white-space:nowrap}
   .btn:hover:not(:disabled){border-color:var(--muted);color:var(--txt)}
@@ -551,6 +557,17 @@
        top:calc(var(--top-h) + 6px);right:12px}
   .pop-hd{font-size:11.5px;color:var(--muted);margin-bottom:9px}
   .pop .note{font-size:10.5px;color:var(--muted);line-height:1.65;margin-top:9px}
+  .notifpop{width:min(360px,92vw);max-height:min(70vh,520px);overflow:auto}
+  .notif-hd{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+  .notif-hd b{font-size:12px;color:var(--txt)}
+  .notif-item{display:flex;flex-direction:column;gap:3px;width:100%;text-align:left;padding:9px 10px;
+              border-radius:7px;border:1px solid transparent;background:none;color:var(--txt-2)}
+  .notif-item:hover{background:var(--surface-2);border-color:var(--line)}
+  .notif-item.unread{background:rgba(255,255,255,.035)}
+  .notif-item .nkind{font-size:10px;color:var(--accent)}
+  .notif-item .ntitle{font-size:12px;color:var(--txt);line-height:1.45}
+  .notif-item .nmeta{font-size:10.5px;color:var(--muted)}
+  .notif-empty{font-size:11px;color:var(--muted);padding:10px 2px;line-height:1.6}
   .fld{display:flex;flex-direction:column;gap:4px;min-width:0}
   .fld label,.fld .lbl{font-size:10.5px;color:var(--muted)}
   .fld input,.fld textarea,.fld select{background:var(--bg);color:var(--txt);border:1px solid var(--line);
@@ -697,6 +714,13 @@
             aria-controls="v-panel" tabindex="-1">运行面板</button>
   </nav>
   <span class="spacer"></span>
+  <button type="button" class="btn gho notifbtn" id="notifybtn" data-popbtn="notifypop"
+          aria-haspopup="dialog" aria-expanded="false" aria-label="事故单通知" title="事故单通知" hidden>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+      <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/>
+      <path d="M13.7 21a2 2 0 0 1-3.4 0"/>
+    </svg><span class="notifbadge" id="notifybadge" hidden>0</span>
+  </button>
   <span class="health" id="healthchip"><span class="dot" id="healthdot"></span><span id="healthtext">未接入</span></span>
   <span class="pill warn" id="llmchip" hidden>LLM MOCK</span>
   <button class="btn gho" id="healthbtn" data-act="opendrawer" aria-expanded="false" aria-controls="drawer">运行态</button>
@@ -709,6 +733,7 @@
 <div class="pop" id="advpop" data-pop role="dialog" aria-label="高级 · 权限隔离演练" hidden></div>
 <div class="pop" id="assignpop" data-pop role="dialog" aria-label="分配负责人" hidden></div>
 <div class="pop" id="transferpop" data-pop role="dialog" aria-label="转交负责人" hidden></div>
+<div class="pop notifpop" id="notifypop" data-pop role="dialog" aria-label="事故单通知" hidden></div>
 
 <div id="v-trouble" class="shell" role="tabpanel" aria-labelledby="tab-trouble">
   <aside class="rail" aria-label="事故单列表">
@@ -904,6 +929,8 @@ const CAP = 200;
 const SS = k => 'opspilot.session.jwt.' + k;
 const ACTIVE_KEY = 'opspilot.incidents.active';
 const SEEN_KEY = 'opspilot.comments.seen';
+// 契约路径必须是字面量：面板契约第 7 层按字面量比对 Controller 映射，禁止拼接规避。
+const NOTIFY_API = '/api/v1/copilot/notifications';
 
 try { localStorage.removeItem('opspilot.jwt'); } catch (e) { /* 非致命 */ }
 
@@ -920,6 +947,7 @@ const S = {
   incidents: [], activeId: null, filter: 'open', search: '',
   comments: [], commentsFor: null, commentDraft: {}, commentBusy: false, assignees: null,
   alerts: [], alertMeta: null, alertTruncated: false,
+  notifications: [], notifyUnread: 0, notifyHidden: false,
   quick: '', drawerOpen: false, mfactsOpen: false
 };
 
@@ -1110,6 +1138,152 @@ async function refreshIncidents() {
     toast('事故单列表加载失败：' + e.message, 'err');
     return false;
   }
+}
+
+/* ==================== 事故单通知（ADR-0037） ==================== */
+let notifyTimer = null, notifyInFlight = false;
+
+async function notificationApi(method, suffix) {
+  const resp = await fetch(NOTIFY_API + (suffix || ''), {
+    method,
+    headers: Object.assign({ 'Content-Type': 'application/json' },
+      S.a.token ? { Authorization: 'Bearer ' + S.a.token } : {})
+  });
+  if (resp.status === 401) {
+    dropToken('a', '401 · token 失效，重新接入');
+    showAuth('401 · token 失效，重新接入');
+    throw new Error('401 · token 失效');
+  }
+  if (resp.status === 404) {
+    const e = new Error('404 · 通知接口不可用');
+    e.notFound = true;
+    throw e;
+  }
+  if (!resp.ok) throw new Error(await httpErrText(resp));
+  return resp.status === 204 ? null : resp.json();
+}
+
+async function refreshNotifications() {
+  if (!S.a.token || notifyInFlight) return;
+  notifyInFlight = true;
+  const token = S.a.token;
+  try {
+    const data = await notificationApi('GET', '?limit=20');
+    if (S.a.token !== token) return;
+    S.notifications = data.notifications || [];
+    S.notifyUnread = Number(data.unread) || 0;
+    S.notifyHidden = false;
+  } catch (e) {
+    if (S.a.token !== token) return;
+    if (e && e.notFound) {
+      // 灰度/回滚期容错：接口不存在时隐藏铃铛，不阻塞事故单页。
+      S.notifyHidden = true;
+      S.notifications = [];
+      S.notifyUnread = 0;
+    }
+  } finally {
+    notifyInFlight = false;
+    if (S.a.token === token) renderNotifications();
+  }
+}
+
+function startNotifyPoll() {
+  stopNotifyPoll();
+  refreshNotifications();
+  notifyTimer = setInterval(refreshNotifications, 30000);
+}
+
+function stopNotifyPoll() {
+  if (notifyTimer) clearInterval(notifyTimer);
+  notifyTimer = null;
+}
+
+// 30s 轮询之外，窗口重新聚焦时立即刷新：切回来看到的是当前未读，不是上次的角标。
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && S.a.token) refreshNotifications();
+});
+window.addEventListener('focus', () => {
+  if (S.a.token) refreshNotifications();
+});
+
+function notifyKindLabel(kind) {
+  if (kind === 'assigned') return '指派';
+  if (kind === 'sla_due_soon') return 'SLA 临期';
+  if (kind === 'sla_breached') return 'SLA 超时';
+  if (kind === 'reopened') return '重新打开';
+  return String(kind || '通知');
+}
+
+function renderNotificationBadge() {
+  const btn = $('notifybtn');
+  if (!btn) return;
+  const show = !!S.a.token && !S.notifyHidden;
+  btn.hidden = !show;
+  const n = S.notifyUnread || 0;
+  const badge = $('notifybadge');
+  badge.hidden = !show || n <= 0;
+  badge.textContent = n > 99 ? '99+' : String(n);
+  btn.setAttribute('aria-label', n > 0 ? '事故单通知（' + n + ' 条未读）' : '事故单通知');
+}
+
+function renderNotifications() {
+  renderNotificationBadge();
+  const box = $('notifypop');
+  if (!box) return;
+  const rows = S.notifications || [];
+  box.innerHTML = '<div class="notif-hd"><b>通知</b>'
+    + '<button type="button" class="btn gho" data-act="notifyreadall"'
+    + (S.notifyUnread > 0 ? '' : ' disabled') + '>全部已读</button></div>'
+    + (rows.length
+      ? rows.map(n => '<button type="button" class="notif-item' + (n.read ? '' : ' unread') + '"'
+          + ' data-notify="' + esc(n.id) + '" data-incident="' + esc(n.incidentId) + '">'
+          + '<span class="nkind">' + esc(notifyKindLabel(n.kind)) + '</span>'
+          + '<span class="ntitle">' + esc(n.title) + '</span>'
+          + '<span class="nmeta">' + esc(n.incidentId) + ' · ' + esc(n.priority || '未定')
+          + ' · ' + esc(relTime(n.createdAt)) + '</span></button>').join('')
+      : '<div class="notif-empty">暂无通知。事故单转交、SLA 临期/超时与重开会出现在这里。</div>');
+}
+
+async function markAllNotificationsRead() {
+  try {
+    await notificationApi('POST', '/read-all');
+    S.notifyUnread = 0;
+    S.notifications = S.notifications.map(n => Object.assign({}, n, { read: true }));
+    renderNotifications();
+    toast('通知已全部标记已读', 'ok');
+  } catch (e) {
+    toast('标记全部已读失败：' + e.message, 'warn');
+  }
+  await refreshNotifications();
+}
+
+async function openNotification(id, incidentId) {
+  closePops();
+  try {
+    await notificationApi('POST', '/' + encodeURIComponent(id) + '/read');
+  } catch (e) {
+    if (!(e && e.notFound)) toast('标记已读失败：' + e.message, 'warn');
+  }
+  await refreshNotifications();
+  await focusIncidentById(incidentId);
+}
+
+async function focusIncidentById(id) {
+  let inc = findIncident(id);
+  if (!inc) {
+    try {
+      inc = await incidentApi('GET', '/api/v1/copilot/incidents/' + encodeURIComponent(id));
+      inc.diagnosis = inc.diagnosis || null;
+      inc.timeline = Array.isArray(inc.timeline) ? inc.timeline : [];
+      S.incidents.unshift(inc);
+      if (S.incidents.length > 60) S.incidents.length = 60;
+    } catch (e) {
+      toast('事故单加载失败：' + e.message, 'err');
+      return;
+    }
+  }
+  setView('trouble');
+  selectIncident(inc.id);
 }
 
 /* ==================== 评论（ADR-0034） ==================== */
@@ -1420,6 +1594,7 @@ async function login(k) {
         try { localStorage.removeItem(ACTIVE_KEY); } catch (e) { /* 非致命 */ }
         await refreshIncidents();
         startPoll();
+        startNotifyPoll();
         loadCoverage();
         closePops();
       }
@@ -1603,8 +1778,10 @@ function dropToken(k, msg) {
     S.platform = null; S.coverage = null; S.covErr = null; S.asking = false;
     S.incidents = []; S.activeId = null;
     S.alerts = []; S.alertMeta = null; S.alertTruncated = false; alertSince = 0;
+    S.notifications = []; S.notifyUnread = 0; S.notifyHidden = false;
     try { localStorage.removeItem(ACTIVE_KEY); } catch (e) { /* 非致命 */ }
     stopPoll();
+    stopNotifyPoll();
     renderHeader(); renderRail(); renderWorkspace();
   }
 }
@@ -2407,6 +2584,7 @@ function renderHeader() {
   $('healthdot').className = 'dot ' + cls;
   $('llmchip').hidden = !(S.platform === true && drawerState && drawerState.health && drawerState.health.live_mode === false);
   $('healthbtn').setAttribute('aria-expanded', String(!$('drawer').hidden));
+  renderNotificationBadge();
   syncTopbarHeight();
 }
 
@@ -2490,6 +2668,8 @@ function openPop(id) {
   document.querySelectorAll('[data-pop]').forEach(p => { p.hidden = p.id !== id; });
   $('acct').setAttribute('aria-expanded', String(id === 'acctpop'));
   $('advbtn').setAttribute('aria-expanded', String(id === 'advpop'));
+  $('notifybtn').setAttribute('aria-expanded', String(id === 'notifypop'));
+  if (id === 'notifypop') { renderNotifications(); refreshNotifications(); }
   openDialogFocus(el);
 }
 function togglePop(id) {
@@ -2499,6 +2679,8 @@ function togglePop(id) {
   el.hidden = !wasHidden;
   $('acct').setAttribute('aria-expanded', String(!el.hidden && id === 'acctpop'));
   $('advbtn').setAttribute('aria-expanded', String(!el.hidden && id === 'advpop'));
+  $('notifybtn').setAttribute('aria-expanded', String(!el.hidden && id === 'notifypop'));
+  if (!el.hidden && id === 'notifypop') { renderNotifications(); refreshNotifications(); }
   if (el.hidden) restoreFocus(); else openDialogFocus(el);
 }
 function closePops() {
@@ -2506,6 +2688,7 @@ function closePops() {
   document.querySelectorAll('[data-pop]').forEach(p => { p.hidden = true; });
   $('acct').setAttribute('aria-expanded', 'false');
   $('advbtn').setAttribute('aria-expanded', 'false');
+  $('notifybtn').setAttribute('aria-expanded', 'false');
   if (had) restoreFocus();
 }
 
@@ -3492,7 +3675,8 @@ document.addEventListener('click', async e => {
   if (!(raw instanceof Element)) return;
   // 列表项/按钮内部通常还有 span/code；动作必须从实际点击位置的最近 data-* 祖先解析。
   const t = raw.closest('[data-act],[data-inc],[data-filter],[data-close],[data-view],'
-    + '[data-assign],[data-copy],[data-fill],[data-near],[data-preset],[data-contrast],[data-mention]') || raw;
+    + '[data-assign],[data-copy],[data-fill],[data-near],[data-preset],[data-contrast],[data-mention],'
+    + '[data-notify]') || raw;
 
   const closeId = t.dataset.close;
   if (closeId) { const d = $(closeId); if (d && d.open) d.close(); return; }
@@ -3521,6 +3705,10 @@ document.addEventListener('click', async e => {
   if (incId) { selectIncident(incId); return; }
 
   if (t.dataset.mention !== undefined) { insertMention(t.dataset.mention); return; }
+  if (t.dataset.notify !== undefined) {
+    await openNotification(t.dataset.notify, t.dataset.incident);
+    return;
+  }
 
   const act = t.dataset.act;
   if (act) {
@@ -3542,6 +3730,7 @@ document.addEventListener('click', async e => {
     if (act === 'transfer') { await openTransferPop(); return; }
     if (act === 'dotransfer') { await submitTransfer(); return; }
     if (act === 'sendcomment') { await sendComment(); return; }
+    if (act === 'notifyreadall') { await markAllNotificationsRead(); return; }
     if (act === 'diag') { await ask(activeIncident()); return; }
     if (act === 'cmdwhy') { toast(EMPTY_CONTRACT_TIP, 'warn'); return; }
     if (act === 'closeinc') { openCloseDialog(); return; }
@@ -3801,6 +3990,7 @@ window.addEventListener('resize', () => {
 if (window.ResizeObserver) new ResizeObserver(syncTopbarHeight).observe(document.querySelector('.top'));
 if (S.a.token) {
   startPoll();
+  startNotifyPoll();
   loadCoverage();
   refreshIncidents().then(() => renderAll());
 }

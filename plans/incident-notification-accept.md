@@ -4,6 +4,9 @@
 > **状态：已冻结（2026-11-25）。** 冻结点 `aa05c84`（origin/main）；
 > 本分支只承载契约，实现分支为 `codex/incident-notification-impl`（契约合并后从 main 切出）。
 > 用户已签收三项默认值：收件人按「判定口径」、60 秒去重桶、`22:00–08:00` 非 P1 只落站内。
+> **R1（2026-11-25，Verifier 发现）：** 面板契约第 7 层的 `copilot_map` 未纳入新增通知控制器，
+> 且面板用字符串拼接规避了字面量门禁。Allowed paths 增加 `scripts/check_panel_contract.sh`；
+> 实现必须用字面量 `/api/v1/copilot/notifications`，并让第 7 层真正覆盖该端点。
 > 本契约不覆盖评论 @ 的跨端通知：ADR-0034 的会话水位（`opspilot.comments.seen`）保持不变，
 > @ 的服务端通知另开切片并先改 ADR。
 
@@ -59,6 +62,7 @@ src/main/java/com/opspilot/incident/**
 src/main/java/com/opspilot/gateway/**                     # 仅在需要注册调度/配置绑定时
 src/main/resources/application.yml
 src/main/resources/static/index.html
+scripts/check_panel_contract.sh                          # R1：第 7 层纳入通知控制器
 src/test/java/com/opspilot/incident/**
 src/test/java/com/opspilot/auth/FlywayMigrationTest.java  # 仅新增 V10 断言
 offline/tests/test_console_contract.py
@@ -106,7 +110,9 @@ offline/doc_numbers.json                                  # 仅当测试计数�
     `aiops_incident_notify_webhook_total{result=ok|fail|suppressed|dropped}`；
     审计不新增事件类型（通知是派生数据，事故审计已覆盖事实来源）。
 11. **不回归**：事故列表 / 详情 / 评论 / 转交 / SLA 扫描的既有语义与响应字段不变；
-    面板契约十层一致；`check_public_copy.py --check` 与 `doc_numbers.py --check` 通过。
+    面板契约十层一致，且第 7 层的 `copilot_map` 必须实际包含
+    `IncidentNotificationController`，面板侧必须使用字面量路径、不得拼接规避；
+    `check_public_copy.py --check` 与 `doc_numbers.py --check` 通过。
 
 ## Verification commands（Verifier 亲自重跑）
 
@@ -153,3 +159,34 @@ python offline/doc_numbers.py --check
 **状态：已签收（2026-11-25）。** 三项默认值按原样确认：收件人范围、60s 去重桶、
 `22:00–08:00` 静默期（仅 P1 外发）。契约冻结，可实现；实现者与 Verifier 不得为同一会话。
 本次签收只授权实现，不含合并授权；合并须另行书面签收。
+
+## 签收记录（2026-11-25，PR #102）
+
+**结论：通过。** 用户书面签收，授权 squash 合并。
+
+### 人审四问
+
+1. **证据充分性：无异议**——独立 Verifier 在 `a6715fa` 亲跑全部命令并完成 7 项活体验收；
+   实现方自评与其日志未作为裁决证据。两条 P1 由 Verifier 复现，修复后由同一 Verifier 复验关闭。
+2. **判据纪律：无异议**——未改/删/弱化断言，未跳测试（`Skipped: 0`）；
+   P1-2 的门禁有效性由 Verifier 独立复现「去 map 变红、加 map 变绿」，未采信实现方日志。
+3. **变更面封闭：无异议**——`ea1b557..a6715fa` 共 23 个文件，全部在 R1 Allowed paths 内；
+   未改 V1–V9、`pom.xml`、ADR-0034 的评论水位。
+4. **遗留边界：接受为已知项**——见下。
+
+### 契约 R1 确认
+
+用户确认 R1：Allowed paths 增加 `scripts/check_panel_contract.sh`，第 7 层 `copilot_map`
+纳入 `IncidentNotificationController`；面板必须使用字面量路径。
+
+### 已知边界（接受）
+
+- 评论 @ 的跨端通知未做：ADR-0034 的会话水位不变，另开切片。
+- 邮件 / 短信 / Web Push / 个人 IM 未做：`users` 表无联系方式字段。
+- webhook 默认关闭；单次尝试、3s 超时、不重试、有界队列。
+- `safeTitle` 保守回退：显式标题恰好等于 query 派生标题时也会显示 `事故 <id>`，优先保证 query 不外泄。
+- 未受本次修复影响的活体验收项沿用首轮证据，并由本轮全量回归复核。
+
+### 合并授权
+
+用户于 2026-11-25 书面回复「签收」，授权 squash 合并 PR #102。

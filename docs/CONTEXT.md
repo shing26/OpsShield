@@ -59,6 +59,18 @@ Reciprocal Rank Fusion，倒数排名融合（k=60），将双路排名无量纲
 **未读水位（Seen Watermark）**:
 左栏未读角标的判据：每张事故单的 `lastCommentId`（服务端 `MAX(comment_id)`）与浏览器 `sessionStorage` 里 `opspilot.comments.seen` 的已读值比较。水位只活在本标签页会话内，**不落 localStorage、不建服务端已读表、不做推送**；登录后的自动选中不算已读，用户显式打开事故单才清除角标。_对外_: 无对外别名。_Avoid_: 已读回执（那会暗示跨设备一致）、消息数（角标表示"有更新"，不是精确未读数）
 
+**站内通知（Incident Notification）**:
+按收件人持久化的事故事件记录（`incident_notifications`，ADR-0037）：指派/转交、SLA 临期/超时、重开各生成一行，只带事故 ID、标题、优先级、时限与事件类型，不复制 query、诊断正文、评论正文或引用片段。通知与事故变更同一事务写入，唯一键 `(tenant, recipient, dedupe_key)` 去重；查询、已读与全部已读都只用 JWT 里的 tenant/sub。_对外_: 无对外别名。_Avoid_: 消息（会读成聊天正文）、推送（那只指可选外发）
+
+**通知外发（Notification Webhook）**:
+可选的租户级群机器人投递：`opspilot.incident.notify.webhook-url` 为空即关闭。配置后只在事务提交后进入有界队列，单线程单次尝试、3s 超时、不重试、不阻塞请求线程；载荷同样不含 query/诊断/评论正文。_对外_: 无对外别名。_Avoid_: 个人私聊（本切片不解用户 IM 身份）、告警投递（那是 Alertmanager 告警链路）
+
+**静默期（Quiet Hours）**:
+只约束通知外发的时间窗，默认 `22:00–08:00`（`Asia/Shanghai`，可配）。窗内非 P1 只落站内、不外发，并记 `suppressed=quiet_hours`；P1 不受限。站内记录永不被静默期丢弃。_对外_: 无对外别名。_Avoid_: 免打扰（易读成站内也不记录）、告警抑制（那是风暴线）
+
+**通知已读（Notification Read）**:
+服务端 `read_at` 时间戳，只由收件人本人写；重复标记幂等且不覆盖首次时间，非本人/跨租户按 404 不泄漏存在性。它与评论的会话内未读水位是两套东西：通知已读跨设备持久，评论水位仍只在 `sessionStorage`（ADR-0034）。_对外_: 无对外别名。_Avoid_: 评论已读（那会改 ADR-0034 的水位语义）
+
 **创建幂等键（clientId）**:
 前端为每次"新建事故"生成的 UUID；服务端以 `(tenant, client_id)` 唯一索引去重。网络重试/双击不会造出两张单，重放返回同一条记录（200 而非 201）。_对外_: 无对外别名。_Avoid_: 请求 ID（那是日志关联键，不是业务幂等键）
 

@@ -139,8 +139,67 @@ class FlywayMigrationTest {
                 assertTrue(rs.next());
                 assertEquals(1, rs.getInt(1), "空库一次跑完必须留下 V9 版本记录");
             }
+            try (ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM incident_notifications")) {
+                assertTrue(rs.next());
+                assertEquals(0, rs.getInt(1), "空库必须由 V10 建出通知表");
+            }
+            try (ResultSet rs = st.executeQuery(
+                    "SELECT COUNT(*) FROM \"flyway_schema_history\" WHERE \"version\" = '10' AND \"success\"")) {
+                assertTrue(rs.next());
+                assertEquals(1, rs.getInt(1), "空库一次跑完必须留下 V10 版本记录");
+            }
         }
         assertEquals(4000, bodyColumnWidth(ds), "空库跑完 V1..V9 后 body 应为 VARCHAR(4000)");
+    }
+
+    /** V9 库升级到 V10：只新增通知表，既有事故/评论/台账数据必须原样保留。 */
+    @Test
+    void v10AddsNotificationsOnExistingV9Database() throws Exception {
+        DataSource ds = ds("v9-to-v10");
+        Flyway.configure()
+                .dataSource(ds)
+                .locations("classpath:db/migration")
+                .baselineOnMigrate(true)
+                .baselineVersion("1")
+                .target("9")
+                .load()
+                .migrate();
+
+        try (Connection c = ds.getConnection(); Statement st = c.createStatement()) {
+            st.execute("INSERT INTO incidents (incident_id, tenant, client_id, title, query, source, status,"
+                    + " created_by) VALUES ('INC-V9-1', 'tenant-1', 'cid-v9', 'V9 旧单', '排查', 'manual',"
+                    + " 'open', 't1-alice')");
+        }
+
+        flyway(ds).migrate();
+
+        try (Connection c = ds.getConnection(); Statement st = c.createStatement()) {
+            try (ResultSet rs = st.executeQuery(
+                    "SELECT title FROM incidents WHERE incident_id = 'INC-V9-1'")) {
+                assertTrue(rs.next(), "V10 升级不得丢已有事故行");
+                assertEquals("V9 旧单", rs.getString("title"));
+            }
+            try (ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM incident_notifications")) {
+                assertTrue(rs.next());
+                assertEquals(0, rs.getInt(1), "V10 必须建出空的通知表");
+            }
+            try (ResultSet rs = st.executeQuery(
+                    "SELECT COUNT(*) FROM \"flyway_schema_history\" WHERE \"version\" = '10' AND \"success\"")) {
+                assertTrue(rs.next());
+                assertEquals(1, rs.getInt(1), "已有 V9 库升级后必须留下 V10 版本记录");
+            }
+            // 唯一索引必须真的存在：同一 (tenant, recipient, dedupe_key) 第二次插入应被拒。
+            st.execute("INSERT INTO incident_notifications (tenant, recipient, incident_id, kind, title,"
+                    + " dedupe_key) VALUES ('tenant-1', 't1-alice', 'INC-V9-1', 'assigned', 'V9 旧单', 'k-1')");
+            boolean rejected = false;
+            try {
+                st.execute("INSERT INTO incident_notifications (tenant, recipient, incident_id, kind, title,"
+                        + " dedupe_key) VALUES ('tenant-1', 't1-alice', 'INC-V9-1', 'assigned', 'V9 旧单', 'k-1')");
+            } catch (java.sql.SQLException e) {
+                rejected = true;
+            }
+            assertTrue(rejected, "V10 必须有 (tenant, recipient, dedupe_key) 唯一索引");
+        }
     }
 
     /** V8 库升级到 V9：只新增告警台账表，既有事故/评论/转交数据必须原样保留。 */
