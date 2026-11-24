@@ -9,7 +9,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * SLA 提醒扫描（ADR-0033）：把"快到时限 / 已超时"从派生值变成可审计的状态跃迁。
@@ -35,11 +37,17 @@ public class IncidentSlaScanner {
     private final IncidentStore store;
     private final IncidentSlaProperties sla;
     private final AuditService audit;
+    private final IncidentNotificationService notifications;
+    private final TransactionTemplate transaction;
 
-    public IncidentSlaScanner(IncidentStore store, IncidentSlaProperties sla, AuditService audit) {
+    public IncidentSlaScanner(IncidentStore store, IncidentSlaProperties sla, AuditService audit,
+                              IncidentNotificationService notifications,
+                              PlatformTransactionManager transactionManager) {
         this.store = store;
         this.sla = sla;
         this.audit = audit;
+        this.notifications = notifications;
+        this.transaction = new TransactionTemplate(transactionManager);
     }
 
     /** 默认 60s 一次；间隔与首启延迟都可在 {@code opspilot.incident.sla.scan-*} 覆写。 */
@@ -47,7 +55,9 @@ public class IncidentSlaScanner {
             initialDelayString = "${opspilot.incident.sla.scan-initial-delay-ms:60000}")
     public void scheduledScan() {
         try {
-            int moved = scan(Instant.now());
+            // 事务边界必须在 try 之内、catch 之外：扫描中途失败要整体回滚，
+            // 不能让"状态跃迁已提交、通知没写"的半态被 catch 后提交。
+            Integer moved = transaction.execute(status -> scan(Instant.now()));
             if (moved > 0) log.info("incident SLA scan: {} state transition(s)", moved);
         } catch (RuntimeException e) {
             // 单次扫描失败不能拖死调度线程；下一轮会重试同一批（条件更新保证不重复审计）。
@@ -70,6 +80,8 @@ public class IncidentSlaScanner {
                 if (!store.transitionSla(tenant, inc.id(), from, to, now)) continue;
                 audit.logIncident(system(tenant), inc.id(), "sla", to,
                         inc.priority() + " due " + inc.dueAt());
+                // 与状态跃迁同一事务；外发在提交后由通知服务入队。
+                notifications.onSla(inc, to);
                 moved++;
             }
         }

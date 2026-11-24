@@ -60,14 +60,17 @@ public class IncidentService {
     private final AuditService audit;
     private final ObjectMapper json;
     private final IncidentSlaProperties slaProperties;
+    private final IncidentNotificationService notifications;
 
     public IncidentService(IncidentStore store, UserStore users, AuditService audit, ObjectMapper json,
-                           IncidentSlaProperties slaProperties) {
+                           IncidentSlaProperties slaProperties,
+                           IncidentNotificationService notifications) {
         this.store = store;
         this.users = users;
         this.audit = audit;
         this.json = json;
         this.slaProperties = slaProperties;
+        this.notifications = notifications;
     }
 
     public List<Incident> list(UserContext user) {
@@ -334,6 +337,8 @@ public class IncidentService {
         if (!store.transfer(next, cur.owner(), reason, user.sub(), now)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "事故单已被其他会话转交，请刷新后重试");
         }
+        // 与 owner 改写同一事务：回滚即零通知行（契约 AC2）。
+        notifications.onAssigned(user, next, toOwner);
         audit.logIncident(user, id, "transfer", "ok", cur.owner() + " -> " + toOwner);
         return next;
     }
@@ -437,6 +442,9 @@ public class IncidentService {
         if (!saved) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "事故单已被其他会话修改，请刷新后重试");
         }
+        // 通知和事故写入共用本方法的事务；任一失败一起回滚。
+        if (ownerChanged) notifications.onAssigned(user, next, next.owner());
+        if (reopening) notifications.onReopened(user, next);
         audit.logIncident(user, id, action, "ok", p.status() == null ? null : status);
         return next;
     }

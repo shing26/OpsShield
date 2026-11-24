@@ -12,8 +12,8 @@
   <a href="https://openjdk.org/"><img src="https://img.shields.io/badge/Java-21-ED8B00?style=flat&amp;logo=openjdk&amp;logoColor=white" alt="Java 21"></a>
   <a href="https://spring.io/projects/spring-boot"><img src="https://img.shields.io/badge/Spring_Boot-4.1.2-6DB33F?style=flat&amp;logo=springboot&amp;logoColor=white" alt="Spring Boot 4.1.2"></a>
   <br>
-  <a href="#-测试体系与安全回归测试"><img src="https://img.shields.io/badge/Java_Tests-560_Passed-4CAF50?style=flat&amp;logo=openjdk&amp;logoColor=white" alt="Java Tests: 560 passed"></a>
-  <a href="#-测试体系与安全回归测试"><img src="https://img.shields.io/badge/Probes-610_Passed-3776AB?style=flat&amp;logo=python&amp;logoColor=white" alt="Python Probes: 610 passed"></a>
+  <a href="#-测试体系与安全回归测试"><img src="https://img.shields.io/badge/Java_Tests-577_Passed-4CAF50?style=flat&amp;logo=openjdk&amp;logoColor=white" alt="Java Tests: 577 passed"></a>
+  <a href="#-测试体系与安全回归测试"><img src="https://img.shields.io/badge/Probes-613_Passed-3776AB?style=flat&amp;logo=python&amp;logoColor=white" alt="Python Probes: 613 passed"></a>
   <a href="docs/benchmark.md"><img src="https://img.shields.io/badge/Benchmark-Regression_Gated-4CAF50?style=flat&amp;logo=githubactions&amp;logoColor=white" alt="Benchmark: regression gated"></a>
   <a href="https://prometheus.io/"><img src="https://img.shields.io/badge/Metrics-Micrometer_%7C_Prometheus-498BA3?style=flat&amp;logo=prometheus&amp;logoColor=white" alt="Metrics: Micrometer and Prometheus"></a>
   <a href="#-系统架构与流量管道"><img src="https://img.shields.io/badge/Action_Contract-read--only-0EA5E9?style=flat" alt="Action contract: read-only"></a>
@@ -363,6 +363,7 @@ OpsShield 把"系统活着"做成了结构化的入口矩阵（默认端口 `808
 | **覆盖范围** | `GET /api/v1/copilot/coverage` | 提问前可见的知识库边界：按调用者身份现算的**服务数 / 错误码数 / 语义块数 + 最近重建时间**，外加可点的服务名与错误码清单（点一下填进输入框）。拒答时同源给出"最接近的标识符"，让答不出来读成**边界**而非故障（[ADR-0023](docs/adr/0023-public-surface-terminology.md)） |
 | **管理快照 / 审计流** | `GET /api/v1/admin/state` · `/api/v1/admin/audit/recent` | 运行面板视图与右上角健康抽屉的数据源；`role=platform ∧ auth_level≥3` 门禁，非平台身份渲染锁定态 |
 | **事故单记录** | `GET/POST /api/v1/copilot/incidents` · `/assignees` · `GET/PATCH /{id}` · `POST /{id}/transfer` · `GET /{id}/assignments` · `GET/POST /{id}/comments` · `?mine=true&status=` | 服务端持久化（ADR-0032，Flyway V5）；转交是 append-only 事实、与 `owner` 同事务，`PATCH owner` 走同一路径（ADR-0033，V6）；评论也是 append-only（ADR-0034，V7），`GET /{id}/comments?since=<commentId>` 按水位增量读，服务端解析正文里的 `@`；`?mine=true` 在服务端按调用者筛选；`due_at` / SLA 状态由配置派生，60s 扫描幂等跃迁；登录锁 429 响应带 `Retry-After` |
+| **站内通知** | `GET /api/v1/copilot/notifications` · `POST /{id}/read` · `POST /read-all` | 通知与事故单变更同事务（ADR-0037，Flyway V10）：指派/转交、SLA 临期/超时、重开按收件人落库；tenant/recipient 只来自 JWT，非本人 404；90 天留存、每日清理。群机器人外发默认关闭，配置后提交后异步、单次尝试、3s 超时，静默期外记 `suppressed` |
 
 #### 核心指标定义（`aiops.*` 层级名，Prometheus 侧点号转下划线）
 
@@ -370,6 +371,8 @@ OpsShield 把"系统活着"做成了结构化的入口矩阵（默认端口 `808
 * `aiops_cache_hit_rate`：双层缓存总命中率 = L1 与 L2 两层命中数之和 / 总请求数（L1 为去重键级精确命中，L2 为向量相似命中；`_l1_` / `_l2_` 分项分别导出）；
 * `aiops_degradation_state`：降级档位序数 gauge，`0=NORMAL`、`1=CACHE_ONLY`、`2=SOP_FALLBACK`（实时读状态机，非 bind 时刻快照）；
 * `aiops_guard_verbatim_masked`：流式导出中被出口护栏掩码的句数（按句累计，非按请求）；
+* `aiops_incident_notifications_total{kind}`：实际落库的站内通知数（`assigned` / `sla_due_soon` / `sla_breached` / `reopened`，去重命中不计）；
+* `aiops_incident_notify_webhook_total{result}`：可选群机器人外发结果（`ok` / `fail` / `suppressed` / `dropped`）；
 * `aiops_guard_action_commands_rejected`：只读命令清单里被命令策略判拒的条数（判拒即丢弃，不静默）；
 * 计数器另有 `aiops_llm_calls`、`aiops_llm_rate_limited`、`aiops_dedup_aggregated`、`aiops_cache_l1_hits`、`aiops_sop_fallbacks`、`aiops_guard_refusals`、`aiops_feedback_total{verdict}`（反馈质量闭环）与 `aiops.retrieval.diagnostic_leaf_swap`（命令产额保位）等——全部由 Micrometer 单一事实源同时供控制台快照与抓取面两个出口（[ADR-0016](docs/adr/0016-prometheus-metrics-exposure.md)）。
 
@@ -379,8 +382,8 @@ OpsShield 把"系统活着"做成了结构化的入口矩阵（默认端口 `808
 
 防线不只靠单测——关键判据全部经"改坏必红、复原必绿"的安全回归测试，文档数字由门闩每次现算比对产物：
 
-* **Java 560 单测**（`mvn test` 实跑全绿）：并发合并、状态机无损跃迁、AST 词法解析、双出口指标一致性、覆盖范围聚合、内存存储后端与身份过滤的跨后端对照、事故单租户隔离与分配权限、转交原子性与 append-only 历史、服务端「我的」筛选、SLA 派生与扫描跃迁幂等、评论追加语义与并发不丢话、200 条上限的行锁并发判据、服务端 @ 解析与租户边界；
-* **Python 610 条 test 函数**（`pytest offline/tests/`；参数化展开后执行例数更多）：含 `action_contract_probe.py` 的 **AC-1..AC-9 九组形式化不变式**——帧形状 / 逐字性 / 契约⊆引用闭包 / 段名闸 / 红线绊线 / 回放一致性 / 租户围栏 / 指标单调 / 反假绿覆盖；以及 `preset_probe.py` 的 **P-1..P-3 三组**——左栏预设与页面同源、预设形状（不锁产额）、覆盖范围与语料逐项相等；
+* **Java 577 单测**（`mvn test` 实跑全绿）：并发合并、状态机无损跃迁、AST 词法解析、双出口指标一致性、覆盖范围聚合、内存存储后端与身份过滤的跨后端对照、事故单租户隔离与分配权限、转交原子性与 append-only 历史、服务端「我的」筛选、SLA 派生与扫描跃迁幂等、评论追加语义与并发不丢话、200 条上限的行锁并发判据、服务端 @ 解析与租户边界、通知与事故单变更同事务/回滚零通知/去重冲突/收件人与已读幂等、webhook 超时与有界队列；
+* **Python 613 条 test 函数**（`pytest offline/tests/`；参数化展开后执行例数更多）：含 `action_contract_probe.py` 的 **AC-1..AC-9 九组形式化不变式**——帧形状 / 逐字性 / 契约⊆引用闭包 / 段名闸 / 红线绊线 / 回放一致性 / 租户围栏 / 指标单调 / 反假绿覆盖；以及 `preset_probe.py` 的 **P-1..P-3 三组**——左栏预设与页面同源、预设形状（不锁产额）、覆盖范围与语料逐项相等；通知面板的铃铛/角标/30s 轮询/聚焦刷新/既有存储键不变由 `test_console_contract.py` 静态钉住；
 * **安全回归测试**：契约探针 5 路（段名闸恒真、逐字恒真、红线恒空、闭包前置 None、AC-7 租户恒真——每条都有"改坏后 N failed / 复原后全绿"的实测记录）；文档门闩另有 A/B/C 三路（改文档数字、改产物、改写措辞，各须红）；
 * **CI 全部 job**（java / static-gate / panel-contract / provenance / python / shell / security / sbom / smoke / benchmark / redteam）零 key 零中间件可跑；`doc_numbers` 门闩现算比对 **33 条文档数字 / 49 处引用**，数字与产物分叉即 CI 红；评测报告与语料的同代性用内容摘要钉死（`provenance`，不用 checkout 会刷平的 mtime）；对外面用词由 `check_public_copy` 钉住（内部 canonical 词不得漏到本 README 与页面文案，词表从 `docs/CONTEXT.md` 现取）。
 
@@ -413,7 +416,7 @@ $PY load/l1_latency.py       # L1 回放延迟（热点命中口径）→ load/r
 
 ## 📐 架构决策记录
 
-系统的演进过程严格遵从 ADR 机制，每篇含否决项与后果。关键决策索引如下（完整 **36 篇**见 [docs/adr/](docs/adr/)）：
+系统的演进过程严格遵从 ADR 机制，每篇含否决项与后果。关键决策索引如下（完整 **37 篇**见 [docs/adr/](docs/adr/)）：
 
 | # | 决策 | 一句话理由 |
 | --- | --- | --- |
@@ -443,6 +446,7 @@ $PY load/l1_latency.py       # L1 回放延迟（热点命中口径）→ load/r
 | [0034](docs/adr/0034-incident-comments.md) | 事故单评论：append-only 讨论、服务端 @ 解析、会话内未读水位（Flyway V7） | 评论是对话事实，不能塞进后写赢的时间线；评论不喂检索/LLM，未读只在会话内 |
 | [0035](docs/adr/0035-alert-intake.md) | 告警入口：告警落表（`(tenant, alert_id)`）、一键建单幂等、有界留存（Flyway V9） | 面板要能回答"今天进了哪些告警、有没有人接手"；`alertId` 不含租户，建单必须显式带 `tenant` |
 | [0036](docs/adr/0036-single-instance-scheduled-jobs.md) | 定时任务与审计环沿用单实例假设；多副本前补分布式锁或拆独立 worker | 单实例下所有验收成立，但审计局部视图与 LLM 成本随副本数放大；触发线必须可判定，不能靠"压测没出问题" |
+| [0037](docs/adr/0037-incident-notification.md) | 站内通知持久化（Flyway V10）+ 可选群机器人外发：同事务、按收件人去重、提交后异步 | 指派/SLA/重开必须让本人知道；外发默认关闭，慢上游不得拖住转交接口 |
 
 ---
 
@@ -458,7 +462,7 @@ $PY load/l1_latency.py       # L1 回放延迟（热点命中口径）→ load/r
 | 日常运维、脚本索引、**债务触发线** | [OPS.md](OPS.md)（脚本按"服务生命周期 / 门禁检查 / 故障注入与演示"分组索引） |
 | 领域词汇 | [docs/CONTEXT.md](docs/CONTEXT.md) |
 | 目录地图 / 逐包职责 / 维护者向内容 | [docs/repo-map.md](docs/repo-map.md) |
-| 架构决策与否决理由 | [docs/adr/](docs/adr/)（36 篇，每篇含否决项与后果） |
+| 架构决策与否决理由 | [docs/adr/](docs/adr/)（37 篇，每篇含否决项与后果） |
 
 ---
 
