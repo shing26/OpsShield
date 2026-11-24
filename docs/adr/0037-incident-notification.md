@@ -20,6 +20,8 @@ ADR-0033 让 `owner` 变更成为可追溯事实，`IncidentSlaScanner` 也会�
 
 1. **同一事务**：通知行与事故变更（转交 / PATCH owner / SLA 跃迁 / 重开）共用调用方事务。
    事故回滚则通知零行；不会出现"事故改了没人知道"或"通知发了事故没改"。
+   通知标题不从 query 派生：建单时空标题会用 query 首段填 `incidents.title`（事故本体的既有语义），
+   通知层识别后回退为 `事故 <id>`，确保 query 不进入通知与 webhook。
 2. **去重**：唯一键 `(tenant, recipient, dedupe_key)`，冲突按正常分支吞掉。
    - `assigned:<incidentId>:<toOwner>:<minuteBucket>`
    - `sla:<incidentId>:<state>`

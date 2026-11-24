@@ -338,6 +338,10 @@ def test_notification_bell_panel_and_read_all() -> None:
     assert "function renderNotifications" in html and "data-notify=" in html, "面板缺通知行渲染"
     assert 'data-act="notifyreadall"' in html and "全部已读" in html, "缺「全部已读」入口"
     assert "async function openNotification" in html, "点击通知的跳转逻辑缺失"
+    assert "const NOTIFY_API = '/api/v1/copilot/notifications';" in html, \
+        "通知端点必须是字面量，禁止拼接规避面板契约第 7 层"
+    assert "'/api/v1/' + 'copilot/notifications'" not in html, \
+        "不得用字符串拼接绕开面板契约的路径字面量比对"
     assert "'/' + encodeURIComponent(id) + '/read'" in html, "点击通知必须调用 /{id}/read"
     assert "function focusIncidentById" in html, "点击通知必须跳转对应事故"
     assert "暂无通知" in html, "空态必须有说明，不能摆样例"

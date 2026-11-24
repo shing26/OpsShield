@@ -86,7 +86,8 @@ copilot_map=$( { api_paths_for src/main/java/com/opspilot/gateway/CopilotControl
   api_paths_for src/main/java/com/opspilot/gateway/FeedbackController.java
   api_paths_for src/main/java/com/opspilot/gateway/SearchController.java
   api_paths_for src/main/java/com/opspilot/action/ActionOpsController.java
-  api_paths_for src/main/java/com/opspilot/incident/IncidentController.java; } | sort -u || true)
+  api_paths_for src/main/java/com/opspilot/incident/IncidentController.java
+  api_paths_for src/main/java/com/opspilot/incident/IncidentNotificationController.java; } | sort -u || true)
 copilot_paths=$(grep -oE "/api/v1/copilot/[a-z/-]+" "$HTML" | sort -u || true)
 for p in $copilot_paths; do
   p="${p%/}"   # 前端用 '/incidents/' + id 拼个体路径；去掉尾斜杠后按类根映射核对

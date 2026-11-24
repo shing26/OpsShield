@@ -929,9 +929,8 @@ const CAP = 200;
 const SS = k => 'opspilot.session.jwt.' + k;
 const ACTIVE_KEY = 'opspilot.incidents.active';
 const SEEN_KEY = 'opspilot.comments.seen';
-// 契约路径是 /api/v1/ 下的 copilot/notifications。这里分段拼接不是为了避免调用它，
-// 而是面板契约脚本只枚举既有 Controller 文件；通知 Controller 的路由由 Java 集成测试锁住。
-const NOTIFY_API = '/api/v1/' + 'copilot/notifications';
+// 契约路径必须是字面量：面板契约第 7 层按字面量比对 Controller 映射，禁止拼接规避。
+const NOTIFY_API = '/api/v1/copilot/notifications';
 
 try { localStorage.removeItem('opspilot.jwt'); } catch (e) { /* 非致命 */ }
 

@@ -100,7 +100,7 @@ public class IncidentNotificationService {
             // 收件人必须在本租户且启用；被猜到的跨租户 sub 不会收到任何行。
             if (!receivable(incident.tenant(), recipient)) continue;
             IncidentNotification row = new IncidentNotification(0L, incident.tenant(), recipient,
-                    incident.id(), kind, incident.title(), nz(incident.priority()),
+                    incident.id(), kind, safeTitle(incident), nz(incident.priority()),
                     incident.dueAt(), dedupeKey, now, null);
             if (store.insert(row)) {
                 metrics.notification(kind);
@@ -129,6 +129,23 @@ public class IncidentNotificationService {
         addRecipient(out, incident.owner(), exclude);
         addRecipient(out, incident.createdBy(), exclude);
         return new ArrayList<>(out);
+    }
+
+    /**
+     * 通知标题的安全回退：建单时空标题会用 query 首段充当 title（事故本体的既有语义），
+     * 但 query 不得进入通知/webhook。标题为空、等于 query 派生标题、或等于整段归一化
+     * query 时，一律改用只含事故 ID 的安全文案。
+     */
+    static String safeTitle(Incident incident) {
+        String title = incident.title() == null ? "" : incident.title().trim();
+        String query = incident.query() == null ? "" : incident.query();
+        String normalizedQuery = query.replaceAll("\\s+", " ").trim();
+        if (title.isEmpty()
+                || title.equals(IncidentService.titleFromQuery(query))
+                || title.equals(normalizedQuery)) {
+            return "事故 " + incident.id();
+        }
+        return title;
     }
 
     private static void addRecipient(LinkedHashSet<String> out, String sub, String exclude) {

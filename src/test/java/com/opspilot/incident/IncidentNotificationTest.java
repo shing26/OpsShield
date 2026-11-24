@@ -129,6 +129,43 @@ class IncidentNotificationTest {
         assertEquals(1, rows("tenant-1", "t1-alice"));
     }
 
+    /** P1 回归：空标题建单时 title 由 query 派生，通知与 webhook 都不得把 query 带出去。 */
+    @Test
+    void notificationTitleNeverLeaksQueryWhenTitleWasDerived() {
+        String marker = "SECRET-QUERY-FALLBACK-7788";
+        String query = marker + " 支付网关 502 排查";
+        Incident inc = incidents.create(ALICE, new IncidentRequests.Create(
+                "cid-query-fallback", "", query, "payment-service",
+                "50041_PAY_GATEWAY_502", "prod", "", "manual", "P1")).incident();
+        assertEquals(IncidentService.titleFromQuery(query), inc.title(),
+                "事故本体的空标题回退语义不得改变");
+
+        incidents.transfer(ALICE, inc.id(), transfer("t1-bob"));
+
+        IncidentNotification row = listFor(BOB).get(0);
+        assertEquals("事故 " + inc.id(), row.title(), "通知标题不得复用 query 派生标题");
+        assertFalse(row.title().contains(marker), "通知行不得包含 query marker");
+        assertFalse(IncidentWebhookDispatcher.text(row).contains(marker),
+                "webhook 载荷不得包含 query marker");
+    }
+
+    /** P1 回归：显式标题照常透传；query 仍然不得进入通知或 webhook。 */
+    @Test
+    void explicitTitlePassesThroughWithoutLeakingQuery() {
+        String marker = "SECRET-QUERY-PASSTHRU-9900";
+        String title = "支付网关 502（人工标题）";
+        Incident inc = incidents.create(ALICE, new IncidentRequests.Create(
+                "cid-title-passthru", title, marker + " 支付网关 502 排查",
+                "payment-service", "50041_PAY_GATEWAY_502", "prod", "", "manual", "P1")).incident();
+
+        incidents.transfer(ALICE, inc.id(), transfer("t1-bob"));
+
+        IncidentNotification row = listFor(BOB).get(0);
+        assertEquals(title, row.title(), "非空标题必须原样透传");
+        assertFalse(IncidentWebhookDispatcher.text(row).contains(marker),
+                "显式标题透传时 query 仍不得进入 webhook");
+    }
+
     // ---- AC3：收件人 ----
 
     @Test

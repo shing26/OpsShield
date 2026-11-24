@@ -538,7 +538,8 @@ public class IncidentService {
         }
     }
 
-    private static String titleFromQuery(String query) {
+    /** 包内可见：通知层要靠它识别"title 其实是 query 派生值"，不得把 query 带进通知。 */
+    static String titleFromQuery(String query) {
         String one = query.replaceAll("\\s+", " ").trim();
         if (one.isEmpty()) return "未命名事故";
         return one.length() > 46 ? one.substring(0, 46) + "…" : one;
