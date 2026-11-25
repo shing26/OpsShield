@@ -951,7 +951,7 @@ const S = {
   a: side('sre-full'), b: side('sre-limited'),
   incidents: [], activeId: null, filter: 'open', search: '',
   incidentCursor: null, incidentHasMore: false, incidentOpenCount: 0,
-  incidentLoadingMore: false, localIncidents: new Map(),
+  incidentLoadingMore: false, incidentRequestSeq: 0, localIncidents: new Map(),
   comments: [], commentsFor: null, commentDraft: {}, commentBusy: false, assignees: null,
   alerts: [], alertMeta: null, alertTruncated: false,
   notifications: [], notifyUnread: 0, notifyHidden: false,
@@ -1099,18 +1099,24 @@ async function incidentApi(method, path, body) {
   if (resp.status === 401) {
     dropToken('a', '401 · token 失效，重新接入');
     showAuth('401 · token 失效，重新接入');
-    throw new Error('401 · token 失效');
+    const err = new Error('401 · token 失效');
+    err.status = 401;
+    throw err;
   }
-  if (!resp.ok) throw new Error(await httpErrText(resp));
+  if (!resp.ok) {
+    const err = new Error(await httpErrText(resp));
+    err.status = resp.status;
+    throw err;
+  }
   return resp.status === 204 ? null : resp.json();
 }
 
 /** 服务端分页的筛选参数：进行中/已结束走 status=，我的走 mine=true。 */
-function incidentFilterQuery(cursor) {
+function incidentFilterQuery(filter, cursor) {
   const p = new URLSearchParams();
-  if (S.filter === 'mine') p.set('mine', 'true');
-  if (S.filter === 'open') p.set('status', 'open');
-  if (S.filter === 'closed') p.set('status', 'closed');
+  if (filter === 'mine') p.set('mine', 'true');
+  if (filter === 'open') p.set('status', 'open');
+  if (filter === 'closed') p.set('status', 'closed');
   if (cursor) p.set('cursor', cursor);
   return p.toString();
 }
@@ -1135,13 +1141,17 @@ function incidentMatchesFilter(inc) {
 async function refreshIncidents() {
   S.incidentCursor = null;
   S.incidentHasMore = false;
+  const requestSeq = ++S.incidentRequestSeq;
   if (!S.a.token) { S.incidents = []; S.incidentOpenCount = 0; return false; }
   const token = S.a.token;
+  const requestFilter = S.filter;
   try {
-    const qs = incidentFilterQuery(null);
+    const qs = incidentFilterQuery(requestFilter, null);
     const data = await incidentApi('GET', '/api/v1/copilot/incidents' + (qs ? '?' + qs : ''));
-    // 登录/切换身份可能发生在这个请求飞行途中；旧身份的响应绝不能落进新身份的列表。
-    if (S.a.token !== token) return false;
+    // 登录/切换身份/切换筛选可能发生在这个请求飞行途中；旧响应绝不能落进新视图。
+    if (S.a.token !== token || S.filter !== requestFilter || requestSeq !== S.incidentRequestSeq) {
+      return false;
+    }
     const serverRows = (data.incidents || []).map(incidentRowShape);
     const serverIds = new Set(serverRows.map(x => x.id));
     // 刷新可能晚于"新建/诊断"：保留本地更新更晚的记录，避免旧响应把刚写的内容顶掉。
@@ -1181,12 +1191,19 @@ async function loadMoreIncidents() {
   if (!S.a.token || !S.incidentCursor || S.incidentLoadingMore) return;
   if (S.incidents.length >= 1000) return;
   const token = S.a.token;
+  const requestFilter = S.filter;
+  const requestCursor = S.incidentCursor;
+  const requestSeq = S.incidentRequestSeq;
   S.incidentLoadingMore = true;
   renderIncidentMore();
   try {
     const data = await incidentApi('GET',
-      '/api/v1/copilot/incidents?' + incidentFilterQuery(S.incidentCursor));
-    if (S.a.token !== token) return;
+      '/api/v1/copilot/incidents?' + incidentFilterQuery(requestFilter, requestCursor));
+    // 翻页期间切换筛选/刷新过：这一页属于旧游标，直接丢弃，不能追加到新视图。
+    if (S.a.token !== token || S.filter !== requestFilter
+        || S.incidentCursor !== requestCursor || requestSeq !== S.incidentRequestSeq) {
+      return;
+    }
     const known = new Set(S.incidents.map(x => x && x.id));
     for (const row of (data.incidents || []).map(incidentRowShape)) {
       if (S.incidents.length >= 1000) break;
@@ -1196,7 +1213,8 @@ async function loadMoreIncidents() {
     }
     S.incidentCursor = data.nextCursor || null;
     S.incidentHasMore = !!data.hasMore;
-    S.incidentOpenCount = Number(data.openCount) || S.incidentOpenCount;
+    const openCount = Number(data.openCount);
+    if (Number.isFinite(openCount)) S.incidentOpenCount = openCount;
     renderIncidentList();
   } catch (e) {
     toast('加载更多失败：' + e.message, 'err');
@@ -1331,7 +1349,8 @@ async function openNotification(id, incidentId) {
     if (!(e && e.notFound)) toast('标记已读失败：' + e.message, 'warn');
   }
   await refreshNotifications();
-  await focusIncidentById(incidentId);
+  const outcome = await focusIncidentById(incidentId);
+  if (outcome === 'not_found') toast('事故单加载失败：HTTP 404 · 事故单不存在或已不可见', 'warn');
 }
 
 async function focusIncidentById(id) {
@@ -1344,12 +1363,14 @@ async function focusIncidentById(id) {
       // 单条回填按 id 去重；不动 nextCursor/hasMore，避免把分页状态打回第一页。
       S.incidents = [inc].concat(S.incidents.filter(x => !x || x.id !== inc.id)).slice(0, 1000);
     } catch (e) {
+      if (e && e.status === 404) return 'not_found';
       toast('事故单加载失败：' + e.message, 'err');
-      return;
+      return 'error';
     }
   }
   setView('trouble');
   selectIncident(inc.id);
+  return 'ok';
 }
 
 /* ==================== 评论（ADR-0034） ==================== */
@@ -3799,10 +3820,11 @@ document.addEventListener('click', async e => {
     if (act === 'closedrawer') { closeDrawer(); return; }
     if (act === 'alertinc') { await createAlertIncident(t.dataset.tenant, t.dataset.alert, t); return; }
     if (act === 'openalertinc') {
-      await refreshIncidents();
-      const id = t.dataset.openid;
-      if (findIncident(id)) { selectIncident(id); setView('trouble'); }
-      else toast('该事故单不在当前身份的左栏（事故单按租户隔离；平台可跨租户建单但不跨租户展示）', 'warn');
+      // 按 id 单条回填：不刷新列表、不重置游标；只有真正 404 才提示不可见。
+      const outcome = await focusIncidentById(t.dataset.openid);
+      if (outcome === 'not_found') {
+        toast('该事故单不在当前身份的左栏（事故单按租户隔离；平台可跨租户建单但不跨租户展示）', 'warn');
+      }
       return;
     }
     if (act === 'openacct') { openPop('acctpop'); return; }

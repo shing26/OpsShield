@@ -268,6 +268,42 @@ def test_incident_history_cursor_frontend_contract() -> None:
         "空态必须区分「本租户没有事故单」与「已加载页无匹配」"
 
 
+def test_alert_open_uses_single_row_backfill_without_resetting_cursor() -> None:
+    """告警入口打开未加载事故单必须单条回填，不得 refresh 重置列表与游标。"""
+    html = _html()
+    start = html.index("if (act === 'openalertinc')")
+    end = html.index("if (act === 'openacct')", start)
+    block = html[start:end]
+    assert "focusIncidentById(t.dataset.openid)" in block, \
+        "告警打开必须复用通知路径的单条回填"
+    assert "refreshIncidents" not in block, \
+        "告警打开不得调用 refreshIncidents（会把列表与游标重置到第一页）"
+    assert "outcome === 'not_found'" in block, \
+        "只有真正 404 才显示跨租户/不存在提示"
+    assert "该事故单不在当前身份的左栏" in block, "404 提示文案必须保留"
+
+    focus_start = html.index("async function focusIncidentById")
+    focus_end = html.index("/* ==================== 评论", focus_start)
+    focus_block = html[focus_start:focus_end]
+    assert "e.status === 404" in focus_block, "单条回填必须识别真正的 404"
+    assert "incidentCursor" not in focus_block and "incidentHasMore" not in focus_block, \
+        "单条回填不得改写分页状态"
+
+
+def test_incident_requests_discard_stale_filter_and_keep_zero_open_count() -> None:
+    """翻页与筛选并发时丢弃旧响应；openCount=0 必须能真正刷新。"""
+    html = _html()
+    assert "const requestFilter = S.filter;" in html, "请求前必须捕获筛选"
+    assert "const requestCursor = S.incidentCursor;" in html, "请求前必须捕获游标"
+    assert "requestSeq !== S.incidentRequestSeq" in html, "必须用请求代际丢弃旧刷新"
+    assert "S.incidentCursor !== requestCursor" in html, "必须用捕获游标丢弃旧追加页"
+    assert "incidentFilterQuery(requestFilter, requestCursor)" in html, \
+        "加载更多必须使用捕获的筛选与游标，而不是回调时的状态"
+    assert "const openCount = Number(data.openCount);" in html
+    assert "if (Number.isFinite(openCount)) S.incidentOpenCount = openCount;" in html, \
+        "openCount=0 不能被 || 旧值吞掉"
+
+
 def test_discussion_card_sits_between_diagnosis_and_timeline() -> None:
     """ADR-0034：讨论卡片必须在「诊断分析」之后、「处置记录」之前。"""
     html = _html()
