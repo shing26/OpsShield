@@ -202,10 +202,10 @@ def test_my_filter_is_server_side_and_drops_local_backfill() -> None:
     """ADR-0033：「我的」必须走服务端 ?mine=true，且不得用 localOnly 回填。"""
     html = _html()
     assert 'data-filter="mine"' in html, "左栏缺「我的」筛选按钮"
-    assert "?mine=true" in html, "「我的」必须请求服务端 ?mine=true"
-    assert "(mine ? '?mine=true' : '')" in html, "mine 参数必须由筛选状态驱动"
-    assert "S.incidents = mine ? merged.slice(0, 60) : localOnly.concat(merged)" in html, \
+    assert "p.set('mine', 'true')" in html, "「我的」必须请求服务端 mine=true"
+    assert "S.filter !== 'mine' && incidentMatchesFilter(row)" in html, \
         "mine=true 时必须关闭 localOnly 回填（否则刚转交出去的单会回来）"
+    assert "slice(0, 60)" not in html, "事故单列表不得再有 60 条客户端截断"
 
 
 def test_transfer_entry_popover_and_failure_toast() -> None:
@@ -233,12 +233,39 @@ def test_sla_fact_and_semantic_colors() -> None:
     assert ".fact dd.err{color:var(--err)}" in html, "breached 必须用 err 色"
 
 
-def test_incident_rail_sorts_by_sla_urgency() -> None:
-    """ADR-0033：左栏排序把已超时/临期排在前面，已结单不抢前排。"""
+def test_incident_rail_uses_server_order_without_client_resort() -> None:
+    """ADR-0038：排序唯一事实源在服务端；左栏不得二次排序（否则追加页会乱跳）。"""
     html = _html()
-    assert "function slaRank" in html, "缺 SLA 紧迫度排序函数"
-    assert "slaRank(a) - slaRank(b)" in html, "左栏未按 SLA 紧迫度排序"
+    assert "slaRank" not in html, "前端不再保留 SLA 排序函数（服务端是唯一事实源）"
+    assert "let list = S.incidents.filter(incidentMatchesFilter);" in html, \
+        "左栏必须按服务端返回顺序渲染"
+    assert "S.incidents.slice().sort" not in html, "禁止客户端对服务端页再次排序"
     assert "已超时" in html and "临期" in html, "左栏缺 SLA 风险标记"
+
+
+def test_incident_history_cursor_frontend_contract() -> None:
+    """ADR-0038：加载更多追加、游标状态、1000 上限与服务端 status 筛选。"""
+    html = _html()
+    assert 'id="incMore"' in html and 'data-act="loadmore"' in html, "左栏底部缺「加载更多」"
+    assert "function loadMoreIncidents" in html, "缺加载更多逻辑"
+    assert "data.nextCursor" in html and "data.hasMore" in html, \
+        "前端必须消费 nextCursor/hasMore"
+    assert "S.incidentOpenCount" in html, "顶栏必须消费服务端 openCount"
+    assert "已加载最近 1000 条，请用筛选缩小范围" in html, "到达 1000 上限必须有明确文案"
+    assert "S.incidents.length >= 1000" in html, "客户端必须限制最多 1000 条"
+
+    # 筛选走服务端；切换即重置游标并重拉第一页。
+    assert "p.set('status', 'open')" in html and "p.set('status', 'closed')" in html, \
+        "进行中/已结束必须走服务端 status="
+    assert "S.incidentCursor = null;" in html and "refreshIncidents().then(() => renderAll())" in html, \
+        "切换筛选必须重置游标并重拉第一页"
+
+    # 追加页按 id 去重且不排序；单条回填同样按 id 去重。
+    assert "known.has(row.id)" in html and "known.add(row.id)" in html, \
+        "加载更多必须按 id 去重"
+    assert html.count("x.id !== inc.id") >= 2, "创建与通知/告警单条回填都必须按 id 去重"
+    assert "本租户还没有事故单" in html and "已加载的页里没有匹配的事故单" in html, \
+        "空态必须区分「本租户没有事故单」与「已加载页无匹配」"
 
 
 def test_discussion_card_sits_between_diagnosis_and_timeline() -> None:

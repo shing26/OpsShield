@@ -4,6 +4,7 @@ import com.opspilot.auth.JwtAuthFilter;
 import com.opspilot.auth.UserContext;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
@@ -38,17 +39,25 @@ public class IncidentController {
     @GetMapping
     public Map<String, Object> list(HttpServletRequest http,
                                     @RequestParam(name = "mine", required = false) String mine,
-                                    @RequestParam(name = "status", required = false) String status) {
+                                    @RequestParam(name = "status", required = false) String status,
+                                    @RequestParam(name = "cursor", required = false) String cursor,
+                                    @RequestParam(name = "limit", required = false) String limit) {
         UserContext user = user(http);
         Map<String, Long> lastComments = service.lastCommentIds(user);
-        List<Map<String, Object>> rows = service.list(user, mine, status).stream()
+        IncidentPage page = service.page(user, mine, status, cursor, limit);
+        List<Map<String, Object>> rows = page.incidents().stream()
                 .map(i -> {
                     Map<String, Object> m = view(i);
                     // 左栏未读角标只消费这个单调水位；评论正文不进入列表响应。
                     m.put("lastCommentId", lastComments.getOrDefault(i.id(), 0L));
                     return m;
                 }).toList();
-        return Map.of("incidents", rows);
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("incidents", rows);
+        out.put("nextCursor", page.nextCursor());
+        out.put("hasMore", page.hasMore());
+        out.put("openCount", page.openCount());
+        return out;
     }
 
     @GetMapping("/assignees")
