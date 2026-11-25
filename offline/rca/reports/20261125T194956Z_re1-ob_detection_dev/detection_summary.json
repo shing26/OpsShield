@@ -1,0 +1,37 @@
+{
+  "generated_at": "2026-11-25T19:50:08+00:00",
+  "suite": "re1-ob",
+  "split": "dev",
+  "n_cases": 75,
+  "params": {
+    "baseline_s": 300,
+    "sustain": 3,
+    "z_threshold": 8.0,
+    "horizon_s": 300,
+    "pre_s": 600,
+    "post_s": 600,
+    "materiality_floor": 0.08
+  },
+  "detected": 44,
+  "detection_rate": 0.5866666666666667,
+  "false_alarms": 2,
+  "no_alarm": 29,
+  "latency_median_s": 17.0,
+  "latency_p90_s": 30.300000000000026,
+  "oracle_top1_all": {
+    "topo-first": 0.7866666666666666,
+    "3sigma": 0.6933333333333334
+  },
+  "detected_top1_all": {
+    "topo-first": 0.6133333333333333,
+    "3sigma": 0.28
+  },
+  "detected_conditional_top1": {
+    "topo-first": 1.0,
+    "3sigma": 0.4318181818181818
+  },
+  "detected_conditional_mrr": {
+    "topo-first": 1.0,
+    "3sigma": 0.6591810966810967
+  }
+}

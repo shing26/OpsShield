@@ -1,0 +1,6 @@
+# RCA 研究切片的隔离依赖（**不进** offline/requirements-dev.txt，也不进运行时）。
+# 由 offline/rca/.venv 使用；版本与本机 M0 实测一致（2026-11-26）。
+numpy==2.4.6
+pandas==2.3.3
+pyarrow==21.0.0
+pytest==9.2.0

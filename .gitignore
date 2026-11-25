@@ -16,6 +16,8 @@ release/
 
 # Python
 offline/.venv/
+offline/rca/.venv/
+offline/rca/data/
 __pycache__/
 *.pyc
 .pytest_cache/
