@@ -132,6 +132,11 @@ def detected_rank(ranking: list[str], truth: str, n_candidates: int) -> int:
     return rank_position(ranking, truth)
 
 
+def counts_as_detection(result: dict) -> bool:
+    """只有「在注入后窗口内首次报警」才算检出；未报警与提前误报都算失败。"""
+    return result["alarm_time"] is not None and not result["false_alarm"]
+
+
 def run(split: str, data_dir: Path, out_dir: Path) -> dict:
     index = load_index(data_dir)
     rows = select_cases(index, "re1-ob", split)
@@ -149,7 +154,7 @@ def run(split: str, data_dir: Path, out_dir: Path) -> dict:
         for method_name in ("topo-first", "3sigma"):
             oracle = METHODS[method_name].rank(case, candidates, seed=7)
             record[f"{method_name}_oracle_rank"] = rank_position(oracle, case.root_cause_service)
-            if result["alarm_time"] is None:
+            if not counts_as_detection(result):
                 record[f"{method_name}_rank"] = detected_rank([], case.root_cause_service,
                                                              len(candidates))
             else:
@@ -186,6 +191,7 @@ def run(split: str, data_dir: Path, out_dir: Path) -> dict:
         "detection_rate": len(latencies) / len(records),
         "false_alarms": sum(1 for r in records if r["false_alarm"]),
         "no_alarm": sum(1 for r in records if r["alarm_time"] is None),
+        "detection_failures": sum(1 for r in records if not counts_as_detection(r)),
         "latency_median_s": float(np.median(latencies)) if latencies else None,
         "latency_p90_s": float(np.percentile(latencies, 90)) if latencies else None,
         "oracle_top1_all": {m: top1(f"{m}_oracle_rank", records) for m in ("topo-first", "3sigma")},

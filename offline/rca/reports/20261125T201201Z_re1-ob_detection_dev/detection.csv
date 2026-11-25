@@ -22,7 +22,7 @@ re1ob_cartservice_delay_2,cartservice,,,False,False,1,14,1,14
 re1ob_cartservice_delay_3,cartservice,,,False,False,1,14,1,14
 re1ob_cartservice_disk_1,cartservice,1702355625,33,True,False,1,1,1,2
 re1ob_cartservice_disk_2,cartservice,1702362174,43,True,False,1,1,2,2
-re1ob_cartservice_disk_3,cartservice,1702362798,-127,False,True,1,1,1,1
+re1ob_cartservice_disk_3,cartservice,1702362798,-127,False,True,1,15,1,15
 re1ob_cartservice_loss_1,cartservice,,,False,False,5,14,1,14
 re1ob_cartservice_loss_2,cartservice,,,False,False,1,14,6,14
 re1ob_cartservice_loss_3,cartservice,,,False,False,1,14,1,14
@@ -44,7 +44,7 @@ re1ob_checkoutservice_loss_3,checkoutservice,,,False,False,1,14,4,14
 re1ob_checkoutservice_mem_1,checkoutservice,1685501132,20,True,False,1,1,3,3
 re1ob_checkoutservice_mem_2,checkoutservice,1685505472,19,True,False,1,1,2,3
 re1ob_checkoutservice_mem_3,checkoutservice,1685321898,19,True,False,1,1,1,1
-re1ob_currencyservice_cpu_1,currencyservice,1685514102,-32,False,True,2,1,5,1
+re1ob_currencyservice_cpu_1,currencyservice,1685514102,-32,False,True,2,15,5,15
 re1ob_currencyservice_cpu_2,currencyservice,1685518590,24,True,False,1,1,2,3
 re1ob_currencyservice_cpu_3,currencyservice,1685523021,12,True,False,1,1,2,3
 re1ob_currencyservice_delay_1,currencyservice,,,False,False,3,14,1,14

@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 
 from dataset import Case
-from detect import detect_case, detected_rank
+from detect import counts_as_detection, detect_case, detected_rank
 
 
 def _case(inject: int = 700, fault: bool = True) -> Case:
@@ -37,3 +37,9 @@ def test_flat_series_does_not_alarm():
 def test_missing_detection_scores_as_a_miss():
     assert detected_rank([], "adservice", 14) == 15
     assert detected_rank(["adservice"], "adservice", 14) == 1
+
+
+def test_false_alarm_is_not_a_detection():
+    assert counts_as_detection({"alarm_time": 90, "false_alarm": True}) is False
+    assert counts_as_detection({"alarm_time": None, "false_alarm": False}) is False
+    assert counts_as_detection({"alarm_time": 110, "false_alarm": False}) is True

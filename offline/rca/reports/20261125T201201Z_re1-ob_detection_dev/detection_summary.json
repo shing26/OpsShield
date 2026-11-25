@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-25T19:50:08+00:00",
+  "generated_at": "2026-11-25T20:12:17+00:00",
   "suite": "re1-ob",
   "split": "dev",
   "n_cases": 75,
@@ -16,6 +16,7 @@
   "detection_rate": 0.5866666666666667,
   "false_alarms": 2,
   "no_alarm": 29,
+  "detection_failures": 31,
   "latency_median_s": 17.0,
   "latency_p90_s": 30.300000000000026,
   "oracle_top1_all": {
@@ -23,8 +24,8 @@
     "3sigma": 0.6933333333333334
   },
   "detected_top1_all": {
-    "topo-first": 0.6133333333333333,
-    "3sigma": 0.28
+    "topo-first": 0.5866666666666667,
+    "3sigma": 0.25333333333333335
   },
   "detected_conditional_top1": {
     "topo-first": 1.0,

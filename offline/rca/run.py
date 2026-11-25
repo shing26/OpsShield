@@ -34,12 +34,14 @@ def evaluate(suite: str, split: str, method_names: list[str], seed: int,
     out_dir.mkdir(parents=True, exist_ok=True)
 
     results = []
+    candidate_counts = [len(candidate_services(case.metrics)) for case in cases]
     summary = {
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "suite": suite,
         "split": split,
         "seed": seed,
         "n_cases": len(cases),
+        "n_candidates": {"min": min(candidate_counts), "max": max(candidate_counts)},
         "methods": {},
     }
 
@@ -68,7 +70,6 @@ def evaluate(suite: str, split: str, method_names: list[str], seed: int,
         top3_values = [1.0 if p <= 3 else 0.0 for p in positions]
         summary["methods"][method_name] = {
             "n_cases": len(positions),
-            "n_candidates": len(candidate_services(cases[0].metrics)),
             "top1": top_k(positions, 1),
             "top1_ci95": list(bootstrap_ci(top1_values, seed=seed)),
             "top3": top_k(positions, 3),
@@ -86,7 +87,8 @@ def evaluate(suite: str, split: str, method_names: list[str], seed: int,
         json.dumps(summary, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
     )
 
-    print(f"cases={len(cases)} candidates={summary['methods'][method_names[0]]['n_candidates']} -> {out_dir}")
+    print(f"cases={len(cases)} candidates={summary['n_candidates']['min']}-"
+          f"{summary['n_candidates']['max']} -> {out_dir}")
     print(f"{'method':<12}{'top1':>8}{'top3':>8}{'mrr':>8}{'mean_rank':>11}")
     for name, stats in summary["methods"].items():
         print(f"{name:<12}{stats['top1']:>8.3f}{stats['top3']:>8.3f}{stats['mrr']:>8.3f}{stats['mean_rank']:>11.2f}")

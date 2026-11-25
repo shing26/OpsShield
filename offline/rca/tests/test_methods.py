@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 
 from dataset import Case, candidate_services
-from methods import BaroRanker, StaticThresholdRanker, ThreeSigmaRanker
+from methods import BaroRanker, MadZRanker, StaticThresholdRanker, ThreeSigmaRanker
 
 
 def _case(adservice_faulty: bool = True) -> Case:
@@ -31,7 +31,7 @@ def _case(adservice_faulty: bool = True) -> Case:
 def test_baro_and_3sigma_find_the_injected_service():
     case = _case()
     candidates = candidate_services(case.metrics)
-    for method in (BaroRanker(), ThreeSigmaRanker()):
+    for method in (BaroRanker(), MadZRanker(), ThreeSigmaRanker()):
         ranking = method.rank(case, candidates, seed=7)
         assert ranking[0] == "adservice", (method.name, ranking)
         assert sorted(ranking) == sorted(candidates)

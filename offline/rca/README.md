@@ -67,7 +67,7 @@ python offline/rca/report.py --dir offline/rca/reports/<run> --check
 ## 当前状态
 
 M0：下载 + 解析 + Top-1/Top-3/MRR + random 基线。
-M1：静态阈值 / 3σ / BARO 口径 robust-z 基线。
+M1：静态阈值 / 3σ / BARO 口径 robust-z（IQR）/ 字面 MAD 基线。
 M2：`topo-first`——材料性下限 + P90 持续性 + 拓扑扣减 + 时相加权。
 M3：全量 125 cases + 一次性测试集 + 报告（结论见 `reports/M2-report.md`）。
 

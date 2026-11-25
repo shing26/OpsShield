@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-25T19:50:20+00:00",
+  "generated_at": "2026-11-25T20:12:28+00:00",
   "suite": "re1-ob",
   "split": "test",
   "n_cases": 50,
@@ -16,6 +16,7 @@
   "detection_rate": 0.6,
   "false_alarms": 2,
   "no_alarm": 18,
+  "detection_failures": 20,
   "latency_median_s": 14.0,
   "latency_p90_s": 34.1,
   "oracle_top1_all": {
@@ -23,8 +24,8 @@
     "3sigma": 0.68
   },
   "detected_top1_all": {
-    "topo-first": 0.58,
-    "3sigma": 0.26
+    "topo-first": 0.56,
+    "3sigma": 0.24
   },
   "detected_conditional_top1": {
     "topo-first": 0.9333333333333333,

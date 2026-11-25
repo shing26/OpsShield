@@ -96,3 +96,19 @@ git status --short
 
 - 2026-11-26：ADR 编号 `0037` 已被 `0037-incident-notification.md` 占用，本切片 ADR 实际落为
   `docs/adr/0039-rca-detector-slice.md`。仅为编号避让，Allowed paths 的意图不变，AC 未放宽。
+
+## 11. R1 修订（2026-11-26，待 Lead 签收）
+
+独立 Verifier 首次验收时发现冻结文本与实现口径不一致。以下修订均为**收紧或事实同步**，
+未放宽任何质量门槛：
+
+- **AC-4 候选集**：草案假设"5 个候选 / Top-5 退化"。实际按 RCAEval 口径取该 case 遥测中
+  出现的全部服务（dev 13–19、test 13–14）。这比 5 候选更难；随机基线从 20%/60% 降到
+  ~6–8%/20–23%。主表仍只报 Top-1/Top-3/MRR。
+- **AC-5 基线口径**：契约字面写 robust-z(MAD)，BARO 实现用 IQR。保留 `baro`（IQR，外部可比），
+  新增 `mad-z`（字面 MAD）作为第五个基线；`mad-z` 在本数据上退化（test Top-1 0.020），如实报告。
+- **AC-7 失败口径**：未报警与注入前误报都记检测失败；误报 case 不参与定位评分（记满盘皆输）。
+- **AC-10 路径**：`docs/repo-map.md` 允许"新增 `offline/rca/` 一行 + 同步 ADR 计数 38→39"，
+  其余仍禁止改动。
+
+**签收前状态**：R1 未签收时，Verifier 的 AC-4 / AC-10 判定仍以冻结原文为准。

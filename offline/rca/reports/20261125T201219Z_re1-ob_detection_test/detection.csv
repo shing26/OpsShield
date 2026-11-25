@@ -15,7 +15,7 @@ re1ob_cartservice_delay_4,cartservice,,,False,False,10,14,1,14
 re1ob_cartservice_delay_5,cartservice,,,False,False,11,14,1,14
 re1ob_cartservice_disk_4,cartservice,1702363732,34,True,False,1,1,2,2
 re1ob_cartservice_disk_5,cartservice,1702364504,35,True,False,1,1,1,1
-re1ob_cartservice_loss_4,cartservice,1692642408,-151,False,True,2,7,1,1
+re1ob_cartservice_loss_4,cartservice,1692642408,-151,False,True,2,14,1,14
 re1ob_cartservice_loss_5,cartservice,,,False,False,1,14,2,14
 re1ob_cartservice_mem_4,cartservice,1685286180,17,True,False,1,1,2,3
 re1ob_cartservice_mem_5,cartservice,1685290514,6,True,False,1,1,1,2
@@ -48,4 +48,4 @@ re1ob_productcatalogservice_disk_5,productcatalogservice,1702377041,36,True,Fals
 re1ob_productcatalogservice_loss_4,productcatalogservice,1692667870,5,True,False,10,10,3,3
 re1ob_productcatalogservice_loss_5,productcatalogservice,,,False,False,6,14,6,14
 re1ob_productcatalogservice_mem_4,productcatalogservice,1685396167,13,True,False,1,1,1,2
-re1ob_productcatalogservice_mem_5,productcatalogservice,1685399986,-509,False,True,1,1,1,7
+re1ob_productcatalogservice_mem_5,productcatalogservice,1685399986,-509,False,True,1,15,1,15

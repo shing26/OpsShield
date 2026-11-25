@@ -99,6 +99,26 @@ class ThreeSigmaRanker:
         return _collapse(scores)
 
 
+class MadZRanker:
+    """契约字面要求的 robust-z（MAD）：1.4826 × 中位绝对偏差，取窗口最大有符号 z。"""
+
+    name = "mad-z"
+
+    def rank(self, case: Case, candidates: Sequence[str], seed: int) -> list[str]:
+        normal, faulty = _prepared(case)
+        scores: dict[str, float] = {}
+        for column in normal.columns:
+            base = normal[column].to_numpy(dtype=float)
+            current = faulty[column].to_numpy(dtype=float)
+            if not len(base) or not len(current):
+                continue
+            median = float(np.median(base))
+            mad = 1.4826 * float(np.median(np.abs(base - median)))
+            scale = mad if mad > 0 else 1.0
+            scores[column] = float(np.max((current - median) / scale))
+        return _collapse(scores)
+
+
 class StaticThresholdRanker:
     """阈值告警基线：只看 SLI（error / latency）是否越过正常窗基线。
 
@@ -211,6 +231,7 @@ class TopoFirstRanker:
 METHODS: dict[str, Ranker] = {
     RandomRanker.name: RandomRanker(),
     BaroRanker.name: BaroRanker(),
+    MadZRanker.name: MadZRanker(),
     ThreeSigmaRanker.name: ThreeSigmaRanker(),
     StaticThresholdRanker.name: StaticThresholdRanker(),
     TopoFirstRanker.name: TopoFirstRanker(),
