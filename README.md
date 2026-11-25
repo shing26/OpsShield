@@ -12,7 +12,7 @@
   <a href="https://openjdk.org/"><img src="https://img.shields.io/badge/Java-21-ED8B00?style=flat&amp;logo=openjdk&amp;logoColor=white" alt="Java 21"></a>
   <a href="https://spring.io/projects/spring-boot"><img src="https://img.shields.io/badge/Spring_Boot-4.1.2-6DB33F?style=flat&amp;logo=springboot&amp;logoColor=white" alt="Spring Boot 4.1.2"></a>
   <br>
-  <a href="#-测试体系与安全回归测试"><img src="https://img.shields.io/badge/Java_Tests-587_Passed-4CAF50?style=flat&amp;logo=openjdk&amp;logoColor=white" alt="Java Tests: 587 passed"></a>
+  <a href="#-测试体系与安全回归测试"><img src="https://img.shields.io/badge/Java_Tests-601_Passed-4CAF50?style=flat&amp;logo=openjdk&amp;logoColor=white" alt="Java Tests: 601 passed"></a>
   <a href="#-测试体系与安全回归测试"><img src="https://img.shields.io/badge/Probes-635_Passed-3776AB?style=flat&amp;logo=python&amp;logoColor=white" alt="Python Probes: 635 passed"></a>
   <a href="docs/benchmark.md"><img src="https://img.shields.io/badge/Benchmark-Regression_Gated-4CAF50?style=flat&amp;logo=githubactions&amp;logoColor=white" alt="Benchmark: regression gated"></a>
   <a href="https://prometheus.io/"><img src="https://img.shields.io/badge/Metrics-Micrometer_%7C_Prometheus-498BA3?style=flat&amp;logo=prometheus&amp;logoColor=white" alt="Metrics: Micrometer and Prometheus"></a>
@@ -386,7 +386,7 @@ OpsShield 把"系统活着"做成了结构化的入口矩阵（默认端口 `808
 * **Java 601 单测**（`mvn test` 实跑全绿）：并发合并、状态机无损跃迁、AST 词法解析、双出口指标一致性、覆盖范围聚合、内存存储后端与身份过滤的跨后端对照、事故单租户隔离与分配权限、转交原子性与 append-only 历史、服务端「我的」筛选、SLA 派生与扫描跃迁幂等、事故单历史键集分页与游标筛选绑定、评论追加语义与并发不丢话、200 条上限的行锁并发判据、服务端 @ 解析与租户边界、通知与事故单变更同事务/回滚零通知/去重冲突/收件人与已读幂等、标题不回退 query、webhook 超时与有界队列、未过期/已过期/未标注判定边界与旧缓存快照回放；
 * **Python 635 条 test 函数**（`pytest offline/tests/`；参数化展开后执行例数更多）：含 `action_contract_probe.py` 的 **AC-1..AC-9 九组形式化不变式**——帧形状 / 逐字性 / 契约⊆引用闭包 / 段名闸 / 红线绊线 / 回放一致性 / 租户围栏 / 指标单调 / 反假绿覆盖；以及 `preset_probe.py` 的 **P-1..P-3 三组**——左栏预设与页面同源、预设形状（不锁产额）、覆盖范围与语料逐项相等；通知面板的铃铛/角标/30s 轮询/聚焦刷新/既有存储键不变由 `test_console_contract.py` 静态钉住；语料重建只加 `doc_digest`/`reviewed_at` 两个键由 `test_chunk_provenance_fields.py` 钉住；
 * **安全回归测试**：契约探针 5 路（段名闸恒真、逐字恒真、红线恒空、闭包前置 None、AC-7 租户恒真——每条都有"改坏后 N failed / 复原后全绿"的实测记录）；文档门闩另有 A/B/C 三路（改文档数字、改产物、改写措辞，各须红）；
-* **CI 全部 job**（java / static-gate / panel-contract / provenance / python / shell / security / sbom / smoke / benchmark / redteam）零 key 零中间件可跑；`doc_numbers` 门闩现算比对 **33 条文档数字 / 49 处引用**，数字与产物分叉即 CI 红；评测报告与语料的同代性用内容摘要钉死（`provenance`，不用 checkout 会刷平的 mtime）；对外面用词由 `check_public_copy` 钉住（内部 canonical 词不得漏到本 README 与页面文案，词表从 `docs/CONTEXT.md` 现取）。
+* **CI 全部 job**（java / static-gate / panel-contract / provenance / python / shell / security / sbom / smoke / benchmark / redteam）零 key 零中间件可跑；`doc_numbers` 门闩现算比对 **33 条文档数字 / 52 处引用**，数字与产物分叉即 CI 红；评测报告与语料的同代性用内容摘要钉死（`provenance`，不用 checkout 会刷平的 mtime）；对外面用词由 `check_public_copy` 钉住（内部 canonical 词不得漏到本 README 与页面文案，词表从 `docs/CONTEXT.md` 现取）。
 
 <details>
 <summary><b>评测与压测：复现命令</b>（需活体栈 + 活体 key；数字底稿即各自产物）</summary>
