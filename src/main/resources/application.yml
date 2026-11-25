@@ -104,6 +104,10 @@ opspilot:
   alert:
     retention-days: ${ALERT_RETENTION_DAYS:30}
     max-per-tenant: ${ALERT_MAX_PER_TENANT:500}
+  # ADR-0039 引用时效：reviewed_at 距今天数超过阈值判 stale；缺失/非法/未来一律 unknown。
+  # 只在 Ref 生成时计算一次，随载荷缓存（快照语义，回放不重算）。
+  citation:
+    stale-after-days: ${CITATION_STALE_AFTER_DAYS:180}
   storage:
     # live=真中间件（缺则启动失败，与历史行为一致）| memory=内存实现，零外部依赖（ADR-0022）。
     # **不自动回退**：探不到中间件只打印一条可执行的提示，然后照常失败——配置期事实不该

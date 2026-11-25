@@ -25,6 +25,7 @@ import com.opspilot.resilience.DegradationState.Level;
 import com.opspilot.resilience.QuotaService;
 import com.opspilot.resilience.SopFallbackService;
 import com.opspilot.retrieval.HybridSearchService;
+import com.opspilot.retrieval.CitationFreshness;
 import com.opspilot.retrieval.ScoredChunk;
 import com.opspilot.retrieval.SearchOutcome;
 import com.opspilot.storm.FingerprintService;
@@ -32,6 +33,8 @@ import com.opspilot.storm.SingleFlight;
 import com.opspilot.storm.SlidingWindow;
 import java.util.ArrayList;
 import java.util.List;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -424,8 +427,12 @@ public class ChatOrchestrator {
         metrics.llmCall();
         AtomicLong firstTokenNano = new AtomicLong(0);
         List<AnswerPayload.Ref> refs = new ArrayList<>();
+        LocalDate today = LocalDate.now(ZoneOffset.UTC);
+        int staleAfterDays = props.citation().staleAfterDays();
         for (ScoredChunk c : chunks) {
-            refs.add(new AnswerPayload.Ref(c.chunkId(), c.breadcrumb(), c.service()));
+            refs.add(new AnswerPayload.Ref(c.chunkId(), c.breadcrumb(), c.service(),
+                    c.docId(), c.docDigest(), c.reviewedAt(),
+                    CitationFreshness.classify(c.reviewedAt(), today, staleAfterDays)));
         }
         VerbatimStreamFilter guard = new VerbatimStreamFilter(
                 chunks.stream().map(ScoredChunk::text).toList(),

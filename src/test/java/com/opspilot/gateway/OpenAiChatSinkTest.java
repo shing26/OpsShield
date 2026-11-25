@@ -61,6 +61,27 @@ class OpenAiChatSinkTest {
         assertEquals("[DONE]", em.frames.get(4));
     }
 
+    /** S3 AC9：OpenAI 面在正文里带出版本身份与时效，缺失时明写"版本未知"。 */
+    @Test
+    void refsRenderDocVersionIdentity() {
+        Capturing em = new Capturing();
+        OpenAiChatSink sink = new OpenAiChatSink(em, "opspilot");
+        sink.delta("答");
+        sink.deliver(completed("答", List.of(
+                new AnswerPayload.Ref("rb-001::x", "订单超时手册", "order-service",
+                        "rb-001", "a1b2c3d4e5f6", "2026-09-16", "fresh"),
+                new AnswerPayload.Ref("rb-002::y", "死锁手册", "order-service",
+                        "rb-002", "ffffffffffff", "2025-01-01", "stale"),
+                new AnswerPayload.Ref("rb-003::z", "未知版本", "order-service",
+                        "rb-003", null, null, "unknown")), List.of()));
+
+        String body = em.frames.get(1);
+        assertTrue(body.contains("[1] 订单超时手册 · order-service · 文档 rb-001@a1b2c3d4e5f6（未过期：2026-09-16）"), body);
+        assertTrue(body.contains("[2] 死锁手册 · order-service · 文档 rb-002@ffffffffffff（已过期：2025-01-01）"), body);
+        assertTrue(body.contains("[3] 未知版本 · order-service · 文档 rb-003（版本未知）（审查日期未标注）"),
+                "缺失摘要必须明写版本未知，不能留空占位；实际正文：" + body);
+    }
+
     @Test
     void doneAndFailFastFrames() {
         Capturing em = new Capturing();

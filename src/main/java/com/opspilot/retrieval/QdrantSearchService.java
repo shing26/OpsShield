@@ -92,10 +92,17 @@ public class QdrantSearchService implements RetrievalLeg {
                 str(pl.get("text")), str(pl.get("breadcrumb")),
                 str(mf.get("service")), codes,
                 mf.get("auth_level") == null ? 1 : (int) mf.get("auth_level").getIntegerValue(),
+                blankToNull(str(mf.get("doc_digest"))),
+                blankToNull(str(mf.get("reviewed_at"))),
                 new ScoredChunk.Scores(0, p.getScore(), 0, 0));
     }
 
     private static String str(io.qdrant.client.grpc.JsonWithInt.Value v) {
         return v == null ? "" : v.getStringValue();
+    }
+
+    /** Qdrant 写入侧把 null 落成空串：回读统一归一回 null（与 ES 侧同口径）。 */
+    private static String blankToNull(String s) {
+        return s == null || s.isBlank() ? null : s;
     }
 }

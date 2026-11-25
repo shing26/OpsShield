@@ -41,7 +41,8 @@ public class InMemoryIndex {
                     c.chunkId(), c.docId(), c.type(), c.text(), c.breadcrumb(),
                     m.service() == null ? "" : m.service(),
                     m.errorCodes() == null ? List.of() : m.errorCodes(),
-                    m.authLevel(), new ScoredChunk.Scores(0, 0, 0, 0));
+                    m.authLevel(), m.docDigest(), m.reviewedAt(),
+                    new ScoredChunk.Scores(0, 0, 0, 0));
             fresh.add(new Doc(sc, m.tenant(), m.actionClass(),
                     vectors != null && i < vectors.size() ? vectors.get(i) : null));
         }

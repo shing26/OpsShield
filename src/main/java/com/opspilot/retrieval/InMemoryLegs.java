@@ -59,7 +59,7 @@ final class InMemoryLexicalLeg implements RetrievalLeg {
 
             if (score > 0) {
                 out.add(new ScoredChunk(c.chunkId(), c.docId(), c.type(), c.text(), c.breadcrumb(),
-                        c.service(), c.errorCodes(), c.authLevel(),
+                        c.service(), c.errorCodes(), c.authLevel(), c.docDigest(), c.reviewedAt(),
                         new ScoredChunk.Scores(score, 0, 0, 0)));
             }
         }
@@ -90,7 +90,7 @@ final class InMemoryVectorLeg implements RetrievalLeg {
             if (cos <= 0) continue;
             ScoredChunk c = d.chunk();
             out.add(new ScoredChunk(c.chunkId(), c.docId(), c.type(), c.text(), c.breadcrumb(),
-                    c.service(), c.errorCodes(), c.authLevel(),
+                    c.service(), c.errorCodes(), c.authLevel(), c.docDigest(), c.reviewedAt(),
                     new ScoredChunk.Scores(0, cos, 0, 0)));
         }
         out.sort(Comparator.comparingDouble(ScoredChunk::vectorScore).reversed());

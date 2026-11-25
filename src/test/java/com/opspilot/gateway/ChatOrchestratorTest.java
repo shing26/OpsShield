@@ -685,6 +685,50 @@ class ChatOrchestratorTest {
         assertTrue(sink.answer.toString().contains("老答案"), "回放文本不受影响");
         assertEquals(1, sink.refs.size(), "老载荷的 refs 原样回放");
         assertEquals(List.of(), sink.actions, "老载荷没有行动契约：回放为空表而非 NPE");
+        assertEquals("unknown", sink.refs.get(0).staleness(), "旧载荷缺新字段 → 回落 unknown");
+    }
+
+    /** S3 AC6/AC7：引用必须带出文档身份、版本、审查日期与时效。 */
+    @Test
+    void refsCarryDocVersionAndStaleness() throws Exception {
+        llmGate.countDown();
+        ScoredChunk c = new ScoredChunk("rb-001::s1", "rb-001", "runbook", "正文", "手册 > 步骤", "svc",
+                List.of(), 3, "a1b2c3d4e5f6", "2000-01-01",
+                new ScoredChunk.Scores(1, 1, 1, 1));
+        when(searchService.search(anyString(), eq("tenant-internal"), anyInt(), anyString()))
+                .thenReturn(new SearchOutcome(List.of(c), "hybrid", true, false, 1.0, 5, LEGS));
+
+        RecordingSink sink = new RecordingSink();
+        orchestrator.submit(req(q()), INTERNAL, sink, "sse");
+        awaitSuccess(sink);
+
+        AnswerPayload.Ref r = sink.refs.get(0);
+        assertEquals("rb-001", r.docId());
+        assertEquals("a1b2c3d4e5f6", r.docDigest());
+        assertEquals("2000-01-01", r.reviewedAt());
+        assertEquals("stale", r.staleness(), "2000-01-01 在任何运行日期都已过期");
+    }
+
+    /**
+     * S3 AC8：回放不重算时效。
+     *
+     * <p>载荷里刻意写 {@code reviewedAt=2000-01-01, staleness=fresh}——若回放路径重算，
+     * 结果必然变成 stale；只有"原样回放快照"才会保持 fresh。这条用例就是快照语义的变异锁。
+     */
+    @Test
+    void cachedPayloadKeepsCitationStalenessSnapshot() throws Exception {
+        String json = "{\"answer\":\"老答案\",\"refs\":[{\"chunkId\":\"rb-001::s1\","
+                + "\"breadcrumb\":\"b\",\"service\":\"svc\",\"docId\":\"rb-001\","
+                + "\"docDigest\":\"a1b2c3d4e5f6\",\"reviewedAt\":\"2000-01-01\","
+                + "\"staleness\":\"fresh\"}],\"actions\":[],\"mode\":\"hybrid\",\"fastPath\":false,"
+                + "\"maxAuthLevel\":3,\"tenant\":\"tenant-internal\",\"refused\":false,\"nearMiss\":[]}";
+        RecordingSink sink = new RecordingSink();
+        orchestrator.replay(sink, json, "L1", false, "fp-snapshot", System.nanoTime(),
+                INTERNAL, q(), "sse", "manual");
+        awaitSuccess(sink);
+
+        assertEquals("fresh", sink.refs.get(0).staleness(),
+                "回放必须保持产生答案时的快照，不得按今天重算成 stale");
     }
 
     /**

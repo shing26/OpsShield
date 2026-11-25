@@ -108,8 +108,8 @@ public class OpenAiChatSink implements ChatSink {
         List<AnswerPayload.Ref> refs = payload.refs();
         if (refs != null && !refs.isEmpty()) {
             StringBuilder sb = new StringBuilder("\n\n## 参考来源\n");
-            for (AnswerPayload.Ref r : refs) {
-                sb.append("- ").append(r.breadcrumb()).append("（").append(r.service()).append("）\n");
+            for (int i = 0; i < refs.size(); i++) {
+                sb.append(refLine(i + 1, refs.get(i)));
             }
             send(Chunk.delta(requestId, model, null, sb.toString()));
         }
@@ -124,14 +124,41 @@ public class OpenAiChatSink implements ChatSink {
         sb.append(actionMarkdown(actions));
         if (refs != null && !refs.isEmpty()) {
             sb.append("\n\n## 参考来源\n");
-            for (AnswerPayload.Ref r : refs) {
-                sb.append("- ").append(r.breadcrumb()).append("（").append(r.service()).append("）\n");
+            for (int i = 0; i < refs.size(); i++) {
+                sb.append(refLine(i + 1, refs.get(i)));
             }
         }
         sb.append("\n\n【系统提示】本轮回答因网关内部异常中断，请稍后重试或联系值班 SRE。");
         send(Chunk.delta(requestId, model, null, sb.toString()));
         send(Chunk.stop(requestId, model));
         sendDone();
+    }
+
+    /**
+     * 引用行（ADR-0039）：OpenAI 面没有结构化帧位，版本身份只能进正文。
+     * 固定形状 `[n] 面包屑 · 服务 · 文档 id@摘要（时效）`，缺失时明写"版本未知"，
+     * 不留空占位——外部客户端无法区分"空"与"没这个字段"。
+     */
+    static String refLine(int index, AnswerPayload.Ref r) {
+        StringBuilder line = new StringBuilder("[").append(index).append("] ")
+                .append(r.breadcrumb() == null ? "" : r.breadcrumb())
+                .append(" · ").append(r.service() == null ? "" : r.service());
+        if (r.docId() != null && !r.docId().isBlank()) {
+            line.append(" · 文档 ").append(r.docId());
+            if (r.docDigest() != null && !r.docDigest().isBlank()) {
+                line.append("@").append(r.docDigest());
+            } else {
+                line.append("（版本未知）");
+            }
+        }
+        if ("stale".equals(r.staleness())) {
+            line.append("（已过期：").append(r.reviewedAt()).append("）");
+        } else if ("fresh".equals(r.staleness())) {
+            line.append("（未过期：").append(r.reviewedAt()).append("）");
+        } else {
+            line.append("（审查日期未标注）");
+        }
+        return line.append("\n").toString();
     }
 
     /** 只读行动契约 → 正文 markdown（OpenAI 面没有结构化帧位，与 refs 同思路降级渲染）。 */
