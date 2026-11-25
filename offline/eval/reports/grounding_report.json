@@ -1,5 +1,5 @@
 {
-  "measured_at": "2026-11-19T02:11:32+08:00",
+  "measured_at": "2026-11-26T04:02:34+08:00",
   "produced_by": "offline/qa_gen_quality_probes.py（V9，复用 V2/V4 已产出答案，零额外 chat 预算）",
   "answers": 11,
   "codes_total": 21,
@@ -7,11 +7,11 @@
   "grounding_rate": 1.0,
   "ungrounded_samples": [],
   "backend": {
-    "llm": "mock-template",
+    "rerank": "mock-idf-coverage",
     "embedding": "mock-lexical-hash",
-    "rerank": "mock-idf-coverage"
+    "llm": "mock-template"
   },
-  "chunks_sha256": "e1a873afb729efd4f504ed31eaa3df1a09dd02bb1a458096d8fef9914ecf6bae",
+  "chunks_sha256": "bd17b9a430566dbbfc804adfa7ecd34ecab52f193307b6f65df42457cfeb6a89",
   "chunks_lines": 459,
   "chat_calls_this_run": 11,
   "judge": "offline/grounding.py——答案里出现的错误码必须落在本轮 refs 的 error_codes 并集内",

@@ -13,6 +13,13 @@
 > 会把它与 chunker 现算结果逐字节比对；chunker 加字段后必须同批重建。
 > 故把该文件补入 Allowed paths，并把 AC4 的「只加字段」比对扩展到它（43 条）。
 > 该文件不属于 `PROVENANCE.json` 的登记面；正文/文档身份/错误码逐字不变。
+>
+> **2026-11-26 契约补正 2（CI 发现，待随实现一并追认）**：
+> CI 的 `provenance` job 还有第二道同代门闩 `eval/answer_eval.py --check`——
+> `offline/eval/reports/grounding_report.json` 的 `chunks_sha256` 必须等于
+> `PROVENANCE.json` 的 `chunks.sha256`。语料重建后必须同批重跑 V9 探针
+> （`qa_gen_quality_probes.py V2 V4 V9`，memory + mock 栈）重生成该报告，否则 CI 必红。
+> 故把该报告补入 Allowed paths；只允许由探针产出，不得手改摘要，也不得改 `answer_eval.py` 判据。
 
 ## Task ID
 
@@ -78,6 +85,7 @@ offline/chunkers/build_chunks.py
 offline/corpus/chunks.jsonl
 offline/domains/dba/corpus/chunks.jsonl
 offline/eval/reports/PROVENANCE.json
+offline/eval/reports/grounding_report.json
 offline/tests/test_doc_digest.py
 offline/tests/test_chunk_provenance_fields.py
 offline/tests/test_console_contract.py
@@ -160,6 +168,7 @@ E:/java/apache-maven-3.9.14/bin/mvn.cmd -o test
 E:/Git/bin/bash.exe scripts/check_panel_contract.sh
 offline/.venv/Scripts/python.exe -m pytest offline/tests -q
 offline/.venv/Scripts/python.exe offline/provenance.py --check
+cd offline && "D:/OpsPilot — AIOps/offline/.venv/Scripts/python.exe" eval/answer_eval.py --check
 offline/.venv/Scripts/python.exe offline/doc_numbers.py --check
 offline/.venv/Scripts/python.exe scripts/check_public_copy.py --check
 ```
