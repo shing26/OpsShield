@@ -141,6 +141,10 @@
           padding:9px;font-size:12px;font-weight:600}
   .newbtn:hover{background:#f2ede2;color:var(--on-accent)}
   .inc-list{display:flex;flex-direction:column;gap:2px;min-height:80px}
+  .inc-more{margin-top:6px;width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;
+            background:transparent;color:var(--muted);font-size:11.5px;line-height:1.5;cursor:pointer}
+  .inc-more:hover:not(:disabled){color:var(--txt);border-color:var(--muted)}
+  .inc-more:disabled{cursor:default;color:var(--muted)}
   .li-hd{font-size:10px;color:var(--muted);letter-spacing:.35px;padding:8px 4px 2px}
   .inc{display:block;width:100%;text-align:left;background:transparent;border:1px solid transparent;
        border-radius:9px;padding:9px 10px;color:inherit;position:relative}
@@ -750,6 +754,7 @@
     </div>
     <button type="button" class="newbtn" data-act="newinc">＋ 新建事故单</button>
     <div id="incList" class="inc-list"></div>
+    <button type="button" class="inc-more" id="incMore" data-act="loadmore" hidden>加载更多</button>
     <div class="rail-foot">
       <div id="covbox"></div>
       <div class="note">事故单与诊断快照保存在网关（按租户隔离）；本页只记住当前选中的事故单。</div>
@@ -945,6 +950,8 @@ const S = {
   coverage: null, covErr: null, covOpen: false,
   a: side('sre-full'), b: side('sre-limited'),
   incidents: [], activeId: null, filter: 'open', search: '',
+  incidentCursor: null, incidentHasMore: false, incidentOpenCount: 0,
+  incidentLoadingMore: false, incidentRequestSeq: 0, localIncidents: new Map(),
   comments: [], commentsFor: null, commentDraft: {}, commentBusy: false, assignees: null,
   alerts: [], alertMeta: null, alertTruncated: false,
   notifications: [], notifyUnread: 0, notifyHidden: false,
@@ -1092,27 +1099,61 @@ async function incidentApi(method, path, body) {
   if (resp.status === 401) {
     dropToken('a', '401 · token 失效，重新接入');
     showAuth('401 · token 失效，重新接入');
-    throw new Error('401 · token 失效');
+    const err = new Error('401 · token 失效');
+    err.status = 401;
+    throw err;
   }
-  if (!resp.ok) throw new Error(await httpErrText(resp));
+  if (!resp.ok) {
+    const err = new Error(await httpErrText(resp));
+    err.status = resp.status;
+    throw err;
+  }
   return resp.status === 204 ? null : resp.json();
 }
 
-/** 登录后从服务端拉事故单；这是唯一的读取入口，浏览器不再保存业务数据。 */
+/** 服务端分页的筛选参数：进行中/已结束走 status=，我的走 mine=true。 */
+function incidentFilterQuery(filter, cursor) {
+  const p = new URLSearchParams();
+  if (filter === 'mine') p.set('mine', 'true');
+  if (filter === 'open') p.set('status', 'open');
+  if (filter === 'closed') p.set('status', 'closed');
+  if (cursor) p.set('cursor', cursor);
+  return p.toString();
+}
+
+function incidentRowShape(x) {
+  return Object.assign({}, x, {
+    diagnosis: x.diagnosis || null,
+    timeline: Array.isArray(x.timeline) ? x.timeline : []
+  });
+}
+
+/** 本地行（新建竞态、通知回填）也遵守当前服务端筛选口径，避免串视图。 */
+function incidentMatchesFilter(inc) {
+  if (!inc) return false;
+  if (S.filter === 'open' && inc.status === 'closed') return false;
+  if (S.filter === 'closed' && inc.status !== 'closed') return false;
+  if (S.filter === 'mine' && inc.owner !== (S.a.tokenUser || S.a.user)) return false;
+  return true;
+}
+
+/** 登录后从服务端拉第一页；这是唯一的读取入口，浏览器不再保存业务数据。 */
 async function refreshIncidents() {
-  if (!S.a.token) { S.incidents = []; return false; }
+  S.incidentCursor = null;
+  S.incidentHasMore = false;
+  const requestSeq = ++S.incidentRequestSeq;
+  if (!S.a.token) { S.incidents = []; S.incidentOpenCount = 0; return false; }
   const token = S.a.token;
-  // 「我的」是服务端筛选（owner = 调用者 sub），不是把本租户列表在前端过滤一遍。
-  const mine = S.filter === 'mine';
+  const requestFilter = S.filter;
   try {
-    const data = await incidentApi('GET',
-      '/api/v1/copilot/incidents' + (mine ? '?mine=true' : ''));
-    // 登录/切换身份可能发生在这个请求飞行途中；旧身份的响应绝不能落进新身份的列表。
-    if (S.a.token !== token) return false;
-    const serverRows = (data.incidents || []).map(x => Object.assign({}, x, {
-      diagnosis: x.diagnosis || null,
-      timeline: Array.isArray(x.timeline) ? x.timeline : []
-    }));
+    const qs = incidentFilterQuery(requestFilter, null);
+    const data = await incidentApi('GET', '/api/v1/copilot/incidents' + (qs ? '?' + qs : ''));
+    // 登录/切换身份/切换筛选可能发生在这个请求飞行途中；旧响应绝不能落进新视图。
+    if (S.a.token !== token || S.filter !== requestFilter || requestSeq !== S.incidentRequestSeq) {
+      return false;
+    }
+    const serverRows = (data.incidents || []).map(incidentRowShape);
+    const serverIds = new Set(serverRows.map(x => x.id));
     // 刷新可能晚于"新建/诊断"：保留本地更新更晚的记录，避免旧响应把刚写的内容顶掉。
     const merged = serverRows.map(row => {
       const local = S.incidents.find(x => x && x.id === row.id);
@@ -1120,15 +1161,20 @@ async function refreshIncidents() {
       const serverAt = Date.parse(row.updatedAt || '');
       return Number.isFinite(localAt) && (!Number.isFinite(serverAt) || localAt > serverAt) ? local : row;
     });
-    // mine=true 时禁用 localOnly 回填：刚被转交出去的单已不属于调用者，
-    // 用本地缓存把它塞回来会让「我的」筛选形同虚设（ADR-0033 的回归判据）。
-    const localOnly = S.incidents.filter(x => x && x.id &&
-      !serverRows.some(y => y.id === x.id));
-    S.incidents = mine ? merged.slice(0, 60) : localOnly.concat(merged).slice(0, 60);
+    // 只回填「本地新建但首页竞态未包含」的行；上一页缓存不得被重新拼回第一页。
+    // mine=true 时禁用回填：刚被转交出去的单不属于调用者（ADR-0033 回归判据）。
+    const localOnly = [];
+    S.localIncidents.forEach((row, id) => {
+      if (serverIds.has(id)) { S.localIncidents.delete(id); return; }
+      if (S.filter !== 'mine' && incidentMatchesFilter(row)) localOnly.push(row);
+    });
+    S.incidents = localOnly.concat(merged).slice(0, 1000);
+    S.incidentCursor = data.nextCursor || null;
+    S.incidentHasMore = !!data.hasMore;
+    S.incidentOpenCount = Number(data.openCount) || 0;
     const keep = S.activeId && findIncident(S.activeId);
     const inc = keep || S.incidents[0] || null;
     S.activeId = inc ? inc.id : null;
-    if (inc && inc.status === 'closed' && S.filter === 'open') S.filter = 'closed';
     S.a.r = inc ? (inc.diagnosis || null) : null;
     if (inc) { try { localStorage.setItem(ACTIVE_KEY, inc.id); } catch (e) { /* 非致命 */ } }
     // 评论与事故单列表分开拉取：列表只带 lastCommentId 水位，正文只在当前单上读。
@@ -1137,6 +1183,44 @@ async function refreshIncidents() {
   } catch (e) {
     toast('事故单列表加载失败：' + e.message, 'err');
     return false;
+  }
+}
+
+/** 追加下一页：按 id 去重，不重排服务端页顺序，也不动当前选中的事故单。 */
+async function loadMoreIncidents() {
+  if (!S.a.token || !S.incidentCursor || S.incidentLoadingMore) return;
+  if (S.incidents.length >= 1000) return;
+  const token = S.a.token;
+  const requestFilter = S.filter;
+  const requestCursor = S.incidentCursor;
+  const requestSeq = S.incidentRequestSeq;
+  S.incidentLoadingMore = true;
+  renderIncidentMore();
+  try {
+    const data = await incidentApi('GET',
+      '/api/v1/copilot/incidents?' + incidentFilterQuery(requestFilter, requestCursor));
+    // 翻页期间切换筛选/刷新过：这一页属于旧游标，直接丢弃，不能追加到新视图。
+    if (S.a.token !== token || S.filter !== requestFilter
+        || S.incidentCursor !== requestCursor || requestSeq !== S.incidentRequestSeq) {
+      return;
+    }
+    const known = new Set(S.incidents.map(x => x && x.id));
+    for (const row of (data.incidents || []).map(incidentRowShape)) {
+      if (S.incidents.length >= 1000) break;
+      if (known.has(row.id)) continue;
+      S.incidents.push(row);
+      known.add(row.id);
+    }
+    S.incidentCursor = data.nextCursor || null;
+    S.incidentHasMore = !!data.hasMore;
+    const openCount = Number(data.openCount);
+    if (Number.isFinite(openCount)) S.incidentOpenCount = openCount;
+    renderIncidentList();
+  } catch (e) {
+    toast('加载更多失败：' + e.message, 'err');
+  } finally {
+    S.incidentLoadingMore = false;
+    renderIncidentMore();
   }
 }
 
@@ -1265,7 +1349,8 @@ async function openNotification(id, incidentId) {
     if (!(e && e.notFound)) toast('标记已读失败：' + e.message, 'warn');
   }
   await refreshNotifications();
-  await focusIncidentById(incidentId);
+  const outcome = await focusIncidentById(incidentId);
+  if (outcome === 'not_found') toast('事故单加载失败：HTTP 404 · 事故单不存在或已不可见', 'warn');
 }
 
 async function focusIncidentById(id) {
@@ -1275,15 +1360,17 @@ async function focusIncidentById(id) {
       inc = await incidentApi('GET', '/api/v1/copilot/incidents/' + encodeURIComponent(id));
       inc.diagnosis = inc.diagnosis || null;
       inc.timeline = Array.isArray(inc.timeline) ? inc.timeline : [];
-      S.incidents.unshift(inc);
-      if (S.incidents.length > 60) S.incidents.length = 60;
+      // 单条回填按 id 去重；不动 nextCursor/hasMore，避免把分页状态打回第一页。
+      S.incidents = [inc].concat(S.incidents.filter(x => !x || x.id !== inc.id)).slice(0, 1000);
     } catch (e) {
+      if (e && e.status === 404) return 'not_found';
       toast('事故单加载失败：' + e.message, 'err');
-      return;
+      return 'error';
     }
   }
   setView('trouble');
   selectIncident(inc.id);
+  return 'ok';
 }
 
 /* ==================== 评论（ADR-0034） ==================== */
@@ -1508,8 +1595,8 @@ async function createIncident(data) {
   }
   inc.diagnosis = inc.diagnosis || null;
   inc.timeline = Array.isArray(inc.timeline) ? inc.timeline : [];
-  S.incidents.unshift(inc);
-  if (S.incidents.length > 60) S.incidents.length = 60;
+  S.incidents = [inc].concat(S.incidents.filter(x => !x || x.id !== inc.id)).slice(0, 1000);
+  S.localIncidents.set(inc.id, inc);
   S.activeId = inc.id;
   try { localStorage.setItem(ACTIVE_KEY, inc.id); } catch (e) { /* 非致命 */ }
   S.a.r = null;
@@ -1587,7 +1674,8 @@ async function login(k) {
       if (k === 'a') {
         S.platform = null;
         // 切换账号时先丢掉上一身份的事故单缓存（含 activeId），再由服务端按新 token 重新拉取。
-        S.incidents = []; S.activeId = null;
+        S.incidents = []; S.activeId = null; S.localIncidents.clear();
+        S.incidentCursor = null; S.incidentHasMore = false; S.incidentOpenCount = 0;
         S.alerts = []; S.alertMeta = null; S.alertTruncated = false; alertSince = 0;
         // 评论正文、已读水位与 @ 候选都带租户边界：换身份必须整块失效，防止旧租户名字漏进补全。
         S.comments = []; S.commentsFor = null; S.commentDraft = {}; S.assignees = null;
@@ -2388,33 +2476,30 @@ function incidentItem(inc) {
     + (inc.owner ? '<span>·</span><span>' + esc(inc.owner) + '</span>' : '') + '</div></button>';
 }
 
-/** 左栏排序（ADR-0033）：先按 SLA 紧迫度，再按最近更新；已结单不抢占前排。 */
-function slaRank(inc) {
-  if (inc.status === 'closed') return 2;
-  if (inc.slaState === 'breached') return 0;
-  if (inc.slaState === 'due_soon') return 1;
-  return 2;
-}
-
+/**
+ * 顺序的唯一事实源是服务端（ADR-0038）：这里只按返回顺序渲染，绝不二次排序。
+ * 加载更多是追加，不是重算——否则追加页会在视觉上乱跳。
+ */
 function renderIncidentList() {
   const box = $('incList');
   if (!box) return;
   const q = S.search.trim().toLowerCase();
-  let list = S.incidents.slice().sort((a, b) =>
-    slaRank(a) - slaRank(b)
-    || String(b.updatedAt || b.createdAt).localeCompare(String(a.updatedAt || a.createdAt)));
-  if (S.filter === 'open') list = list.filter(x => x.status !== 'closed');
-  if (S.filter === 'closed') list = list.filter(x => x.status === 'closed');
+  let list = S.incidents.filter(incidentMatchesFilter);
   if (q) {
     list = list.filter(x => [x.title, x.query, x.service, x.errorCode, x.alertId]
       .filter(Boolean).join(' ').toLowerCase().includes(q));
   }
   if (!list.length) {
-    const msg = S.incidents.length
-      ? '没有匹配的事故单。换个关键词，或切到「全部」。'
-      : (S.a.token
-          ? '本租户还没有事故单。发起一次诊断会自动建立事故单，或点上方「新建事故单」。'
-          : '接入身份后加载本租户事故单；事故单保存在服务端，换设备也能看到。');
+    let msg;
+    if (!S.a.token) {
+      msg = '接入身份后加载本租户事故单；事故单保存在服务端，换设备也能看到。';
+    } else if (!S.incidents.length && !q) {
+      msg = S.filter === 'all' && S.incidentOpenCount === 0
+        ? '本租户还没有事故单。发起一次诊断会自动建立事故单，或点上方「新建事故单」。'
+        : '本租户没有符合当前筛选的事故单。切到「全部」查看历史。';
+    } else {
+      msg = '已加载的页里没有匹配的事故单。换个关键词，或点下方「加载更多」。';
+    }
     box.innerHTML = '<div class="rail-empty">' + msg + '</div>';
   } else {
     let h = '', last = '';
@@ -2425,10 +2510,31 @@ function renderIncidentList() {
     }
     box.innerHTML = h;
   }
-  const open = S.incidents.filter(x => x.status !== 'closed').length;
-  $('incCount').textContent = open + ' 进行中';
+  // 顶栏计数是全租户进行中总数（openCount），不是已加载数组里的进行中。
+  $('incCount').textContent = S.incidentOpenCount + ' 进行中';
   document.querySelectorAll('#incFilter button').forEach(b =>
     b.classList.toggle('on', b.dataset.filter === S.filter));
+  renderIncidentMore();
+}
+
+function renderIncidentMore() {
+  const btn = $('incMore');
+  if (!btn) return;
+  if (S.incidents.length >= 1000) {
+    btn.hidden = false;
+    btn.disabled = true;
+    btn.textContent = '已加载最近 1000 条，请用筛选缩小范围';
+    return;
+  }
+  if (!S.incidentHasMore) {
+    btn.hidden = true;
+    btn.disabled = false;
+    btn.textContent = '加载更多';
+    return;
+  }
+  btn.hidden = false;
+  btn.disabled = S.incidentLoadingMore;
+  btn.textContent = S.incidentLoadingMore ? '加载中…' : '加载更多';
 }
 
 function renderRail() {
@@ -2954,8 +3060,8 @@ function renderPanelGate() {
 function renderStoreStat() {
   const el = $('storestat');
   if (!el) return;
-  const open = S.incidents.filter(x => x.status !== 'closed').length;
-  el.textContent = S.incidents.length ? ('事故单 ' + S.incidents.length + ' 条 · 进行中 ' + open) : '';
+  el.textContent = (S.incidents.length || S.incidentOpenCount)
+    ? ('已加载 ' + S.incidents.length + ' 条 · 进行中 ' + S.incidentOpenCount) : '';
 }
 
 function renderAll() {
@@ -3690,14 +3796,12 @@ document.addEventListener('click', async e => {
 
   const filter = t.dataset.filter;
   if (filter) {
-    const wasMine = S.filter === 'mine';
     S.filter = filter;
-    // 「我的」是服务端筛选：进出这个筛选都要重拉，否则列表会残留上一视图的单子。
-    if ((filter === 'mine' || wasMine) && S.a.token) {
-      refreshIncidents().then(() => renderAll());
-    } else {
-      renderIncidentList();
-    }
+    // 四个筛选都是服务端口径（status= / mine=true）；切换必重置游标并重拉第一页。
+    S.incidentCursor = null;
+    S.incidentHasMore = false;
+    if (S.a.token) refreshIncidents().then(() => renderAll());
+    else renderAll();
     return;
   }
 
@@ -3716,15 +3820,17 @@ document.addEventListener('click', async e => {
     if (act === 'closedrawer') { closeDrawer(); return; }
     if (act === 'alertinc') { await createAlertIncident(t.dataset.tenant, t.dataset.alert, t); return; }
     if (act === 'openalertinc') {
-      await refreshIncidents();
-      const id = t.dataset.openid;
-      if (findIncident(id)) { selectIncident(id); setView('trouble'); }
-      else toast('该事故单不在当前身份的左栏（事故单按租户隔离；平台可跨租户建单但不跨租户展示）', 'warn');
+      // 按 id 单条回填：不刷新列表、不重置游标；只有真正 404 才提示不可见。
+      const outcome = await focusIncidentById(t.dataset.openid);
+      if (outcome === 'not_found') {
+        toast('该事故单不在当前身份的左栏（事故单按租户隔离；平台可跨租户建单但不跨租户展示）', 'warn');
+      }
       return;
     }
     if (act === 'openacct') { openPop('acctpop'); return; }
     if (act === 'covtoggle') { S.covOpen = !S.covOpen; renderRail(); return; }
     if (act === 'newinc') { openIncidentDialog({ mode: 'create' }); return; }
+    if (act === 'loadmore') { await loadMoreIncidents(); return; }
     if (act === 'editinc') { openIncidentDialog({ mode: 'edit', inc: activeIncident() }); return; }
     if (act === 'assign') { await openAssignPop(); return; }
     if (act === 'transfer') { await openTransferPop(); return; }

@@ -36,7 +36,8 @@ import tools.jackson.databind.ObjectMapper;
 @Service
 public class IncidentService {
 
-    private static final int MAX_LIST = 60;
+    private static final int DEFAULT_LIST_LIMIT = 60;
+    private static final int MAX_LIST_LIMIT = 100;
     private static final int MAX_ASSIGNMENTS = 50;
     private static final int MAX_REASON = 200;
     private static final String NO_REASON = "—";
@@ -82,22 +83,64 @@ public class IncidentService {
      * 两者都只拼绑定参数，不拼 SQL 字面量；无参数时与历史行为一致。
      */
     public List<Incident> list(UserContext user, String mine, String status) {
+        return page(user, mine, status, null, null).incidents();
+    }
+
+    /**
+     * 游标分页（ADR-0038）。游标不含 tenant，也不是授权凭据：tenant 只来自 JWT。
+     * 游标里的 mine/status 必须与本次请求一致，否则 400；非法/截断/乱码同样 400。
+     */
+    public IncidentPage page(UserContext user, String mine, String status, String cursor, String limit) {
         requireUser(user);
-        String owner = null;
-        if (mine != null && !mine.isBlank()) {
-            if ("true".equalsIgnoreCase(mine)) owner = user.sub();
-            else if (!"false".equalsIgnoreCase(mine)) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "mine 只能是 true 或 false");
-            }
+        String mineToken = mineToken(mine);
+        String statusToken = statusToken(status);
+        int limitValue = parseLimit(limit);
+        IncidentCursor after = cursor == null ? null
+                : IncidentCursor.decode(cursor, mineToken, statusToken);
+        String owner = "true".equals(mineToken) ? user.sub() : null;
+        String statusFilter = statusToken.isEmpty() ? null : statusToken;
+
+        List<IncidentStore.Ranked> fetched =
+                store.listPage(user.tenantId(), owner, statusFilter, after, limitValue + 1);
+        boolean hasMore = fetched.size() > limitValue;
+        List<IncidentStore.Ranked> kept = hasMore ? fetched.subList(0, limitValue) : fetched;
+        String nextCursor = null;
+        if (hasMore) {
+            IncidentStore.Ranked last = kept.get(kept.size() - 1);
+            nextCursor = IncidentCursor.encode(last.slaRank(), last.incident().updatedAt(),
+                    last.incident().id(), mineToken, statusToken);
         }
-        String statusFilter = null;
-        if (status != null && !status.isBlank()) {
-            if (!Incident.STATUS_OPEN.equals(status) && !Incident.STATUS_CLOSED.equals(status)) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "status 只能是 open 或 closed");
-            }
-            statusFilter = status;
+        return new IncidentPage(kept.stream().map(IncidentStore.Ranked::incident).toList(),
+                nextCursor, hasMore, store.countOpen(user.tenantId()));
+    }
+
+    private static String mineToken(String mine) {
+        if (mine == null || mine.isBlank()) return "";
+        if ("true".equalsIgnoreCase(mine)) return "true";
+        if ("false".equalsIgnoreCase(mine)) return "false";
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "mine 只能是 true 或 false");
+    }
+
+    private static String statusToken(String status) {
+        if (status == null || status.isBlank()) return "";
+        if (!Incident.STATUS_OPEN.equals(status) && !Incident.STATUS_CLOSED.equals(status)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "status 只能是 open 或 closed");
         }
-        return store.list(user.tenantId(), MAX_LIST, owner, statusFilter);
+        return status;
+    }
+
+    /** limit 缺省 60，合法区间 1..100；非数字、空串、越界一律 400。 */
+    private static int parseLimit(String raw) {
+        if (raw == null) return DEFAULT_LIST_LIMIT;
+        String value = raw.trim();
+        if (value.isEmpty() || !value.matches("\\d{1,3}")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "limit 必须是 1..100 的整数");
+        }
+        int parsed = Integer.parseInt(value);
+        if (parsed < 1 || parsed > MAX_LIST_LIMIT) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "limit 必须是 1..100 的整数");
+        }
+        return parsed;
     }
 
     public Incident get(UserContext user, String id) {

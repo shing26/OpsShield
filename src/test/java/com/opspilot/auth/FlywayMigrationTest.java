@@ -52,6 +52,26 @@ class FlywayMigrationTest {
         }
     }
 
+    /** V11 只加索引：名字存在，且列顺序必须是 (tenant, updated_at, incident_id)。 */
+    private static void assertHistoryCursorIndex(DataSource ds) throws Exception {
+        try (Connection c = ds.getConnection(); Statement st = c.createStatement()) {
+            try (ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM INFORMATION_SCHEMA.INDEXES"
+                    + " WHERE TABLE_NAME = 'INCIDENTS'"
+                    + " AND INDEX_NAME = 'IDX_INCIDENTS_TENANT_UPDATED_ID'")) {
+                assertTrue(rs.next());
+                assertEquals(1, rs.getInt(1), "V11 必须建出事故历史游标索引");
+            }
+            try (ResultSet rs = st.executeQuery("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.INDEX_COLUMNS"
+                    + " WHERE INDEX_NAME = 'IDX_INCIDENTS_TENANT_UPDATED_ID'"
+                    + " ORDER BY ORDINAL_POSITION")) {
+                java.util.List<String> columns = new java.util.ArrayList<>();
+                while (rs.next()) columns.add(rs.getString(1));
+                assertEquals(java.util.List.of("TENANT", "UPDATED_AT", "INCIDENT_ID"), columns,
+                        "游标索引列顺序必须是 (tenant, updated_at, incident_id)");
+            }
+        }
+    }
+
     @Test
     void v6UpgradesExistingV5DataAndAddsAssignmentTable() throws Exception {
         DataSource ds = ds("v5-to-v6");
@@ -148,8 +168,14 @@ class FlywayMigrationTest {
                 assertTrue(rs.next());
                 assertEquals(1, rs.getInt(1), "空库一次跑完必须留下 V10 版本记录");
             }
+            try (ResultSet rs = st.executeQuery(
+                    "SELECT COUNT(*) FROM \"flyway_schema_history\" WHERE \"version\" = '11' AND \"success\"")) {
+                assertTrue(rs.next());
+                assertEquals(1, rs.getInt(1), "空库一次跑完必须留下 V11 版本记录");
+            }
         }
         assertEquals(4000, bodyColumnWidth(ds), "空库跑完 V1..V9 后 body 应为 VARCHAR(4000)");
+        assertHistoryCursorIndex(ds);
     }
 
     /** V9 库升级到 V10：只新增通知表，既有事故/评论/台账数据必须原样保留。 */
@@ -188,6 +214,12 @@ class FlywayMigrationTest {
                 assertTrue(rs.next());
                 assertEquals(1, rs.getInt(1), "已有 V9 库升级后必须留下 V10 版本记录");
             }
+            try (ResultSet rs = st.executeQuery(
+                    "SELECT COUNT(*) FROM \"flyway_schema_history\" WHERE \"version\" = '11' AND \"success\"")) {
+                assertTrue(rs.next());
+                assertEquals(1, rs.getInt(1), "已有 V10 库升级后必须留下 V11 版本记录");
+            }
+            assertHistoryCursorIndex(ds);
             // 唯一索引必须真的存在：同一 (tenant, recipient, dedupe_key) 第二次插入应被拒。
             st.execute("INSERT INTO incident_notifications (tenant, recipient, incident_id, kind, title,"
                     + " dedupe_key) VALUES ('tenant-1', 't1-alice', 'INC-V9-1', 'assigned', 'V9 旧单', 'k-1')");

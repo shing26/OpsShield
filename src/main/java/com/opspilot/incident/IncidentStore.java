@@ -78,6 +78,13 @@ public class IncidentStore {
                     rs.getString("mentions_json"),
                     instant(rs, "created_at"));
 
+    /** 一行事故 + 该行在本次排序里的 SLA 档位；游标需要把档位一起带回。 */
+    public record Ranked(Incident incident, int slaRank) {
+    }
+
+    private static final RowMapper<Ranked> RANKED_MAPPER = (ResultSet rs, int i) ->
+            new Ranked(MAPPER.mapRow(rs, i), rs.getInt("sla_rank"));
+
     private static Instant instant(ResultSet rs, String column) throws SQLException {
         Timestamp ts = rs.getTimestamp(column);
         return ts == null ? null : ts.toInstant();
@@ -113,6 +120,54 @@ public class IncidentStore {
         sql.append(" ORDER BY updated_at DESC, incident_id DESC LIMIT ?");
         args.add(limit);
         return jdbc.query(sql.toString(), MAPPER, args.toArray());
+    }
+
+    /**
+     * 键集分页：排序键 {@code (sla_rank ASC, updated_at DESC, incident_id DESC)}。
+     *
+     * <p>不拼 OFFSET；游标比较展开成布尔表达式，H2 与 PostgreSQL 都不依赖 row-value 比较。
+     * {@code sla_rank} 与前端曾用的 {@code slaRank()} 逐字一致：先判 closed，再判 breached/due_soon。
+     * 内层子查询先算档位，外层再用档位过滤与排序。
+     */
+    public List<Ranked> listPage(String tenant, String owner, String status, IncidentCursor after,
+                                 int fetch) {
+        StringBuilder sql = new StringBuilder("SELECT * FROM (SELECT i.*, CASE "
+                + "WHEN i.status = 'closed' THEN 2 "
+                + "WHEN i.sla_state = 'breached' THEN 0 "
+                + "WHEN i.sla_state = 'due_soon' THEN 1 ELSE 2 END AS sla_rank "
+                + "FROM incidents i WHERE i.tenant = ?");
+        List<Object> args = new ArrayList<>();
+        args.add(tenant);
+        if (owner != null) {
+            sql.append(" AND i.owner = ?");
+            args.add(owner);
+        }
+        if (status != null) {
+            sql.append(" AND i.status = ?");
+            args.add(status);
+        }
+        sql.append(") t");
+        if (after != null) {
+            sql.append(" WHERE sla_rank > ? OR (sla_rank = ? AND (updated_at < ? "
+                    + "OR (updated_at = ? AND incident_id < ?)))");
+            Timestamp at = Timestamp.from(after.updatedAt());
+            args.add(after.rank());
+            args.add(after.rank());
+            args.add(at);
+            args.add(at);
+            args.add(after.incidentId());
+        }
+        sql.append(" ORDER BY sla_rank ASC, updated_at DESC, incident_id DESC LIMIT ?");
+        args.add(fetch);
+        return jdbc.query(sql.toString(), RANKED_MAPPER, args.toArray());
+    }
+
+    /** 本租户进行中总数：只看 tenant + status，走既有 (tenant, status) 索引。 */
+    public int countOpen(String tenant) {
+        Integer n = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM incidents WHERE tenant = ? AND status = ?",
+                Integer.class, tenant, Incident.STATUS_OPEN);
+        return n == null ? 0 : n;
     }
 
     public Optional<Incident> find(String tenant, String id) {
