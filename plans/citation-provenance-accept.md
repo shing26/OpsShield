@@ -6,6 +6,13 @@
 > 用户已签收四项口径：内容摘要作版本、`reviewed_at` 作时效事实源、
 > `Ref` 只加字段且回放不重算、现有 0/69 不做伪回填。
 > 本切片只做「引用带得出版本身份与审查时效」，不做文档版本历史、不做过期降权、不做上游批量导入。
+>
+> **2026-11-26 契约补正（实现期发现，待随实现一并追认）**：
+> `offline/domains/dba/corpus/chunks.jsonl` 是第二个领域包的构建产物，
+> 既有测试 `test_domain_pack.py::test_chunks_are_reproducible_with_existing_chunker`
+> 会把它与 chunker 现算结果逐字节比对；chunker 加字段后必须同批重建。
+> 故把该文件补入 Allowed paths，并把 AC4 的「只加字段」比对扩展到它（43 条）。
+> 该文件不属于 `PROVENANCE.json` 的登记面；正文/文档身份/错误码逐字不变。
 
 ## Task ID
 
@@ -69,6 +76,7 @@ offline/chunkers/markdown_tree_chunker.py
 offline/chunkers/openapi_ast_chunker.py
 offline/chunkers/build_chunks.py
 offline/corpus/chunks.jsonl
+offline/domains/dba/corpus/chunks.jsonl
 offline/eval/reports/PROVENANCE.json
 offline/tests/test_doc_digest.py
 offline/tests/test_chunk_provenance_fields.py
@@ -111,6 +119,9 @@ src/test/java/com/opspilot/config/OpsPilotPropertiesValidationTest.java
 4. **语料重建只加字段，不改语义**：重建后仍为 **459** 行；对每个 `chunk_id`，
    `text / doc_id / type / breadcrumb / metadata 的既有键` 与 `main` 版逐字相同，
    `metadata` 只新增 `doc_digest` 与 `reviewed_at` 两个键；`golden_dataset.jsonl` 逐字节不变。
+   `offline/domains/dba/corpus/chunks.jsonl`（43 条）适用同一判据：
+   只新增 `doc_digest` / `reviewed_at`，正文/文档身份/错误码逐字不变；
+   它由 `test_chunkers` 之外的 `test_domain_pack.py` 强制与现算结果一致，不进 `PROVENANCE.json`。
    `PROVENANCE.json` 只允许由 `python provenance.py --stamp` 重新生成，且登记前必须通过上述比对；
    提交信息写明「仅新增元数据字段，正文/错误码/文档身份逐字未变」。不得手改摘要。
 5. **元数据贯通两条链路**：`Chunk.Metadata` 新增 `docDigest / reviewedAt`（旧 chunk 缺字段为 `null`）；
