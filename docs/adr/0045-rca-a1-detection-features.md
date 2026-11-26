@@ -1,6 +1,6 @@
 # 0045. RCA A1：新特征过滤器未通过，OB 的误报不是瞬态尖峰
 
-- 状态：Proposed（待 Lead 签收）
+- 状态：Proposed（待 Lead 签收；契约 §5 R1 修订需一并认可）
 - 日期：2026-11-27
 - 契约：`plans/rca-detection-a1-accept.md`（FROZEN）
 - 证据：`offline/rca/reports/A1-report.md`

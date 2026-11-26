@@ -188,3 +188,27 @@ git status --short
 5. **机制论证更正**：初版报告/ADR 称“过滤后覆盖上限 = v2 的 0.480”，这是错的
    （实测 0.493）。逐 case 对账后改为“过滤器不新增事件，只做重选择：
    FA→检出 +12、检出→miss −11，净 +1”。**FAIL 判定不变**。
+
+## 14. R1 修订（提案，待 Lead 签收；2026-11-27）
+
+> 性质：仅修订 §5 Allowed paths 中 `docs/repo-map.md` 的授权范围，用于消除
+> 与既有文档编号门闩的冲突。**不放宽、不改写 AC-1..AC-10、§8 判定矩阵或任何
+> 实验口径；A1 仍判 FAIL。**
+
+- 原文：`docs/repo-map.md`（仅 `offline/rca/` 行）
+- R1：`docs/repo-map.md`（仅 `offline/rca/` 行，以及 `docs/adr/` 计数行）
+- 冲突事实：新增 ADR-0045 后，`offline/doc_numbers.json` 把
+  `docs/repo-map.md` 的 `docs/adr/` 行登记为 `adr_count` 引用点，
+  `doc_numbers.py --check` 要求该行同步“45 项架构决策”与 0045 条目；
+  §5 原文只授权改 `offline/rca/` 行，无法同时满足门闩。
+- 备选与取舍：(a) 改 `doc_numbers` 登记——削弱既有门闩；(b) 保留门闩红——
+  允许已知失败进入分支；(c) 仅修订本行授权范围。取 (c)。
+- 修订边界：只允许 `docs/adr/` 行的 ADR 计数与 0045 条目随新增 ADR 同步；
+  不得改该行其他 ADR 条目，也不得改 `docs/repo-map.md` 的其他行。
+- 签收效力：Lead 书面签收本 §14 后，AC-8 由 FAIL 改为 PASS；未签收则
+  AC-8 保持 FAIL，本分支不合并。两种情况下 A1 FAIL 均不变。
+
+**签收状态：待 Lead 签收。** 签收范围是本 §14 的 Allowed paths 修订 +
+ADR-0045 的 A1 FAIL 决策；AC-1..AC-10 与 A1 FAIL 均不变。签收后 AC-8 由
+FAIL 改 PASS、ADR-0045 由 Proposed 改为“已采纳”；未签收则 AC-8 保持 FAIL、
+本分支不合并。
