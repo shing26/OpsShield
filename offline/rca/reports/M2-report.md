@@ -153,4 +153,4 @@ offline/rca/.venv/Scripts/python.exe offline/rca/report.py --dir <run_dir> --che
 | 报告数字错误（§6 的 23/9、§4 的 floor=0.10、§5 的 58/26） | 逐项更正；数字改由本次重跑产物生成 |
 | AC-5：契约字面要求 MAD，实际 BARO 用 IQR | 新增 `mad-z` 基线；结果证明 MAD 在本数据上退化（test Top-1 0.020），作为结论保留 |
 | AC-9：无泄漏测试只覆盖 random | 新增 `test_leakage_methods.py`：全部方法 + 检测轨对 truth/fault/name 免疫 |
-| AC-4 / AC-10：候选集与 repo-map 行数与冻结文本不一致 | 契约 R1 修订（候选集 13–19/13–14；repo-map 允许同步 ADR 计数），**待 Lead 签收** |
+| AC-4 / AC-10：候选集与 repo-map 行数与冻结文本不一致 | 契约 R1 修订（候选集 13–19/13–14；repo-map 允许同步 ADR 计数），**已签收 2026-11-26** |
