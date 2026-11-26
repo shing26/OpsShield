@@ -21,12 +21,14 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
+import detect_features as feat
 from dataset import (Case, candidate_services, load_case, load_index,
                      metric_family, select_cases, to_service)
 from methods import METHODS
@@ -49,6 +51,19 @@ HORIZON_S = 300
 PRE_S = 600
 POST_S = 600
 MATERIALITY_FLOOR = 0.08
+
+# A1 预注册默认值（见 plans/rca-detection-a1-accept.md §4）。
+DEFAULT_FILTER = {"modes": ("coherence", "duration"), "z0": 4.0, "k": 3,
+                  "window_s": 120, "fraction": 0.8}
+
+
+@dataclass(frozen=True)
+class AlarmFilter:
+    modes: tuple[str, ...] = ("coherence", "duration")
+    z0: float = 4.0
+    k: int = 3
+    window_s: int = 120
+    fraction: float = 0.8
 
 
 def z_frame(case: Case, family: str = RESOURCE) -> pd.DataFrame:
@@ -79,11 +94,11 @@ def z_frame(case: Case, family: str = RESOURCE) -> pd.DataFrame:
     return pd.DataFrame(positive_z, index=values.index, columns=columns)
 
 
-def alarm_series(z: pd.DataFrame, z_threshold: float, sustain: int = SUSTAIN,
-                 min_metrics: int = 1) -> pd.Series:
-    """服务级报警：同一服务至少 ``min_metrics`` 个指标连续 ``sustain`` 点越线。"""
+def service_alarm_series(z: pd.DataFrame, z_threshold: float, sustain: int = SUSTAIN,
+                         min_metrics: int = 1) -> pd.DataFrame:
+    """逐服务报警：同一服务至少 ``min_metrics`` 个指标连续 ``sustain`` 点越线。"""
     if z.empty:
-        return pd.Series(dtype=bool)
+        return pd.DataFrame(index=z.index)
 
     by_service: dict[str, list[str]] = {}
     for column in z.columns:
@@ -92,7 +107,40 @@ def alarm_series(z: pd.DataFrame, z_threshold: float, sustain: int = SUSTAIN,
     for service, columns in by_service.items():
         hits = (z[columns] > z_threshold).sum(axis=1) >= min_metrics
         service_hits[service] = hits.rolling(sustain, min_periods=sustain).sum() >= sustain
-    return pd.DataFrame(service_hits).any(axis=1)
+    return pd.DataFrame(service_hits, index=z.index)
+
+
+def alarm_series(z: pd.DataFrame, z_threshold: float, sustain: int = SUSTAIN,
+                 min_metrics: int = 1) -> pd.Series:
+    """任一服务报警即报警。"""
+    frame = service_alarm_series(z, z_threshold, sustain, min_metrics)
+    if frame.empty:
+        return pd.Series(dtype=bool)
+    return frame.any(axis=1)
+
+
+def filtered_first_alarm(alarms: pd.DataFrame, coherence: pd.Series,
+                         duration: dict[str, pd.Series], alarm_filter: AlarmFilter,
+                         inject_time: int) -> tuple[int | None, str | None]:
+    """按时间顺序取第一个通过 ``C or D`` 的报警事件。"""
+    if alarms.empty:
+        return None, None
+    low, high = inject_time - PRE_S, inject_time + POST_S
+    times = alarms.index[(alarms.index >= low) & (alarms.index <= high)]
+    for moment in times:
+        services = [s for s in alarms.columns if bool(alarms.at[moment, s])]
+        if not services:
+            continue
+        coherent = ("coherence" in alarm_filter.modes
+                    and bool(coherence.get(moment, False)))
+        for service in services:
+            if coherent:
+                return int(moment), service
+            if "duration" in alarm_filter.modes:
+                flags = duration.get(service)
+                if flags is not None and bool(flags.get(moment, False)):
+                    return int(moment), service
+    return None, None
 
 
 def first_alarm(alarms: pd.Series, inject_time: int) -> int | None:
@@ -117,14 +165,34 @@ def summarize_alarm(alarm: int | None, inject_time: int) -> dict:
 
 def detect_case(case: Case, arms: tuple[str, ...] = (RESOURCE,),
                 thresholds: dict[str, float] | None = None,
-                sustain: int = SUSTAIN, min_metrics: int = 1) -> dict:
+                sustain: int = SUSTAIN, min_metrics: int = 1,
+                alarm_filter: AlarmFilter | None = None) -> dict:
     thresholds = thresholds or DEFAULT_THRESHOLDS
     per_arm: dict[str, dict] = {}
     earliest: int | None = None
     for arm in arms:
-        alarm = first_alarm(alarm_series(z_frame(case, arm), thresholds[arm], sustain,
-                                         min_metrics), case.inject_time)
-        per_arm[arm] = summarize_alarm(alarm, case.inject_time)
+        z = z_frame(case, arm)
+        extra: dict = {}
+        if alarm_filter is None:
+            alarm = first_alarm(alarm_series(z, thresholds[arm], sustain, min_metrics),
+                                case.inject_time)
+        else:
+            alarms = service_alarm_series(z, thresholds[arm], sustain, min_metrics)
+            anomaly = feat.service_anomaly(z, alarm_filter.z0)
+            coherence = feat.coherence_pass(anomaly, alarm_filter.k)
+            duration = {
+                service: feat.duration_pass(anomaly[service], alarm_filter.window_s,
+                                            alarm_filter.fraction)
+                for service in anomaly.columns
+            }
+            alarm, service = filtered_first_alarm(alarms, coherence, duration,
+                                                  alarm_filter, case.inject_time)
+            extra = {
+                "alarm_service": service,
+                "p_corr": (feat.topology_correlation(z, service, alarm, case.system)
+                           if alarm is not None and service else None),
+            }
+        per_arm[arm] = {**summarize_alarm(alarm, case.inject_time), **extra}
         if alarm is not None and (earliest is None or alarm < earliest):
             earliest = alarm
     combined = summarize_alarm(earliest, case.inject_time)
@@ -184,7 +252,8 @@ def _arm_summary(records: list[dict], arm: str) -> dict:
 
 
 def run(suite: str, split: str, arms: tuple[str, ...], thresholds: dict[str, float],
-        data_dir: Path, out_dir: Path, reps: list[int] | None = None) -> dict:
+        data_dir: Path, out_dir: Path, reps: list[int] | None = None,
+        alarm_filter: AlarmFilter | None = None) -> dict:
     index = load_index(data_dir)
     rows = select_cases(index, suite, split, reps)
     cases = [load_case(data_dir, row) for _, row in rows.iterrows()]
@@ -192,12 +261,13 @@ def run(suite: str, split: str, arms: tuple[str, ...], thresholds: dict[str, flo
         raise SystemExit(f"no cases for {suite}/{split}")
 
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    run_dir = out_dir / f"{stamp}_{suite}_detection_{split}"
+    suffix = "" if alarm_filter is None else f"_filter{'-'.join(alarm_filter.modes)}"
+    run_dir = out_dir / f"{stamp}_{suite}_detection_{split}{suffix}"
     run_dir.mkdir(parents=True, exist_ok=True)
 
     records = []
     for case in cases:
-        result = detect_case(case, arms, thresholds)
+        result = detect_case(case, arms, thresholds, alarm_filter=alarm_filter)
         record = {"case": case.name, "truth": case.root_cause_service, **result}
         record.pop("arms")
         # 下面评分用合并口径；arms 的原始结果保留在 per-arm 字段里。
@@ -241,6 +311,11 @@ def run(suite: str, split: str, arms: tuple[str, ...], thresholds: dict[str, flo
         "n_cases": len(records),
         "arms": list(arms),
         "thresholds": thresholds,
+        "filter": (None if alarm_filter is None else {
+            "modes": list(alarm_filter.modes), "z0": alarm_filter.z0,
+            "k": alarm_filter.k, "window_s": alarm_filter.window_s,
+            "fraction": alarm_filter.fraction,
+        }),
         "params": {
             "baseline_s": BASELINE_S, "sustain": SUSTAIN, "horizon_s": HORIZON_S,
             "pre_s": PRE_S, "post_s": POST_S, "materiality_floor": MATERIALITY_FLOOR,
@@ -275,6 +350,10 @@ def run(suite: str, split: str, arms: tuple[str, ...], thresholds: dict[str, flo
     print(f"suite={suite} split={split} cases={len(records)} "
           f"detected={summary['detected']} rate={summary['detection_rate']:.3f} "
           f"false_alarms={summary['false_alarms']} no_alarm={summary['no_alarm']}")
+    if alarm_filter is not None:
+        print(f"filter={','.join(alarm_filter.modes)} z0={alarm_filter.z0} "
+              f"k={alarm_filter.k} W={alarm_filter.window_s}s "
+              f"p={alarm_filter.fraction}")
     if detected_records:
         print(f"latency median={summary['latency_median_s']:.0f}s "
               f"p90={summary['latency_p90_s']:.0f}s")
@@ -295,6 +374,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--threshold-resource", type=float,
                         default=DEFAULT_THRESHOLDS[RESOURCE])
     parser.add_argument("--threshold-sli", type=float, default=DEFAULT_THRESHOLDS[SLI])
+    parser.add_argument("--filter", default="off",
+                        choices=["off", "coherence", "duration", "both"],
+                        help="A1 new-feature filter; 'off' keeps v2 behaviour")
+    parser.add_argument("--z0", type=float, default=DEFAULT_FILTER["z0"])
+    parser.add_argument("--k", type=int, default=DEFAULT_FILTER["k"])
+    parser.add_argument("--duration-window", type=int,
+                        default=DEFAULT_FILTER["window_s"])
+    parser.add_argument("--duration-fraction", type=float,
+                        default=DEFAULT_FILTER["fraction"])
     parser.add_argument("--reps", nargs="+", type=int, default=None)
     parser.add_argument("--data-dir", type=Path, default=DEFAULT_DATA)
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
@@ -302,7 +390,13 @@ def main(argv: list[str] | None = None) -> int:
 
     arms = (RESOURCE, SLI) if args.arms == "both" else (args.arms,)
     thresholds = {RESOURCE: args.threshold_resource, SLI: args.threshold_sli}
-    run(args.suite, args.split, arms, thresholds, args.data_dir, args.out, args.reps)
+    modes = {"off": (), "coherence": ("coherence",), "duration": ("duration",),
+             "both": ("coherence", "duration")}[args.filter]
+    alarm_filter = None if not modes else AlarmFilter(
+        modes=modes, z0=args.z0, k=args.k, window_s=args.duration_window,
+        fraction=args.duration_fraction)
+    run(args.suite, args.split, arms, thresholds, args.data_dir, args.out, args.reps,
+        alarm_filter)
     return 0
 
 
