@@ -176,6 +176,17 @@ def main(argv: list[str] | None = None) -> int:
         print("NO CONFIG satisfies per-fault delta >= -5pp", flush=True)
         return 2
     print("CHOSEN " + _line(chosen, baseline))
+    for fusion in ("weighted", "rrf", "max"):
+        subset = [item for item in primary["configs"].values()
+                  if item["config"]["fusion"] == fusion]
+        if not subset:
+            continue
+        eligible = [item for item in subset
+                    if min(fault_deltas(item, baseline).values()) >= -MAX_FAULT_DROP]
+        best = max(subset, key=lambda item: item["top1"])
+        print(f"  family {fusion:<8} compliant={len(eligible)}/{len(subset)} "
+              f"best_top1={best['top1']:.3f} "
+              f"worst_fault={min(fault_deltas(best, baseline).values()):+.3f}")
     print("  guard " + _line(guard["configs"][json.dumps(chosen["config"], sort_keys=True)],
                              guard["baseline_3sigma"]))
     print(f"-> {path}")

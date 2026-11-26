@@ -44,7 +44,7 @@
 | `offline/eval/` | golden dataset、`evaluate.py`（评测并自动刷新出处登记）、评测报告 | ✅ |
 | `offline/eval/gate_matrix.py` | **门控混淆矩阵 + 阈值扫描**：误拒率/漏拒率 + 0.1/0.2/0.3/0.4 四档。走 `/search` 取门控信号，故**一次遍历算完任意阈值**（无需重启网关）且不含 L1/L2 缓存（排除"缓存回放绕过门控"的混淆） | ✅ |
 | `offline/eval/refuse_set.jsonl` | 门控矩阵的"应拒答"半集（幽灵错误码 + 域外提问）；**位于 `corpus/` 之外**（探针词进语料会污染评测指标），其"幽灵码确实不在语料里"的前提由测试现算锁死 | ✅ |
-| `offline/rca/` | **RCA 检测/定位研究切片**（[ADR-0039](adr/0039-rca-detector-slice.md) / [ADR-0040](adr/0040-rca-v2-dual-arm.md)）：RCAEval 两套数据（RE1-OB 回归护栏 + RE1-SS 外部验证，per-suite provenance）、Top-1/Top-3/MRR + 分故障/配对 CI 评测、random/static/3σ/BARO/MAD 基线、v1 `topo-first`、v2 `dual-arm`（resource+SLI 双检测臂 + 自适应融合）、dev 选参（`tune_detect.py`/`tune_rank.py`）、数据审计与 v1 回归护栏。依赖隔离在 `offline/rca/.venv`，数据与 venv 不入库；v1 不接产品面（`reports/M2-report.md`），v2 定位/端到端通过但检测误报 6% 未过，同样不接产品面（`reports/V2-report.md`） | ✅ |
+| `offline/rca/` | **RCA 检测/定位研究切片**（[ADR-0039](adr/0039-rca-detector-slice.md) / [ADR-0040](adr/0040-rca-v2-dual-arm.md)）：RCAEval 两套数据（RE1-OB 回归护栏 + RE1-SS 外部验证，per-suite provenance）、Top-1/Top-3/MRR + 分故障/配对 CI 评测、random/static/3σ/BARO/MAD 基线、v1 `topo-first`、v2 `dual-arm`（resource+SLI 双检测臂 + 自适应融合）、dev 选参（`tune_detect.py`/`tune_rank.py`）、数据审计与 v1 回归护栏。依赖隔离在 `offline/rca/.venv`，数据与 venv 不入库；v1 不接产品面（`reports/M2-report.md`）；v2 按冻结契约失败（合规 RRF 在 dev 0/36 达标，`weighted` 变体仅探索性；检测误报 6%），同样不接产品面（`reports/V2-report.md`） | ✅ |
 | `offline/eval/observed_probe.py` | **真实输入探测（G4）**：在系统自己跑出的 query 上测三件**无需真值**的事（零召回率 / 快路径命中率 / 门控拒答率）。query 集不入库，报告只含聚合 | ✅ |
 | `offline/provenance.py` | **报告↔语料同代判据**（面一）：CI 门闩 `--check` + 出处登记 `--stamp`（内容摘要，非 mtime） | ✅ |
 | `offline/doc_numbers.py` | **文档数字↔产物同代判据**（面二）：按 `doc_numbers.json` 每次**现算**产物真值比对文档字面量（不存快照、无 `--stamp`） | ✅ |

@@ -155,8 +155,18 @@ def detected_rank(ranking: list[str], truth: str, n_candidates: int) -> int:
 
 
 def counts_as_detection(result: dict) -> bool:
-    """只有「在注入后窗口内首次报警」才算检出；未报警与提前误报都算失败。"""
-    return result["alarm_time"] is not None and not result["false_alarm"]
+    """只有「注入后 ``HORIZON_S`` 内的首次报警」才算检出。
+
+    未报警、提前误报、以及超过 horizon 的迟到报警都算失败。v1 的这里只判
+    ``alarm_time is not None``，会把 +300s 之后的报警也记成检出，与 CSV 的
+    ``detected`` 列不一致——v2 修正为同一个口径。
+    """
+    if "detected" in result:
+        return bool(result["detected"]) and not result.get("false_alarm", False)
+    latency = result.get("latency_s")
+    if latency is not None:
+        return 0 <= latency <= HORIZON_S
+    return result.get("alarm_time") is not None and not result.get("false_alarm", False)
 
 
 def _arm_summary(records: list[dict], arm: str) -> dict:

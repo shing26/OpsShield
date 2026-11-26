@@ -13,13 +13,19 @@ def _case(name: str, truth: str, fault: str) -> Case:
     n = 400
     cpu = rng.normal(10, 0.3, n)
     cpu[200:] += 8
+    latency = rng.normal(0.05, 0.002, n)
+    latency[200:] += 0.05
     return Case(
         name=name,
         root_cause_service=truth,
         fault=fault,
         repetition=1,
         inject_time=200,
-        metrics=pd.DataFrame({"time": np.arange(n), "adservice_cpu": cpu}),
+        metrics=pd.DataFrame({
+            "time": np.arange(n),
+            "adservice_cpu": cpu,
+            "adservice_latency-90": latency,
+        }),
     )
 
 
@@ -44,3 +50,12 @@ def test_random_ignores_truth_and_fault_but_uses_case_name():
 def test_detection_ignores_label_fields():
     assert detect_case(_case("case_a", "adservice", "cpu")) == \
         detect_case(_case("case_b", "frontend", "mem"))
+
+
+@pytest.mark.parametrize("arms", [("resource",), ("sli",), ("resource", "sli")])
+def test_detection_ignores_label_fields_for_every_arm(arms):
+    thresholds = {"resource": 8.0, "sli": 8.0}
+    assert detect_case(_case("case_a", "adservice", "cpu"), arms=arms,
+                       thresholds=thresholds) == \
+        detect_case(_case("case_b", "frontend", "mem"), arms=arms,
+                    thresholds=thresholds)

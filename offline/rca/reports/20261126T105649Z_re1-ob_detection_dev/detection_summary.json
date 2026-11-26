@@ -1,0 +1,60 @@
+{
+  "generated_at": "2026-11-26T10:57:01+00:00",
+  "suite": "re1-ob",
+  "split": "dev",
+  "reps": null,
+  "n_cases": 75,
+  "arms": [
+    "resource",
+    "sli"
+  ],
+  "thresholds": {
+    "resource": 20.0,
+    "sli": 8.0
+  },
+  "params": {
+    "baseline_s": 300,
+    "sustain": 3,
+    "horizon_s": 300,
+    "pre_s": 600,
+    "post_s": 600,
+    "materiality_floor": 0.08
+  },
+  "detected": 36,
+  "detection_rate": 0.48,
+  "false_alarms": 31,
+  "no_alarm": 7,
+  "detection_failures": 39,
+  "latency_median_s": 17.0,
+  "latency_p90_s": 58.5,
+  "per_arm": {
+    "resource": {
+      "detected": 21,
+      "detection_rate": 0.28,
+      "false_alarms": 0,
+      "no_alarm": 54,
+      "latency_median_s": 15.0,
+      "latency_p90_s": 19.0
+    },
+    "sli": {
+      "detected": 29,
+      "detection_rate": 0.38666666666666666,
+      "false_alarms": 31,
+      "no_alarm": 13,
+      "latency_median_s": 20.0,
+      "latency_p90_s": 123.59999999999995
+    }
+  },
+  "dual-arm_oracle_top1_all": 0.8933333333333333,
+  "dual-arm_detected_top1_all": 0.38666666666666666,
+  "dual-arm_detected_conditional_top1": 0.8055555555555556,
+  "dual-arm_detected_conditional_mrr": 0.8706349206349207,
+  "topo-first_oracle_top1_all": 0.7866666666666666,
+  "topo-first_detected_top1_all": 0.28,
+  "topo-first_detected_conditional_top1": 0.5833333333333334,
+  "topo-first_detected_conditional_mrr": 0.6739648468815136,
+  "3sigma_oracle_top1_all": 0.6933333333333334,
+  "3sigma_detected_top1_all": 0.29333333333333333,
+  "3sigma_detected_conditional_top1": 0.6111111111111112,
+  "3sigma_detected_conditional_mrr": 0.7442784067784067
+}

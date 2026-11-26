@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 
 from dataset import Case
-from detect import counts_as_detection, detect_case, detected_rank
+from detect import counts_as_detection, detect_case, detected_rank, summarize_alarm
 
 
 def _case(inject: int = 700, fault: bool = True) -> Case:
@@ -43,6 +43,13 @@ def test_false_alarm_is_not_a_detection():
     assert counts_as_detection({"alarm_time": 90, "false_alarm": True}) is False
     assert counts_as_detection({"alarm_time": None, "false_alarm": False}) is False
     assert counts_as_detection({"alarm_time": 110, "false_alarm": False}) is True
+
+
+def test_alarm_after_horizon_is_not_a_detection():
+    late = summarize_alarm(450, 100)
+    assert late["latency_s"] == 350
+    assert late["detected"] is False
+    assert counts_as_detection(late) is False
 
 
 def test_sli_arm_catches_latency_only_fault():
