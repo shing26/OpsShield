@@ -173,15 +173,33 @@ E:/Git/bin/bash.exe scripts/check_panel_contract.sh
 - 禁止重试/跳过/`xfail` 掩盖 flake；禁止顺序依赖（每个 spec 单独跑必须绿）。
 - 禁止直插 H2、禁止 stub/abort 业务 API、禁止注入 token 跳过登录（登录 spec 必须走 UI）。
 - 禁止引入 Node / package.json / 第二套 Playwright runner。
-- 禁止为通过测试改业务行为、改文案或删改既有断言；只允许补 `data-testid`。
+- 禁止为通过测试改业务行为、改文案或删改既有断言；只允许补 `data-testid`，
+  以及 R1 明确追认的 `.inc-list` 可点击性修复。
 - 禁止提交 `e2e/artifacts/`、截图、trace、日志或任何凭据；密码/密钥只走环境变量。
 - 禁止把视觉回归、跨浏览器矩阵、移动端 E2E、性能测试塞进本切片。
 - 禁止改 V1–V11 迁移、事故/通知/评论/分页/告警语义。
 
 ## 回滚
 
-本切片只新增 `e2e/` 与 CI job，运行时零改动（`index.html` 仅加测试钩子）。
+本切片新增 `e2e/` 与 CI job；运行时仅 R1 追认的 `.inc-list` flex 修复，
+其余 `index.html` 改动仅为测试钩子。
 删除 `e2e` job 与 `e2e/` 即可回滚；既有功能不受影响。
+
+## R1 修订（2026-11-27，已签收）
+
+**背景**：E2E 实测事故数超过首屏条数后，`.rail`（`display:flex;
+flex-direction:column; overflow:auto`）会把 `.inc-list` 压到 `min-height:80px`
+以下，列表内容溢出并盖住 `#incMore`，点击命中被列表项拦截。AC5 要求真实点击
+「加载更多」，不修则不可达。
+
+**追认范围**：仅授权 `src/main/resources/static/index.html` 的 `.inc-list`
+规则增加 `flex:0 0 auto`（含解释注释），使列表保持内容高度、由 `.rail`
+统一滚动。不得改文案、业务逻辑、既有断言或任何其他运行时行为。
+
+**证据**：Verifier 在 `53fe625` 复现覆盖，确认该声明为最小修复；
+实现方与 Verifier 证据包均记录两遍 E2E、五 spec 单跑与 headed 实测。
+
+**裁决**：Verifier 提出的 P1（未追认运行时 CSS）在本修订签收后关闭。
 
 ## 人审签收
 
@@ -195,3 +213,6 @@ E:/Git/bin/bash.exe scripts/check_panel_contract.sh
 
 实现者与 Verifier 不得为同一会话。本次签收只授权实现，不含合并授权；
 合并须另行书面签收。
+
+**R1 状态：已签收（2026-11-27）。** 用户书面「签收 R1」，追认上述
+`.inc-list{flex:0 0 auto}` 例外；仍需 Verifier 窄复验与合并前另行授权。
