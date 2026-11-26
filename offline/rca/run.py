@@ -88,7 +88,8 @@ def evaluate(suite: str, split: str, method_names: list[str], seed: int,
         }
 
     summary["paired"] = {}
-    for treatment, control in (("dual-arm", "3sigma"), ("topo-first", "3sigma")):
+    for treatment, control in (("dual-arm", "3sigma"), ("dual-arm-rrf", "3sigma"),
+                               ("topo-first", "3sigma")):
         if treatment in summary["methods"] and control in summary["methods"]:
             summary["paired"][f"{treatment}_vs_{control}"] = {
                 f"top{k}": compare(results, treatment, control, k) for k in (1, 3)

@@ -4,6 +4,7 @@
 
     python offline/rca/audit.py --suite re1-ss
     python offline/rca/audit.py --suite re1-ob
+    python offline/rca/audit.py --suite re1-tt
 """
 from __future__ import annotations
 
@@ -48,6 +49,7 @@ def audit_suite(data_dir: Path, suite: str) -> tuple[list[str], dict]:
         problems.append("duplicate case names in index")
 
     family_counts: dict[str, list[int]] = {}
+    candidate_counts: list[int] = []
     nan_cases = 0
     nan_cells = 0
     for _, row in rows.iterrows():
@@ -65,8 +67,11 @@ def audit_suite(data_dir: Path, suite: str) -> tuple[list[str], dict]:
             )
 
         candidates = candidate_services(case.metrics)
+        candidate_counts.append(len(candidates))
         if case.root_cause_service not in candidates:
             problems.append(f"{name}: truth {case.root_cause_service} not in telemetry")
+        if "ts" in candidates:
+            problems.append(f"{name}: degenerate service bucket 'ts' (to_service mis-folded ts-*)")
 
         n_timesteps = int(row["n_timesteps"])
         if len(case.metrics) != n_timesteps:
@@ -103,13 +108,16 @@ def audit_suite(data_dir: Path, suite: str) -> tuple[list[str], dict]:
         for family, values in family_counts.items()
     }
     stats["nan"] = {"cases": nan_cases, "cells": nan_cells, "of_cases": len(rows)}
+    stats["candidates"] = ({"min": min(candidate_counts), "max": max(candidate_counts)}
+                           if candidate_counts else {})
     stats["pre_window_s"] = _pre_window(rows, data_dir)
     return problems, stats
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Audit RCAEval telemetry against its index")
-    parser.add_argument("--suite", default="re1-ss", choices=["re1-ob", "re1-ss"])
+    parser.add_argument("--suite", default="re1-ss",
+                        choices=["re1-ob", "re1-ss", "re1-tt"])
     parser.add_argument("--data-dir", type=Path, default=DEFAULT_DATA)
     args = parser.parse_args(argv)
 
@@ -118,6 +126,7 @@ def main(argv: list[str] | None = None) -> int:
           f"reps={stats['repetitions']} faults={stats['faults']}")
     print(f"services={stats['services']}")
     print(f"pre_window={stats['pre_window_s']}")
+    print(f"candidate_services={stats['candidates']}")
     print(f"nan={stats['nan']}")
     for family, value in stats["families"].items():
         print(f"{family}: {value['cases_with_family']}/{value['of']} cases have >=1 column")

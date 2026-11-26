@@ -45,6 +45,8 @@ def test_to_service_matches_rcaeval_convention():
     assert to_service("adservice_cpu") == "adservice"
     assert to_service("frontend-external_error") == "frontend-external"
     assert to_service("PassthroughCluster_load") == "PassthroughCluster"
+    assert to_service("ts-auth-service_cpu") == "ts-auth-service"
+    assert to_service("ts-travel-service_latency-90") == "ts-travel-service"
 
 
 def test_select_cases_uses_repetition_split(tmp_path: Path):

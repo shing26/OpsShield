@@ -2,7 +2,8 @@ import numpy as np
 import pandas as pd
 
 from dataset import Case, candidate_services
-from methods import BaroRanker, MadZRanker, StaticThresholdRanker, ThreeSigmaRanker
+from methods import (BaroRanker, MadZRanker, StaticThresholdRanker,
+                     ThreeSigmaRanker, conf_rrf_scores)
 
 
 def _case(adservice_faulty: bool = True) -> Case:
@@ -50,3 +51,22 @@ def test_static_threshold_only_ranks_sli_violations():
     ranking = StaticThresholdRanker().rank(case, candidate_services(case.metrics), seed=7)
     assert ranking[0] == "frontend"
     assert ranking[-1] == "adservice"
+
+
+def _equal_rrf(resource: dict[str, float], sli: dict[str, float], k: int = 60) -> dict:
+    res_rank = {s: i + 1 for i, s in enumerate(sorted(resource, key=lambda s: (-resource[s], s)))}
+    sli_rank = {s: i + 1 for i, s in enumerate(sorted(sli, key=lambda s: (-sli[s], s)))}
+    size = len(set(resource) | set(sli))
+    return {s: 1.0 / (k + res_rank.get(s, size + 1))
+            + 1.0 / (k + sli_rank.get(s, size + 1))
+            for s in set(resource) | set(sli)}
+
+
+def test_conf_rrf_weights_the_confident_arm_but_keeps_rank_ordering():
+    # Truth (adservice) is #1 on SLI but #3 on resource; frontend is #1 on resource, #2 on SLI.
+    resource = {"frontend": 25.0, "cartservice": 20.0, "adservice": 15.0}
+    sli = {"adservice": 500.0, "frontend": 200.0, "cartservice": 1.0}
+    equal = _equal_rrf(resource, sli)
+    conf = conf_rrf_scores(resource, sli)
+    assert max(equal, key=equal.get) == "frontend"
+    assert max(conf, key=conf.get) == "adservice"

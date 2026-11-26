@@ -36,9 +36,12 @@ DEFAULT_CFG = {
 }
 
 
-def configs() -> list[dict]:
-    keys = list(GRID)
-    return [dict(zip(keys, values)) for values in itertools.product(*(GRID[k] for k in keys))]
+def configs(fusion: str | None = None) -> list[dict]:
+    grid = dict(GRID)
+    if fusion is not None:
+        grid["fusion"] = (fusion,)
+    keys = list(grid)
+    return [dict(zip(keys, values)) for values in itertools.product(*(grid[k] for k in keys))]
 
 
 def _ranker(cfg: dict) -> DualArmRanker:
@@ -126,6 +129,39 @@ def select(primary: dict, min_fault_delta: float = -MAX_FAULT_DROP) -> dict | No
     return max(eligible, key=rank_key)[0]
 
 
+def select_both(primary: dict, guard: dict,
+                min_fault_delta: float = -MAX_FAULT_DROP) -> dict | None:
+    """v3：primary 与 guard 两套 dev 都必须满足分故障约束。
+
+    先最大化两套的平均 Top-1，再比平均 MRR，再比最差分故障差值；仍打平则保留
+    默认参数。融合方式在 v3 固定，因此距离只统计非 fusion 字段。
+    """
+    eligible = []
+    for key, item in primary["configs"].items():
+        guard_item = guard["configs"].get(key)
+        if guard_item is None:
+            continue
+        worst_primary = min(fault_deltas(item, primary["baseline_3sigma"]).values())
+        worst_guard = min(fault_deltas(guard_item, guard["baseline_3sigma"]).values())
+        worst = min(worst_primary, worst_guard)
+        if worst < min_fault_delta:
+            continue
+        eligible.append((item, guard_item, worst))
+    if not eligible:
+        return None
+
+    def rank_key(triple: tuple[dict, dict, float]):
+        item, guard_item, worst = triple
+        distance = sum(1 for key, value in DEFAULT_CFG.items()
+                       if key != "fusion" and item["config"][key] != value)
+        mean_top1 = (item["top1"] + guard_item["top1"]) / 2
+        mean_mrr = (item["mrr"] + guard_item["mrr"]) / 2
+        return (round(mean_top1, 12), round(mean_mrr, 12),
+                round(worst, 12), -distance)
+
+    return max(eligible, key=rank_key)[0]
+
+
 def _line(item: dict, baseline: dict) -> str:
     cfg = item["config"]
     deltas = fault_deltas(item, baseline)
@@ -140,28 +176,39 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Dual-arm ranking parameter sweep (dev only)")
     parser.add_argument("--suite", default="re1-ss")
     parser.add_argument("--guard", default="re1-ob")
+    parser.add_argument("--fusion", default=None,
+                        choices=sorted((*GRID["fusion"], "conf_rrf")),
+                        help="restrict the sweep to one fusion family (v3 uses conf_rrf)")
     parser.add_argument("--data-dir", type=Path, default=DEFAULT_DATA)
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
     args = parser.parse_args(argv)
 
-    grid = configs()
+    grid = configs(args.fusion)
     primary = evaluate(args.suite, grid, args.data_dir)
     guard = evaluate(args.guard, grid, args.data_dir)
-    chosen = select(primary)
+    chosen = select_both(primary, guard) if args.fusion else select(primary)
 
     payload = {
         "suite": args.suite,
         "guard": args.guard,
-        "grid": {k: list(v) for k, v in GRID.items()},
+        "grid": ({**{k: list(v) for k, v in GRID.items() if k != "fusion"},
+                  "fusion": [args.fusion]} if args.fusion
+                 else {k: list(v) for k, v in GRID.items()}),
         "n_configs": len(grid),
-        "selection_rule": "all fault types >= 3sigma - 5pp on primary dev; "
-                          "maximize top1, then mrr, then worst-fault delta",
+        "selection_rule": (
+            "all fault types >= 3sigma - 5pp on BOTH primary and guard dev; "
+            "maximize mean top1, then mean mrr, then worst-fault delta"
+            if args.fusion else
+            "all fault types >= 3sigma - 5pp on primary dev; "
+            "maximize top1, then mrr, then worst-fault delta"),
         "chosen": chosen,
         "primary": primary,
         "guard_results": guard,
     }
+    if args.fusion:
+        payload["fusion"] = args.fusion
     args.out.mkdir(parents=True, exist_ok=True)
-    path = args.out / "V2-rank-sweep.json"
+    path = args.out / ("V3-rank-sweep.json" if args.fusion else "V2-rank-sweep.json")
     path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
                     encoding="utf-8")
 
@@ -173,10 +220,11 @@ def main(argv: list[str] | None = None) -> int:
     for item in ranked[:10]:
         print("  " + _line(item, baseline))
     if chosen is None:
-        print("NO CONFIG satisfies per-fault delta >= -5pp", flush=True)
+        print("NO CONFIG satisfies per-fault delta >= -5pp"
+              + (" on both dev suites" if args.fusion else ""), flush=True)
         return 2
     print("CHOSEN " + _line(chosen, baseline))
-    for fusion in ("weighted", "rrf", "max"):
+    for fusion in ((args.fusion,) if args.fusion else ("weighted", "rrf", "max")):
         subset = [item for item in primary["configs"].values()
                   if item["config"]["fusion"] == fusion]
         if not subset:
@@ -184,11 +232,25 @@ def main(argv: list[str] | None = None) -> int:
         eligible = [item for item in subset
                     if min(fault_deltas(item, baseline).values()) >= -MAX_FAULT_DROP]
         best = max(subset, key=lambda item: item["top1"])
-        print(f"  family {fusion:<8} compliant={len(eligible)}/{len(subset)} "
-              f"best_top1={best['top1']:.3f} "
-              f"worst_fault={min(fault_deltas(best, baseline).values()):+.3f}")
-    print("  guard " + _line(guard["configs"][json.dumps(chosen["config"], sort_keys=True)],
-                             guard["baseline_3sigma"]))
+        if args.fusion:
+            both = 0
+            for item in subset:
+                key = json.dumps(item["config"], sort_keys=True)
+                guard_item = guard["configs"][key]
+                if (min(fault_deltas(item, baseline).values()) >= -MAX_FAULT_DROP
+                        and min(fault_deltas(guard_item,
+                                             guard["baseline_3sigma"]).values())
+                        >= -MAX_FAULT_DROP):
+                    both += 1
+            print(f"  family {fusion:<8} compliant_primary={len(eligible)}/{len(subset)} "
+                  f"compliant_both={both}/{len(subset)} best_top1={best['top1']:.3f} "
+                  f"worst_fault={min(fault_deltas(best, baseline).values()):+.3f}")
+        else:
+            print(f"  family {fusion:<8} compliant={len(eligible)}/{len(subset)} "
+                  f"best_top1={best['top1']:.3f} "
+                  f"worst_fault={min(fault_deltas(best, baseline).values()):+.3f}")
+    guard_item = guard["configs"][json.dumps(chosen["config"], sort_keys=True)]
+    print("  guard " + _line(guard_item, guard["baseline_3sigma"]))
     print(f"-> {path}")
     return 0
 

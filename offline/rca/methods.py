@@ -63,6 +63,26 @@ def _rank_map(scores: dict[str, float]) -> dict[str, int]:
     return {service: index + 1 for index, service in enumerate(ordered)}
 
 
+def conf_rrf_scores(resource: dict[str, float], sli: dict[str, float],
+                    k: int = 60) -> dict[str, float]:
+    """置信加权秩融合：服务排序只用秩，权重是每臂 max-score 的占比。"""
+    services = set(resource) | set(sli)
+    max_res = max(resource.values(), default=0.0)
+    max_sli = max(sli.values(), default=0.0)
+    total = max_res + max_sli
+    if total <= 0:
+        return {service: 0.0 for service in services}
+    res_rank = _rank_map(resource)
+    sli_rank = _rank_map(sli)
+    size = len(services)
+    w_res, w_sli = max_res / total, max_sli / total
+    return {
+        service: w_res / (k + res_rank.get(service, size + 1))
+        + w_sli / (k + sli_rank.get(service, size + 1))
+        for service in services
+    }
+
+
 @dataclass(frozen=True)
 class ArmScores:
     resource: dict[str, float]
@@ -248,7 +268,8 @@ class TopoFirstRanker:
 class DualArmRanker:
     """v2 方法：资源臂 + SLI 臂，按显著性自适应融合。
 
-    - 两臂都显著：``weighted`` 按两臂峰值加权归一化；``rrf`` 按秩融合；``max`` 取大。
+    - 两臂都显著：``weighted`` 按两臂峰值加权归一化；``rrf`` 等权秩融合；
+      ``conf_rrf`` 按臂置信度加权的秩融合；``max`` 取大。
     - 仅一臂显著：直接用该臂，避免另一臂的噪声顶替。
     - 都不显著：退回两臂原始分的较大者。
     - 拓扑扣减只作用于 SLI 分量（调用方的延迟可能是被调方症状）。
@@ -260,7 +281,7 @@ class DualArmRanker:
     onset_z = 3.0
     tau_res = 3.0
     tau_sli = 3.0
-    fusion = "weighted"  # weighted | rrf | max
+    fusion = "weighted"  # weighted | rrf | conf_rrf | max
     rrf_k = 60
     callee_discount = 0.5
     first_mover_boost = 0.3
@@ -291,6 +312,8 @@ class DualArmRanker:
                 + 1.0 / (self.rrf_k + sli_rank.get(service, size + 1))
                 for service in services
             }
+        elif res_sig and sli_sig and self.fusion == "conf_rrf":
+            scores = conf_rrf_scores(resource, sli, self.rrf_k)
         elif res_sig and sli_sig and self.fusion == "weighted":
             total = max_res + max_sli
             w_res, w_sli = max_res / total, max_sli / total
@@ -318,6 +341,22 @@ class DualArmRanker:
         return [s for s, _ in sorted(scores.items(), key=lambda item: (-item[1], item[0]))]
 
 
+class DualArmRRFRanker(DualArmRanker):
+    """v3：置信加权秩融合。
+
+    服务排序只由两臂的秩决定；每臂一个标量权重，来自显著性门控已经使用的
+    ``max(arm)``。它不是分数级加权，符合契约 §3.3 的“RRF 或等价秩融合”。
+    """
+
+    name = "dual-arm-rrf"
+    fusion = "conf_rrf"
+    # V3-1 dev 选参（reports/V3-rank-sweep.json）：SS/OB 两套 dev 都 36/36 合规。
+    tau_res = 3.0
+    tau_sli = 8.0
+    callee_discount = 0.5
+    first_mover_boost = 0.3
+
+
 METHODS: dict[str, Ranker] = {
     RandomRanker.name: RandomRanker(),
     BaroRanker.name: BaroRanker(),
@@ -326,4 +365,5 @@ METHODS: dict[str, Ranker] = {
     StaticThresholdRanker.name: StaticThresholdRanker(),
     TopoFirstRanker.name: TopoFirstRanker(),
     DualArmRanker.name: DualArmRanker(),
+    DualArmRRFRanker.name: DualArmRRFRanker(),
 }

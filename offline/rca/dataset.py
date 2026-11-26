@@ -73,8 +73,12 @@ def select_cases(index: pd.DataFrame, suite: str, split: str = "dev",
 
 
 def to_service(column: str) -> str:
-    """按 RCAEval 的口径把 ``<service>_<indicator>`` 折叠为服务名。"""
-    return column.split("_")[0].replace("-db", "")
+    """按 RCAEval 的口径把 ``<service>_<indicator>`` 折叠为服务名。
+
+    从最后一个 ``_`` 切分，兼容 Train Ticket 的 ``ts-auth-service_cpu``；
+    对 Online Boutique / Sock Shop 的列名与旧的 ``split("_")[0]`` 逐列等价。
+    """
+    return column.rsplit("_", 1)[0].replace("-db", "")
 
 
 def metric_family(column: str) -> str:

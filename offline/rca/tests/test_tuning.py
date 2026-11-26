@@ -1,6 +1,7 @@
 """选参规则本身的测试：约束不能被聚合指标绕过。"""
 from tune_detect import select as select_detection
 from tune_rank import select as select_ranking
+from tune_rank import select_both
 from paired import compare
 
 
@@ -49,6 +50,42 @@ def test_rank_selection_returns_none_when_all_violate():
         "configs": {"bad": _rank_item(0.99, {"delay": 0.5})},
     }
     assert select_ranking(primary) is None
+
+
+def test_rank_selection_both_rejects_guard_regression():
+    cfg = {"fusion": "conf_rrf", "tau_res": 3.0, "tau_sli": 3.0,
+           "callee_discount": 0.5, "first_mover_boost": 0.3}
+    primary = {
+        "baseline_3sigma": {"by_fault": {"delay": 0.8}},
+        "configs": {"cfg": _rank_item(0.95, {"delay": 0.85}, cfg)},
+    }
+    guard = {
+        "baseline_3sigma": {"by_fault": {"delay": 0.9}},
+        "configs": {"cfg": _rank_item(0.95, {"delay": 0.5}, cfg)},
+    }
+    assert select_both(primary, guard) is None
+
+
+def test_rank_selection_both_prefers_mean_top1():
+    tuned = {"fusion": "conf_rrf", "tau_res": 3.0, "tau_sli": 3.0,
+             "callee_discount": 0.5, "first_mover_boost": 0.0}
+    default = {"fusion": "conf_rrf", "tau_res": 3.0, "tau_sli": 3.0,
+               "callee_discount": 0.5, "first_mover_boost": 0.3}
+    primary = {
+        "baseline_3sigma": {"by_fault": {"delay": 0.8}},
+        "configs": {
+            "a": _rank_item(0.90, {"delay": 0.8}, tuned),
+            "b": _rank_item(0.88, {"delay": 0.8}, default),
+        },
+    }
+    guard = {
+        "baseline_3sigma": {"by_fault": {"delay": 0.9}},
+        "configs": {
+            "a": _rank_item(0.92, {"delay": 0.9}, tuned),
+            "b": _rank_item(0.88, {"delay": 0.9}, default),
+        },
+    }
+    assert select_both(primary, guard)["top1"] == 0.90
 
 
 def _detect_item(coverage: float, fa: float, p90: float = 30.0) -> dict:
