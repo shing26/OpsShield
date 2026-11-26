@@ -38,7 +38,9 @@ DEFAULT_OUT = ROOT / "reports"
 RESOURCE = "resource"
 SLI = "sli"
 ARMS = (RESOURCE, SLI)
-DEFAULT_THRESHOLDS = {RESOURCE: 8.0, SLI: 12.0}
+# dev 选参结果（见 reports/V2-detect-sweep.json）：RE1-SS dev 覆盖率 0.907、
+# 误报 1/75；契约固定 sustain=3、材料性下限 8%。
+DEFAULT_THRESHOLDS = {RESOURCE: 20.0, SLI: 8.0}
 
 BASELINE_S = 300
 SUSTAIN = 3

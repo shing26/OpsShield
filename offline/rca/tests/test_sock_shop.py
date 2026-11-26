@@ -96,3 +96,20 @@ def test_dual_arm_discounts_caller_sli_when_callee_is_stronger():
     }, truth="carts")
     ranking = DualArmRanker().rank(case, candidate_services(case.metrics), seed=7)
     assert ranking[0] == "carts", ranking
+
+
+def test_dual_arm_treats_all_nan_column_as_no_evidence():
+    rng = np.random.default_rng(31)
+    n = 100
+    injected = np.arange(n) >= 50
+    cpu = rng.normal(10, 0.2, n)
+    cpu[injected] += 10
+    case = _case({
+        "time": np.arange(n),
+        "carts_cpu": cpu,
+        "orders_error": np.full(n, np.nan),
+        "orders_cpu": rng.normal(10, 0.2, n),
+    }, truth="carts")
+    ranking = DualArmRanker().rank(case, candidate_services(case.metrics), seed=7)
+    assert ranking[0] == "carts", ranking
+    assert set(ranking) == {"carts", "orders"}

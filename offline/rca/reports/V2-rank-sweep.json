@@ -1,0 +1,5938 @@
+{
+  "suite": "re1-ss",
+  "guard": "re1-ob",
+  "grid": {
+    "fusion": [
+      "weighted",
+      "rrf",
+      "max"
+    ],
+    "tau_res": [
+      3.0,
+      5.0,
+      8.0
+    ],
+    "tau_sli": [
+      3.0,
+      5.0,
+      8.0
+    ],
+    "callee_discount": [
+      0.5,
+      0.8
+    ],
+    "first_mover_boost": [
+      0.3,
+      0.0
+    ]
+  },
+  "n_configs": 108,
+  "selection_rule": "all fault types >= 3sigma - 5pp on primary dev; maximize top1, then mrr, then worst-fault delta",
+  "chosen": {
+    "config": {
+      "fusion": "weighted",
+      "tau_res": 3.0,
+      "tau_sli": 3.0,
+      "callee_discount": 0.5,
+      "first_mover_boost": 0.3
+    },
+    "top1": 0.9466666666666667,
+    "top3": 0.9733333333333334,
+    "mrr": 0.9622222222222222,
+    "mean_rank": 1.1333333333333333,
+    "by_fault": {
+      "cpu": 1.0,
+      "delay": 1.0,
+      "disk": 0.9333333333333333,
+      "loss": 0.8,
+      "mem": 1.0
+    },
+    "by_service": {
+      "carts": 1.0,
+      "catalogue": 1.0,
+      "orders": 1.0,
+      "payment": 0.7333333333333333,
+      "user": 1.0
+    }
+  },
+  "primary": {
+    "baseline_3sigma": {
+      "top1": 0.84,
+      "top3": 0.9733333333333334,
+      "mrr": 0.9088888888888889,
+      "mean_rank": 1.24,
+      "by_fault": {
+        "cpu": 1.0,
+        "delay": 0.8,
+        "disk": 0.8666666666666667,
+        "loss": 0.6,
+        "mem": 0.9333333333333333
+      },
+      "by_service": {
+        "carts": 0.7333333333333333,
+        "catalogue": 1.0,
+        "orders": 0.7333333333333333,
+        "payment": 0.8,
+        "user": 0.9333333333333333
+      }
+    },
+    "configs": {
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.3, \"fusion\": \"weighted\", \"tau_res\": 3.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 3.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9622222222222222,
+        "mean_rank": 1.1333333333333333,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.0, \"fusion\": \"weighted\", \"tau_res\": 3.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 3.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9622222222222222,
+        "mean_rank": 1.1333333333333333,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.3, \"fusion\": \"weighted\", \"tau_res\": 3.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 3.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9622222222222222,
+        "mean_rank": 1.1333333333333333,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.0, \"fusion\": \"weighted\", \"tau_res\": 3.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 3.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9622222222222222,
+        "mean_rank": 1.1333333333333333,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.3, \"fusion\": \"weighted\", \"tau_res\": 3.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 3.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9622222222222222,
+        "mean_rank": 1.1333333333333333,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.0, \"fusion\": \"weighted\", \"tau_res\": 3.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 3.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9622222222222222,
+        "mean_rank": 1.1333333333333333,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.3, \"fusion\": \"weighted\", \"tau_res\": 3.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 3.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9622222222222222,
+        "mean_rank": 1.1333333333333333,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.0, \"fusion\": \"weighted\", \"tau_res\": 3.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 3.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9622222222222222,
+        "mean_rank": 1.1333333333333333,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.3, \"fusion\": \"weighted\", \"tau_res\": 3.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 3.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9622222222222222,
+        "mean_rank": 1.1333333333333333,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.0, \"fusion\": \"weighted\", \"tau_res\": 3.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 3.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9622222222222222,
+        "mean_rank": 1.1333333333333333,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.3, \"fusion\": \"weighted\", \"tau_res\": 3.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 3.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9622222222222222,
+        "mean_rank": 1.1333333333333333,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.0, \"fusion\": \"weighted\", \"tau_res\": 3.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 3.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9622222222222222,
+        "mean_rank": 1.1333333333333333,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.3, \"fusion\": \"weighted\", \"tau_res\": 5.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 5.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9644444444444444,
+        "mean_rank": 1.12,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.0, \"fusion\": \"weighted\", \"tau_res\": 5.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 5.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9644444444444444,
+        "mean_rank": 1.12,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.3, \"fusion\": \"weighted\", \"tau_res\": 5.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 5.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9644444444444444,
+        "mean_rank": 1.12,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.0, \"fusion\": \"weighted\", \"tau_res\": 5.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 5.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9644444444444444,
+        "mean_rank": 1.12,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.3, \"fusion\": \"weighted\", \"tau_res\": 5.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 5.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9644444444444444,
+        "mean_rank": 1.12,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.0, \"fusion\": \"weighted\", \"tau_res\": 5.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 5.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9644444444444444,
+        "mean_rank": 1.12,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.3, \"fusion\": \"weighted\", \"tau_res\": 5.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 5.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9644444444444444,
+        "mean_rank": 1.12,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.0, \"fusion\": \"weighted\", \"tau_res\": 5.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 5.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9644444444444444,
+        "mean_rank": 1.12,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.3, \"fusion\": \"weighted\", \"tau_res\": 5.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 5.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9644444444444444,
+        "mean_rank": 1.12,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.0, \"fusion\": \"weighted\", \"tau_res\": 5.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 5.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9644444444444444,
+        "mean_rank": 1.12,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.3, \"fusion\": \"weighted\", \"tau_res\": 5.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 5.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9644444444444444,
+        "mean_rank": 1.12,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.0, \"fusion\": \"weighted\", \"tau_res\": 5.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 5.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9644444444444444,
+        "mean_rank": 1.12,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.3, \"fusion\": \"weighted\", \"tau_res\": 8.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 8.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9644444444444444,
+        "mean_rank": 1.12,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.0, \"fusion\": \"weighted\", \"tau_res\": 8.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 8.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9644444444444444,
+        "mean_rank": 1.12,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.3, \"fusion\": \"weighted\", \"tau_res\": 8.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 8.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9644444444444444,
+        "mean_rank": 1.12,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.0, \"fusion\": \"weighted\", \"tau_res\": 8.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 8.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9644444444444444,
+        "mean_rank": 1.12,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.3, \"fusion\": \"weighted\", \"tau_res\": 8.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 8.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9644444444444444,
+        "mean_rank": 1.12,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.0, \"fusion\": \"weighted\", \"tau_res\": 8.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 8.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9644444444444444,
+        "mean_rank": 1.12,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.3, \"fusion\": \"weighted\", \"tau_res\": 8.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 8.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9644444444444444,
+        "mean_rank": 1.12,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.0, \"fusion\": \"weighted\", \"tau_res\": 8.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 8.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9644444444444444,
+        "mean_rank": 1.12,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.3, \"fusion\": \"weighted\", \"tau_res\": 8.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 8.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9644444444444444,
+        "mean_rank": 1.12,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.0, \"fusion\": \"weighted\", \"tau_res\": 8.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 8.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9644444444444444,
+        "mean_rank": 1.12,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.3, \"fusion\": \"weighted\", \"tau_res\": 8.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 8.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9644444444444444,
+        "mean_rank": 1.12,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.0, \"fusion\": \"weighted\", \"tau_res\": 8.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 8.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9644444444444444,
+        "mean_rank": 1.12,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.3, \"fusion\": \"rrf\", \"tau_res\": 3.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 3.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.84,
+        "top3": 0.9866666666666667,
+        "mrr": 0.91,
+        "mean_rank": 1.2266666666666666,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 0.5333333333333333,
+          "disk": 1.0,
+          "loss": 0.6666666666666666,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 0.8,
+          "catalogue": 0.8666666666666667,
+          "orders": 0.8666666666666667,
+          "payment": 0.8,
+          "user": 0.8666666666666667
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.0, \"fusion\": \"rrf\", \"tau_res\": 3.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 3.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.8,
+        "top3": 0.9866666666666667,
+        "mrr": 0.8855555555555555,
+        "mean_rank": 1.2933333333333332,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 0.5333333333333333,
+          "disk": 0.9333333333333333,
+          "loss": 0.5333333333333333,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 0.9333333333333333,
+          "catalogue": 0.8,
+          "orders": 0.8666666666666667,
+          "payment": 0.6,
+          "user": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.3, \"fusion\": \"rrf\", \"tau_res\": 3.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 3.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.84,
+        "top3": 0.9866666666666667,
+        "mrr": 0.91,
+        "mean_rank": 1.2266666666666666,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 0.5333333333333333,
+          "disk": 1.0,
+          "loss": 0.6666666666666666,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 0.8,
+          "catalogue": 0.8666666666666667,
+          "orders": 0.8666666666666667,
+          "payment": 0.8,
+          "user": 0.8666666666666667
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.0, \"fusion\": \"rrf\", \"tau_res\": 3.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 3.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.8,
+        "top3": 0.9866666666666667,
+        "mrr": 0.8855555555555555,
+        "mean_rank": 1.2933333333333332,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 0.6,
+          "disk": 0.9333333333333333,
+          "loss": 0.4666666666666667,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 0.9333333333333333,
+          "catalogue": 0.7333333333333333,
+          "orders": 0.8666666666666667,
+          "payment": 0.6666666666666666,
+          "user": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.3, \"fusion\": \"rrf\", \"tau_res\": 3.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 3.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.84,
+        "top3": 0.9866666666666667,
+        "mrr": 0.91,
+        "mean_rank": 1.2266666666666666,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 0.5333333333333333,
+          "disk": 1.0,
+          "loss": 0.6666666666666666,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 0.8,
+          "catalogue": 0.8666666666666667,
+          "orders": 0.8666666666666667,
+          "payment": 0.8,
+          "user": 0.8666666666666667
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.0, \"fusion\": \"rrf\", \"tau_res\": 3.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 3.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.8,
+        "top3": 0.9866666666666667,
+        "mrr": 0.8855555555555555,
+        "mean_rank": 1.2933333333333332,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 0.5333333333333333,
+          "disk": 0.9333333333333333,
+          "loss": 0.5333333333333333,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 0.9333333333333333,
+          "catalogue": 0.8,
+          "orders": 0.8666666666666667,
+          "payment": 0.6,
+          "user": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.3, \"fusion\": \"rrf\", \"tau_res\": 3.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 3.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.84,
+        "top3": 0.9866666666666667,
+        "mrr": 0.91,
+        "mean_rank": 1.2266666666666666,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 0.5333333333333333,
+          "disk": 1.0,
+          "loss": 0.6666666666666666,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 0.8,
+          "catalogue": 0.8666666666666667,
+          "orders": 0.8666666666666667,
+          "payment": 0.8,
+          "user": 0.8666666666666667
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.0, \"fusion\": \"rrf\", \"tau_res\": 3.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 3.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.8,
+        "top3": 0.9866666666666667,
+        "mrr": 0.8855555555555555,
+        "mean_rank": 1.2933333333333332,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 0.6,
+          "disk": 0.9333333333333333,
+          "loss": 0.4666666666666667,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 0.9333333333333333,
+          "catalogue": 0.7333333333333333,
+          "orders": 0.8666666666666667,
+          "payment": 0.6666666666666666,
+          "user": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.3, \"fusion\": \"rrf\", \"tau_res\": 3.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 3.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.84,
+        "top3": 0.9866666666666667,
+        "mrr": 0.91,
+        "mean_rank": 1.2266666666666666,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 0.5333333333333333,
+          "disk": 1.0,
+          "loss": 0.6666666666666666,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 0.8,
+          "catalogue": 0.8666666666666667,
+          "orders": 0.8666666666666667,
+          "payment": 0.8,
+          "user": 0.8666666666666667
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.0, \"fusion\": \"rrf\", \"tau_res\": 3.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 3.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.8,
+        "top3": 0.9866666666666667,
+        "mrr": 0.8855555555555555,
+        "mean_rank": 1.2933333333333332,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 0.5333333333333333,
+          "disk": 0.9333333333333333,
+          "loss": 0.5333333333333333,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 0.9333333333333333,
+          "catalogue": 0.8,
+          "orders": 0.8666666666666667,
+          "payment": 0.6,
+          "user": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.3, \"fusion\": \"rrf\", \"tau_res\": 3.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 3.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.84,
+        "top3": 0.9866666666666667,
+        "mrr": 0.91,
+        "mean_rank": 1.2266666666666666,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 0.5333333333333333,
+          "disk": 1.0,
+          "loss": 0.6666666666666666,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 0.8,
+          "catalogue": 0.8666666666666667,
+          "orders": 0.8666666666666667,
+          "payment": 0.8,
+          "user": 0.8666666666666667
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.0, \"fusion\": \"rrf\", \"tau_res\": 3.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 3.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.8,
+        "top3": 0.9866666666666667,
+        "mrr": 0.8855555555555555,
+        "mean_rank": 1.2933333333333332,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 0.6,
+          "disk": 0.9333333333333333,
+          "loss": 0.4666666666666667,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 0.9333333333333333,
+          "catalogue": 0.7333333333333333,
+          "orders": 0.8666666666666667,
+          "payment": 0.6666666666666666,
+          "user": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.3, \"fusion\": \"rrf\", \"tau_res\": 5.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 5.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.84,
+        "top3": 0.9866666666666667,
+        "mrr": 0.9122222222222223,
+        "mean_rank": 1.2133333333333334,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 0.5333333333333333,
+          "disk": 1.0,
+          "loss": 0.6666666666666666,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 0.8,
+          "catalogue": 0.8666666666666667,
+          "orders": 0.9333333333333333,
+          "payment": 0.7333333333333333,
+          "user": 0.8666666666666667
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.0, \"fusion\": \"rrf\", \"tau_res\": 5.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 5.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.8666666666666667,
+        "top3": 0.9866666666666667,
+        "mrr": 0.9233333333333333,
+        "mean_rank": 1.2,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 0.6666666666666666,
+          "disk": 0.9333333333333333,
+          "loss": 0.7333333333333333,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 0.9333333333333333,
+          "catalogue": 0.8666666666666667,
+          "orders": 1.0,
+          "payment": 0.6666666666666666,
+          "user": 0.8666666666666667
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.3, \"fusion\": \"rrf\", \"tau_res\": 5.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 5.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.84,
+        "top3": 0.9866666666666667,
+        "mrr": 0.9122222222222223,
+        "mean_rank": 1.2133333333333334,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 0.5333333333333333,
+          "disk": 1.0,
+          "loss": 0.6666666666666666,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 0.8,
+          "catalogue": 0.8666666666666667,
+          "orders": 0.9333333333333333,
+          "payment": 0.7333333333333333,
+          "user": 0.8666666666666667
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.0, \"fusion\": \"rrf\", \"tau_res\": 5.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 5.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.8533333333333334,
+        "top3": 0.9866666666666667,
+        "mrr": 0.9166666666666666,
+        "mean_rank": 1.2133333333333334,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 0.6666666666666666,
+          "disk": 0.9333333333333333,
+          "loss": 0.6666666666666666,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 0.9333333333333333,
+          "catalogue": 0.8,
+          "orders": 1.0,
+          "payment": 0.6666666666666666,
+          "user": 0.8666666666666667
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.3, \"fusion\": \"rrf\", \"tau_res\": 5.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 5.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.84,
+        "top3": 0.9866666666666667,
+        "mrr": 0.9122222222222223,
+        "mean_rank": 1.2133333333333334,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 0.5333333333333333,
+          "disk": 1.0,
+          "loss": 0.6666666666666666,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 0.8,
+          "catalogue": 0.8666666666666667,
+          "orders": 0.9333333333333333,
+          "payment": 0.7333333333333333,
+          "user": 0.8666666666666667
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.0, \"fusion\": \"rrf\", \"tau_res\": 5.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 5.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.8666666666666667,
+        "top3": 0.9866666666666667,
+        "mrr": 0.9233333333333333,
+        "mean_rank": 1.2,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 0.6666666666666666,
+          "disk": 0.9333333333333333,
+          "loss": 0.7333333333333333,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 0.9333333333333333,
+          "catalogue": 0.8666666666666667,
+          "orders": 1.0,
+          "payment": 0.6666666666666666,
+          "user": 0.8666666666666667
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.3, \"fusion\": \"rrf\", \"tau_res\": 5.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 5.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.84,
+        "top3": 0.9866666666666667,
+        "mrr": 0.9122222222222223,
+        "mean_rank": 1.2133333333333334,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 0.5333333333333333,
+          "disk": 1.0,
+          "loss": 0.6666666666666666,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 0.8,
+          "catalogue": 0.8666666666666667,
+          "orders": 0.9333333333333333,
+          "payment": 0.7333333333333333,
+          "user": 0.8666666666666667
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.0, \"fusion\": \"rrf\", \"tau_res\": 5.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 5.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.8533333333333334,
+        "top3": 0.9866666666666667,
+        "mrr": 0.9166666666666666,
+        "mean_rank": 1.2133333333333334,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 0.6666666666666666,
+          "disk": 0.9333333333333333,
+          "loss": 0.6666666666666666,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 0.9333333333333333,
+          "catalogue": 0.8,
+          "orders": 1.0,
+          "payment": 0.6666666666666666,
+          "user": 0.8666666666666667
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.3, \"fusion\": \"rrf\", \"tau_res\": 5.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 5.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.84,
+        "top3": 0.9866666666666667,
+        "mrr": 0.9122222222222223,
+        "mean_rank": 1.2133333333333334,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 0.5333333333333333,
+          "disk": 1.0,
+          "loss": 0.6666666666666666,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 0.8,
+          "catalogue": 0.8666666666666667,
+          "orders": 0.9333333333333333,
+          "payment": 0.7333333333333333,
+          "user": 0.8666666666666667
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.0, \"fusion\": \"rrf\", \"tau_res\": 5.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 5.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.8666666666666667,
+        "top3": 0.9866666666666667,
+        "mrr": 0.9233333333333333,
+        "mean_rank": 1.2,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 0.6666666666666666,
+          "disk": 0.9333333333333333,
+          "loss": 0.7333333333333333,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 0.9333333333333333,
+          "catalogue": 0.8666666666666667,
+          "orders": 1.0,
+          "payment": 0.6666666666666666,
+          "user": 0.8666666666666667
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.3, \"fusion\": \"rrf\", \"tau_res\": 5.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 5.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.84,
+        "top3": 0.9866666666666667,
+        "mrr": 0.9122222222222223,
+        "mean_rank": 1.2133333333333334,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 0.5333333333333333,
+          "disk": 1.0,
+          "loss": 0.6666666666666666,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 0.8,
+          "catalogue": 0.8666666666666667,
+          "orders": 0.9333333333333333,
+          "payment": 0.7333333333333333,
+          "user": 0.8666666666666667
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.0, \"fusion\": \"rrf\", \"tau_res\": 5.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 5.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.8533333333333334,
+        "top3": 0.9866666666666667,
+        "mrr": 0.9166666666666666,
+        "mean_rank": 1.2133333333333334,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 0.6666666666666666,
+          "disk": 0.9333333333333333,
+          "loss": 0.6666666666666666,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 0.9333333333333333,
+          "catalogue": 0.8,
+          "orders": 1.0,
+          "payment": 0.6666666666666666,
+          "user": 0.8666666666666667
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.3, \"fusion\": \"rrf\", \"tau_res\": 8.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 8.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.84,
+        "top3": 0.9866666666666667,
+        "mrr": 0.9122222222222223,
+        "mean_rank": 1.2133333333333334,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 0.5333333333333333,
+          "disk": 1.0,
+          "loss": 0.6666666666666666,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 0.8,
+          "catalogue": 0.8666666666666667,
+          "orders": 0.9333333333333333,
+          "payment": 0.7333333333333333,
+          "user": 0.8666666666666667
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.0, \"fusion\": \"rrf\", \"tau_res\": 8.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 8.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.8666666666666667,
+        "top3": 0.9866666666666667,
+        "mrr": 0.9233333333333333,
+        "mean_rank": 1.2,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 0.6666666666666666,
+          "disk": 0.9333333333333333,
+          "loss": 0.7333333333333333,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 0.9333333333333333,
+          "catalogue": 0.8666666666666667,
+          "orders": 1.0,
+          "payment": 0.6666666666666666,
+          "user": 0.8666666666666667
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.3, \"fusion\": \"rrf\", \"tau_res\": 8.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 8.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.84,
+        "top3": 0.9866666666666667,
+        "mrr": 0.9122222222222223,
+        "mean_rank": 1.2133333333333334,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 0.5333333333333333,
+          "disk": 1.0,
+          "loss": 0.6666666666666666,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 0.8,
+          "catalogue": 0.8666666666666667,
+          "orders": 0.9333333333333333,
+          "payment": 0.7333333333333333,
+          "user": 0.8666666666666667
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.0, \"fusion\": \"rrf\", \"tau_res\": 8.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 8.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.8533333333333334,
+        "top3": 0.9866666666666667,
+        "mrr": 0.9166666666666666,
+        "mean_rank": 1.2133333333333334,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 0.6666666666666666,
+          "disk": 0.9333333333333333,
+          "loss": 0.6666666666666666,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 0.9333333333333333,
+          "catalogue": 0.8,
+          "orders": 1.0,
+          "payment": 0.6666666666666666,
+          "user": 0.8666666666666667
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.3, \"fusion\": \"rrf\", \"tau_res\": 8.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 8.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.84,
+        "top3": 0.9866666666666667,
+        "mrr": 0.9122222222222223,
+        "mean_rank": 1.2133333333333334,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 0.5333333333333333,
+          "disk": 1.0,
+          "loss": 0.6666666666666666,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 0.8,
+          "catalogue": 0.8666666666666667,
+          "orders": 0.9333333333333333,
+          "payment": 0.7333333333333333,
+          "user": 0.8666666666666667
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.0, \"fusion\": \"rrf\", \"tau_res\": 8.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 8.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.8666666666666667,
+        "top3": 0.9866666666666667,
+        "mrr": 0.9233333333333333,
+        "mean_rank": 1.2,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 0.6666666666666666,
+          "disk": 0.9333333333333333,
+          "loss": 0.7333333333333333,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 0.9333333333333333,
+          "catalogue": 0.8666666666666667,
+          "orders": 1.0,
+          "payment": 0.6666666666666666,
+          "user": 0.8666666666666667
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.3, \"fusion\": \"rrf\", \"tau_res\": 8.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 8.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.84,
+        "top3": 0.9866666666666667,
+        "mrr": 0.9122222222222223,
+        "mean_rank": 1.2133333333333334,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 0.5333333333333333,
+          "disk": 1.0,
+          "loss": 0.6666666666666666,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 0.8,
+          "catalogue": 0.8666666666666667,
+          "orders": 0.9333333333333333,
+          "payment": 0.7333333333333333,
+          "user": 0.8666666666666667
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.0, \"fusion\": \"rrf\", \"tau_res\": 8.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 8.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.8533333333333334,
+        "top3": 0.9866666666666667,
+        "mrr": 0.9166666666666666,
+        "mean_rank": 1.2133333333333334,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 0.6666666666666666,
+          "disk": 0.9333333333333333,
+          "loss": 0.6666666666666666,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 0.9333333333333333,
+          "catalogue": 0.8,
+          "orders": 1.0,
+          "payment": 0.6666666666666666,
+          "user": 0.8666666666666667
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.3, \"fusion\": \"rrf\", \"tau_res\": 8.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 8.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.84,
+        "top3": 0.9866666666666667,
+        "mrr": 0.9122222222222223,
+        "mean_rank": 1.2133333333333334,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 0.5333333333333333,
+          "disk": 1.0,
+          "loss": 0.6666666666666666,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 0.8,
+          "catalogue": 0.8666666666666667,
+          "orders": 0.9333333333333333,
+          "payment": 0.7333333333333333,
+          "user": 0.8666666666666667
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.0, \"fusion\": \"rrf\", \"tau_res\": 8.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 8.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.8666666666666667,
+        "top3": 0.9866666666666667,
+        "mrr": 0.9233333333333333,
+        "mean_rank": 1.2,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 0.6666666666666666,
+          "disk": 0.9333333333333333,
+          "loss": 0.7333333333333333,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 0.9333333333333333,
+          "catalogue": 0.8666666666666667,
+          "orders": 1.0,
+          "payment": 0.6666666666666666,
+          "user": 0.8666666666666667
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.3, \"fusion\": \"rrf\", \"tau_res\": 8.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 8.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.84,
+        "top3": 0.9866666666666667,
+        "mrr": 0.9122222222222223,
+        "mean_rank": 1.2133333333333334,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 0.5333333333333333,
+          "disk": 1.0,
+          "loss": 0.6666666666666666,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 0.8,
+          "catalogue": 0.8666666666666667,
+          "orders": 0.9333333333333333,
+          "payment": 0.7333333333333333,
+          "user": 0.8666666666666667
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.0, \"fusion\": \"rrf\", \"tau_res\": 8.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 8.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.8533333333333334,
+        "top3": 0.9866666666666667,
+        "mrr": 0.9166666666666666,
+        "mean_rank": 1.2133333333333334,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 0.6666666666666666,
+          "disk": 0.9333333333333333,
+          "loss": 0.6666666666666666,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 0.9333333333333333,
+          "catalogue": 0.8,
+          "orders": 1.0,
+          "payment": 0.6666666666666666,
+          "user": 0.8666666666666667
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.3, \"fusion\": \"max\", \"tau_res\": 3.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 3.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9622222222222222,
+        "mean_rank": 1.1333333333333333,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.0, \"fusion\": \"max\", \"tau_res\": 3.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 3.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9622222222222222,
+        "mean_rank": 1.1333333333333333,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.3, \"fusion\": \"max\", \"tau_res\": 3.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 3.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9622222222222222,
+        "mean_rank": 1.1333333333333333,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.0, \"fusion\": \"max\", \"tau_res\": 3.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 3.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9622222222222222,
+        "mean_rank": 1.1333333333333333,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.3, \"fusion\": \"max\", \"tau_res\": 3.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 3.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9622222222222222,
+        "mean_rank": 1.1333333333333333,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.0, \"fusion\": \"max\", \"tau_res\": 3.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 3.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9622222222222222,
+        "mean_rank": 1.1333333333333333,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.3, \"fusion\": \"max\", \"tau_res\": 3.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 3.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9622222222222222,
+        "mean_rank": 1.1333333333333333,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.0, \"fusion\": \"max\", \"tau_res\": 3.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 3.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9622222222222222,
+        "mean_rank": 1.1333333333333333,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.3, \"fusion\": \"max\", \"tau_res\": 3.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 3.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9622222222222222,
+        "mean_rank": 1.1333333333333333,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.0, \"fusion\": \"max\", \"tau_res\": 3.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 3.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9622222222222222,
+        "mean_rank": 1.1333333333333333,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.3, \"fusion\": \"max\", \"tau_res\": 3.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 3.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9622222222222222,
+        "mean_rank": 1.1333333333333333,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.0, \"fusion\": \"max\", \"tau_res\": 3.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 3.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9622222222222222,
+        "mean_rank": 1.1333333333333333,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.3, \"fusion\": \"max\", \"tau_res\": 5.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 5.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9644444444444444,
+        "mean_rank": 1.12,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.0, \"fusion\": \"max\", \"tau_res\": 5.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 5.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9644444444444444,
+        "mean_rank": 1.12,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.3, \"fusion\": \"max\", \"tau_res\": 5.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 5.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9644444444444444,
+        "mean_rank": 1.12,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.0, \"fusion\": \"max\", \"tau_res\": 5.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 5.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9644444444444444,
+        "mean_rank": 1.12,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.3, \"fusion\": \"max\", \"tau_res\": 5.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 5.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9644444444444444,
+        "mean_rank": 1.12,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.0, \"fusion\": \"max\", \"tau_res\": 5.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 5.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9644444444444444,
+        "mean_rank": 1.12,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.3, \"fusion\": \"max\", \"tau_res\": 5.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 5.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9644444444444444,
+        "mean_rank": 1.12,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.0, \"fusion\": \"max\", \"tau_res\": 5.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 5.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9644444444444444,
+        "mean_rank": 1.12,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.3, \"fusion\": \"max\", \"tau_res\": 5.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 5.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9644444444444444,
+        "mean_rank": 1.12,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.0, \"fusion\": \"max\", \"tau_res\": 5.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 5.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9644444444444444,
+        "mean_rank": 1.12,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.3, \"fusion\": \"max\", \"tau_res\": 5.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 5.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9644444444444444,
+        "mean_rank": 1.12,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.0, \"fusion\": \"max\", \"tau_res\": 5.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 5.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9644444444444444,
+        "mean_rank": 1.12,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.3, \"fusion\": \"max\", \"tau_res\": 8.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 8.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9644444444444444,
+        "mean_rank": 1.12,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.0, \"fusion\": \"max\", \"tau_res\": 8.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 8.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9644444444444444,
+        "mean_rank": 1.12,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.3, \"fusion\": \"max\", \"tau_res\": 8.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 8.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9644444444444444,
+        "mean_rank": 1.12,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.0, \"fusion\": \"max\", \"tau_res\": 8.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 8.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9644444444444444,
+        "mean_rank": 1.12,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.3, \"fusion\": \"max\", \"tau_res\": 8.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 8.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9644444444444444,
+        "mean_rank": 1.12,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.0, \"fusion\": \"max\", \"tau_res\": 8.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 8.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9644444444444444,
+        "mean_rank": 1.12,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.3, \"fusion\": \"max\", \"tau_res\": 8.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 8.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9644444444444444,
+        "mean_rank": 1.12,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.0, \"fusion\": \"max\", \"tau_res\": 8.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 8.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9644444444444444,
+        "mean_rank": 1.12,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.3, \"fusion\": \"max\", \"tau_res\": 8.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 8.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9644444444444444,
+        "mean_rank": 1.12,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.0, \"fusion\": \"max\", \"tau_res\": 8.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 8.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9644444444444444,
+        "mean_rank": 1.12,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.3, \"fusion\": \"max\", \"tau_res\": 8.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 8.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9644444444444444,
+        "mean_rank": 1.12,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.0, \"fusion\": \"max\", \"tau_res\": 8.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 8.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.9466666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9644444444444444,
+        "mean_rank": 1.12,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 0.9333333333333333,
+          "loss": 0.8,
+          "mem": 1.0
+        },
+        "by_service": {
+          "carts": 1.0,
+          "catalogue": 1.0,
+          "orders": 1.0,
+          "payment": 0.7333333333333333,
+          "user": 1.0
+        }
+      }
+    }
+  },
+  "guard_results": {
+    "baseline_3sigma": {
+      "top1": 0.6933333333333334,
+      "top3": 0.8933333333333333,
+      "mrr": 0.8091111111111111,
+      "mean_rank": 1.6533333333333333,
+      "by_fault": {
+        "cpu": 0.5333333333333333,
+        "delay": 1.0,
+        "disk": 0.6666666666666666,
+        "loss": 0.4,
+        "mem": 0.8666666666666667
+      },
+      "by_service": {
+        "adservice": 0.8666666666666667,
+        "cartservice": 0.8,
+        "checkoutservice": 0.4666666666666667,
+        "currencyservice": 0.7333333333333333,
+        "productcatalogservice": 0.6
+      }
+    },
+    "configs": {
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.3, \"fusion\": \"weighted\", \"tau_res\": 3.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 3.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.8933333333333333,
+        "top3": 0.96,
+        "mrr": 0.9331111111111111,
+        "mean_rank": 1.2266666666666666,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.5333333333333333,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.9333333333333333,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.0, \"fusion\": \"weighted\", \"tau_res\": 3.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 3.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.8933333333333333,
+        "top3": 0.96,
+        "mrr": 0.9331111111111111,
+        "mean_rank": 1.2266666666666666,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.5333333333333333,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.9333333333333333,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.3, \"fusion\": \"weighted\", \"tau_res\": 3.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 3.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.88,
+        "top3": 0.96,
+        "mrr": 0.9264444444444444,
+        "mean_rank": 1.24,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.4666666666666667,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.8666666666666667,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.0, \"fusion\": \"weighted\", \"tau_res\": 3.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 3.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.88,
+        "top3": 0.96,
+        "mrr": 0.9264444444444444,
+        "mean_rank": 1.24,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.4666666666666667,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.8666666666666667,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.3, \"fusion\": \"weighted\", \"tau_res\": 3.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 3.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.8933333333333333,
+        "top3": 0.96,
+        "mrr": 0.9331111111111111,
+        "mean_rank": 1.2266666666666666,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.5333333333333333,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.9333333333333333,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.0, \"fusion\": \"weighted\", \"tau_res\": 3.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 3.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.8933333333333333,
+        "top3": 0.96,
+        "mrr": 0.9331111111111111,
+        "mean_rank": 1.2266666666666666,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.5333333333333333,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.9333333333333333,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.3, \"fusion\": \"weighted\", \"tau_res\": 3.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 3.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.88,
+        "top3": 0.96,
+        "mrr": 0.9264444444444444,
+        "mean_rank": 1.24,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.4666666666666667,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.8666666666666667,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.0, \"fusion\": \"weighted\", \"tau_res\": 3.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 3.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.88,
+        "top3": 0.96,
+        "mrr": 0.9264444444444444,
+        "mean_rank": 1.24,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.4666666666666667,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.8666666666666667,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.3, \"fusion\": \"weighted\", \"tau_res\": 3.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 3.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.8933333333333333,
+        "top3": 0.96,
+        "mrr": 0.9331111111111111,
+        "mean_rank": 1.2266666666666666,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.5333333333333333,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.9333333333333333,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.0, \"fusion\": \"weighted\", \"tau_res\": 3.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 3.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.8933333333333333,
+        "top3": 0.96,
+        "mrr": 0.9331111111111111,
+        "mean_rank": 1.2266666666666666,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.5333333333333333,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.9333333333333333,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.3, \"fusion\": \"weighted\", \"tau_res\": 3.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 3.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.88,
+        "top3": 0.96,
+        "mrr": 0.9264444444444444,
+        "mean_rank": 1.24,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.4666666666666667,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.8666666666666667,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.0, \"fusion\": \"weighted\", \"tau_res\": 3.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 3.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.88,
+        "top3": 0.96,
+        "mrr": 0.9264444444444444,
+        "mean_rank": 1.24,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.4666666666666667,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.8666666666666667,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.3, \"fusion\": \"weighted\", \"tau_res\": 5.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 5.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.8933333333333333,
+        "top3": 0.96,
+        "mrr": 0.9331111111111111,
+        "mean_rank": 1.2266666666666666,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.5333333333333333,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.9333333333333333,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.0, \"fusion\": \"weighted\", \"tau_res\": 5.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 5.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.8933333333333333,
+        "top3": 0.96,
+        "mrr": 0.9331111111111111,
+        "mean_rank": 1.2266666666666666,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.5333333333333333,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.9333333333333333,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.3, \"fusion\": \"weighted\", \"tau_res\": 5.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 5.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.88,
+        "top3": 0.96,
+        "mrr": 0.9257777777777778,
+        "mean_rank": 1.2533333333333334,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.4666666666666667,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.8666666666666667,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.0, \"fusion\": \"weighted\", \"tau_res\": 5.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 5.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.88,
+        "top3": 0.96,
+        "mrr": 0.9257777777777778,
+        "mean_rank": 1.2533333333333334,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.4666666666666667,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.8666666666666667,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.3, \"fusion\": \"weighted\", \"tau_res\": 5.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 5.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.8933333333333333,
+        "top3": 0.96,
+        "mrr": 0.9331111111111111,
+        "mean_rank": 1.2266666666666666,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.5333333333333333,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.9333333333333333,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.0, \"fusion\": \"weighted\", \"tau_res\": 5.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 5.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.8933333333333333,
+        "top3": 0.96,
+        "mrr": 0.9331111111111111,
+        "mean_rank": 1.2266666666666666,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.5333333333333333,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.9333333333333333,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.3, \"fusion\": \"weighted\", \"tau_res\": 5.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 5.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.88,
+        "top3": 0.96,
+        "mrr": 0.9257777777777778,
+        "mean_rank": 1.2533333333333334,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.4666666666666667,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.8666666666666667,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.0, \"fusion\": \"weighted\", \"tau_res\": 5.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 5.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.88,
+        "top3": 0.96,
+        "mrr": 0.9257777777777778,
+        "mean_rank": 1.2533333333333334,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.4666666666666667,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.8666666666666667,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.3, \"fusion\": \"weighted\", \"tau_res\": 5.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 5.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.8933333333333333,
+        "top3": 0.96,
+        "mrr": 0.9331111111111111,
+        "mean_rank": 1.2266666666666666,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.5333333333333333,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.9333333333333333,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.0, \"fusion\": \"weighted\", \"tau_res\": 5.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 5.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.8933333333333333,
+        "top3": 0.96,
+        "mrr": 0.9331111111111111,
+        "mean_rank": 1.2266666666666666,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.5333333333333333,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.9333333333333333,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.3, \"fusion\": \"weighted\", \"tau_res\": 5.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 5.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.88,
+        "top3": 0.96,
+        "mrr": 0.9257777777777778,
+        "mean_rank": 1.2533333333333334,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.4666666666666667,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.8666666666666667,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.0, \"fusion\": \"weighted\", \"tau_res\": 5.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 5.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.88,
+        "top3": 0.96,
+        "mrr": 0.9257777777777778,
+        "mean_rank": 1.2533333333333334,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.4666666666666667,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.8666666666666667,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.3, \"fusion\": \"weighted\", \"tau_res\": 8.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 8.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.8933333333333333,
+        "top3": 0.96,
+        "mrr": 0.9308888888888889,
+        "mean_rank": 1.24,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.5333333333333333,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.9333333333333333,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.0, \"fusion\": \"weighted\", \"tau_res\": 8.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 8.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.8933333333333333,
+        "top3": 0.96,
+        "mrr": 0.9308888888888889,
+        "mean_rank": 1.24,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.5333333333333333,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.9333333333333333,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.3, \"fusion\": \"weighted\", \"tau_res\": 8.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 8.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.88,
+        "top3": 0.96,
+        "mrr": 0.9257777777777778,
+        "mean_rank": 1.2533333333333334,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.4666666666666667,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.8666666666666667,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.0, \"fusion\": \"weighted\", \"tau_res\": 8.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 8.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.88,
+        "top3": 0.96,
+        "mrr": 0.9257777777777778,
+        "mean_rank": 1.2533333333333334,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.4666666666666667,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.8666666666666667,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.3, \"fusion\": \"weighted\", \"tau_res\": 8.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 8.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.8933333333333333,
+        "top3": 0.96,
+        "mrr": 0.9308888888888889,
+        "mean_rank": 1.24,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.5333333333333333,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.9333333333333333,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.0, \"fusion\": \"weighted\", \"tau_res\": 8.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 8.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.8933333333333333,
+        "top3": 0.96,
+        "mrr": 0.9308888888888889,
+        "mean_rank": 1.24,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.5333333333333333,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.9333333333333333,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.3, \"fusion\": \"weighted\", \"tau_res\": 8.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 8.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.88,
+        "top3": 0.96,
+        "mrr": 0.9257777777777778,
+        "mean_rank": 1.2533333333333334,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.4666666666666667,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.8666666666666667,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.0, \"fusion\": \"weighted\", \"tau_res\": 8.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 8.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.88,
+        "top3": 0.96,
+        "mrr": 0.9257777777777778,
+        "mean_rank": 1.2533333333333334,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.4666666666666667,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.8666666666666667,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.3, \"fusion\": \"weighted\", \"tau_res\": 8.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 8.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.8933333333333333,
+        "top3": 0.96,
+        "mrr": 0.9308888888888889,
+        "mean_rank": 1.24,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.5333333333333333,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.9333333333333333,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.0, \"fusion\": \"weighted\", \"tau_res\": 8.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 8.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.8933333333333333,
+        "top3": 0.96,
+        "mrr": 0.9308888888888889,
+        "mean_rank": 1.24,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.5333333333333333,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.9333333333333333,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.3, \"fusion\": \"weighted\", \"tau_res\": 8.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 8.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.88,
+        "top3": 0.96,
+        "mrr": 0.9257777777777778,
+        "mean_rank": 1.2533333333333334,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.4666666666666667,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.8666666666666667,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.0, \"fusion\": \"weighted\", \"tau_res\": 8.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "weighted",
+          "tau_res": 8.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.88,
+        "top3": 0.96,
+        "mrr": 0.9257777777777778,
+        "mean_rank": 1.2533333333333334,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.4666666666666667,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.8666666666666667,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.3, \"fusion\": \"rrf\", \"tau_res\": 3.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 3.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.8533333333333334,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9164444444444444,
+        "mean_rank": 1.24,
+        "by_fault": {
+          "cpu": 0.6,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.6666666666666666,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.8666666666666667,
+          "cartservice": 0.8,
+          "checkoutservice": 1.0,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.0, \"fusion\": \"rrf\", \"tau_res\": 3.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 3.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.8666666666666667,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9231111111111111,
+        "mean_rank": 1.2266666666666666,
+        "by_fault": {
+          "cpu": 0.6666666666666666,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.6666666666666666,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.9333333333333333,
+          "cartservice": 0.8666666666666667,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.3, \"fusion\": \"rrf\", \"tau_res\": 3.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 3.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.8533333333333334,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9142222222222223,
+        "mean_rank": 1.2533333333333334,
+        "by_fault": {
+          "cpu": 0.6,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.6666666666666666,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.8666666666666667,
+          "cartservice": 0.8,
+          "checkoutservice": 1.0,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.0, \"fusion\": \"rrf\", \"tau_res\": 3.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 3.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.84,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9075555555555556,
+        "mean_rank": 1.2666666666666666,
+        "by_fault": {
+          "cpu": 0.5333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.6666666666666666,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.9333333333333333,
+          "cartservice": 0.8,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.7333333333333333,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.3, \"fusion\": \"rrf\", \"tau_res\": 3.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 3.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.9066666666666666,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9431111111111111,
+        "mean_rank": 1.1866666666666668,
+        "by_fault": {
+          "cpu": 0.8666666666666667,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.6666666666666666,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.8666666666666667,
+          "cartservice": 1.0,
+          "checkoutservice": 1.0,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8666666666666667
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.0, \"fusion\": \"rrf\", \"tau_res\": 3.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 3.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.9066666666666666,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9431111111111111,
+        "mean_rank": 1.1866666666666668,
+        "by_fault": {
+          "cpu": 0.8666666666666667,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.6666666666666666,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.9333333333333333,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8666666666666667
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.3, \"fusion\": \"rrf\", \"tau_res\": 3.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 3.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.9066666666666666,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9431111111111111,
+        "mean_rank": 1.1866666666666668,
+        "by_fault": {
+          "cpu": 0.8666666666666667,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.6666666666666666,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.8666666666666667,
+          "cartservice": 1.0,
+          "checkoutservice": 1.0,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8666666666666667
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.0, \"fusion\": \"rrf\", \"tau_res\": 3.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 3.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.8933333333333333,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9364444444444444,
+        "mean_rank": 1.2,
+        "by_fault": {
+          "cpu": 0.8,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.6666666666666666,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.9333333333333333,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.7333333333333333,
+          "productcatalogservice": 0.8666666666666667
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.3, \"fusion\": \"rrf\", \"tau_res\": 3.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 3.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.9333333333333333,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9586666666666667,
+        "mean_rank": 1.1466666666666667,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.6666666666666666,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.9333333333333333,
+          "cartservice": 1.0,
+          "checkoutservice": 1.0,
+          "currencyservice": 0.8666666666666667,
+          "productcatalogservice": 0.8666666666666667
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.0, \"fusion\": \"rrf\", \"tau_res\": 3.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 3.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.9333333333333333,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9586666666666667,
+        "mean_rank": 1.1466666666666667,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.6666666666666666,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 1.0,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8666666666666667,
+          "productcatalogservice": 0.8666666666666667
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.3, \"fusion\": \"rrf\", \"tau_res\": 3.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 3.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.9333333333333333,
+        "top3": 0.9733333333333334,
+        "mrr": 0.9586666666666667,
+        "mean_rank": 1.1466666666666667,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.6666666666666666,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.9333333333333333,
+          "cartservice": 1.0,
+          "checkoutservice": 1.0,
+          "currencyservice": 0.8666666666666667,
+          "productcatalogservice": 0.8666666666666667
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.0, \"fusion\": \"rrf\", \"tau_res\": 3.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 3.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.92,
+        "top3": 0.9733333333333334,
+        "mrr": 0.952,
+        "mean_rank": 1.16,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.6666666666666666,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 1.0,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8666666666666667
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.3, \"fusion\": \"rrf\", \"tau_res\": 5.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 5.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.84,
+        "top3": 0.96,
+        "mrr": 0.9064444444444445,
+        "mean_rank": 1.28,
+        "by_fault": {
+          "cpu": 0.6,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.6,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.8666666666666667,
+          "cartservice": 0.8,
+          "checkoutservice": 1.0,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.7333333333333333
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.0, \"fusion\": \"rrf\", \"tau_res\": 5.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 5.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.8533333333333334,
+        "top3": 0.96,
+        "mrr": 0.9131111111111111,
+        "mean_rank": 1.2666666666666666,
+        "by_fault": {
+          "cpu": 0.6666666666666666,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.6,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.9333333333333333,
+          "cartservice": 0.8666666666666667,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.7333333333333333
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.3, \"fusion\": \"rrf\", \"tau_res\": 5.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 5.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.84,
+        "top3": 0.96,
+        "mrr": 0.9035555555555556,
+        "mean_rank": 1.3066666666666666,
+        "by_fault": {
+          "cpu": 0.6,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.6,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.8666666666666667,
+          "cartservice": 0.8,
+          "checkoutservice": 1.0,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.7333333333333333
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.0, \"fusion\": \"rrf\", \"tau_res\": 5.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 5.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.8266666666666667,
+        "top3": 0.96,
+        "mrr": 0.8968888888888888,
+        "mean_rank": 1.32,
+        "by_fault": {
+          "cpu": 0.5333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.6,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.9333333333333333,
+          "cartservice": 0.8,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.7333333333333333,
+          "productcatalogservice": 0.7333333333333333
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.3, \"fusion\": \"rrf\", \"tau_res\": 5.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 5.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.8933333333333333,
+        "top3": 0.96,
+        "mrr": 0.9331111111111111,
+        "mean_rank": 1.2266666666666666,
+        "by_fault": {
+          "cpu": 0.8666666666666667,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.6,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.8666666666666667,
+          "cartservice": 1.0,
+          "checkoutservice": 1.0,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.0, \"fusion\": \"rrf\", \"tau_res\": 5.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 5.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.8933333333333333,
+        "top3": 0.96,
+        "mrr": 0.9331111111111111,
+        "mean_rank": 1.2266666666666666,
+        "by_fault": {
+          "cpu": 0.8666666666666667,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.6,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.9333333333333333,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.3, \"fusion\": \"rrf\", \"tau_res\": 5.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 5.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.8933333333333333,
+        "top3": 0.96,
+        "mrr": 0.9324444444444444,
+        "mean_rank": 1.24,
+        "by_fault": {
+          "cpu": 0.8666666666666667,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.6,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.8666666666666667,
+          "cartservice": 1.0,
+          "checkoutservice": 1.0,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.0, \"fusion\": \"rrf\", \"tau_res\": 5.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 5.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.88,
+        "top3": 0.96,
+        "mrr": 0.9257777777777778,
+        "mean_rank": 1.2533333333333334,
+        "by_fault": {
+          "cpu": 0.8,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.6,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.9333333333333333,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.7333333333333333,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.3, \"fusion\": \"rrf\", \"tau_res\": 5.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 5.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.92,
+        "top3": 0.96,
+        "mrr": 0.9486666666666667,
+        "mean_rank": 1.1866666666666668,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.6,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.9333333333333333,
+          "cartservice": 1.0,
+          "checkoutservice": 1.0,
+          "currencyservice": 0.8666666666666667,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.0, \"fusion\": \"rrf\", \"tau_res\": 5.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 5.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.92,
+        "top3": 0.96,
+        "mrr": 0.9486666666666667,
+        "mean_rank": 1.1866666666666668,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.6,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 1.0,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8666666666666667,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.3, \"fusion\": \"rrf\", \"tau_res\": 5.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 5.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.92,
+        "top3": 0.96,
+        "mrr": 0.948,
+        "mean_rank": 1.2,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.6,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.9333333333333333,
+          "cartservice": 1.0,
+          "checkoutservice": 1.0,
+          "currencyservice": 0.8666666666666667,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.0, \"fusion\": \"rrf\", \"tau_res\": 5.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 5.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.9066666666666666,
+        "top3": 0.96,
+        "mrr": 0.9413333333333334,
+        "mean_rank": 1.2133333333333334,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.6,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 1.0,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.3, \"fusion\": \"rrf\", \"tau_res\": 8.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 8.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.8266666666666667,
+        "top3": 0.96,
+        "mrr": 0.8975555555555556,
+        "mean_rank": 1.3066666666666666,
+        "by_fault": {
+          "cpu": 0.6,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.5333333333333333,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.8666666666666667,
+          "cartservice": 0.8,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.7333333333333333
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.0, \"fusion\": \"rrf\", \"tau_res\": 8.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 8.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.8533333333333334,
+        "top3": 0.96,
+        "mrr": 0.9108888888888889,
+        "mean_rank": 1.28,
+        "by_fault": {
+          "cpu": 0.6666666666666666,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.6,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.9333333333333333,
+          "cartservice": 0.8666666666666667,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.7333333333333333
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.3, \"fusion\": \"rrf\", \"tau_res\": 8.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 8.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.8266666666666667,
+        "top3": 0.96,
+        "mrr": 0.8968888888888888,
+        "mean_rank": 1.32,
+        "by_fault": {
+          "cpu": 0.6,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.5333333333333333,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.8666666666666667,
+          "cartservice": 0.8,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.7333333333333333
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.0, \"fusion\": \"rrf\", \"tau_res\": 8.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 8.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.8266666666666667,
+        "top3": 0.96,
+        "mrr": 0.8968888888888888,
+        "mean_rank": 1.32,
+        "by_fault": {
+          "cpu": 0.5333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.6,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.9333333333333333,
+          "cartservice": 0.8,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.7333333333333333,
+          "productcatalogservice": 0.7333333333333333
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.3, \"fusion\": \"rrf\", \"tau_res\": 8.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 8.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.88,
+        "top3": 0.96,
+        "mrr": 0.9242222222222222,
+        "mean_rank": 1.2533333333333334,
+        "by_fault": {
+          "cpu": 0.8666666666666667,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.5333333333333333,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.8666666666666667,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.0, \"fusion\": \"rrf\", \"tau_res\": 8.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 8.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.8933333333333333,
+        "top3": 0.96,
+        "mrr": 0.9308888888888889,
+        "mean_rank": 1.24,
+        "by_fault": {
+          "cpu": 0.8666666666666667,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.6,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.9333333333333333,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.3, \"fusion\": \"rrf\", \"tau_res\": 8.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 8.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.88,
+        "top3": 0.96,
+        "mrr": 0.9257777777777778,
+        "mean_rank": 1.2533333333333334,
+        "by_fault": {
+          "cpu": 0.8666666666666667,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.5333333333333333,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.8666666666666667,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.0, \"fusion\": \"rrf\", \"tau_res\": 8.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 8.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.88,
+        "top3": 0.96,
+        "mrr": 0.9257777777777778,
+        "mean_rank": 1.2533333333333334,
+        "by_fault": {
+          "cpu": 0.8,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.6,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.9333333333333333,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.7333333333333333,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.3, \"fusion\": \"rrf\", \"tau_res\": 8.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 8.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.9066666666666666,
+        "top3": 0.96,
+        "mrr": 0.9397777777777778,
+        "mean_rank": 1.2133333333333334,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.5333333333333333,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.9333333333333333,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8666666666666667,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.0, \"fusion\": \"rrf\", \"tau_res\": 8.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 8.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.92,
+        "top3": 0.96,
+        "mrr": 0.9464444444444444,
+        "mean_rank": 1.2,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.6,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 1.0,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8666666666666667,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.3, \"fusion\": \"rrf\", \"tau_res\": 8.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 8.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.9066666666666666,
+        "top3": 0.96,
+        "mrr": 0.9413333333333334,
+        "mean_rank": 1.2133333333333334,
+        "by_fault": {
+          "cpu": 1.0,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.5333333333333333,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.9333333333333333,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8666666666666667,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.0, \"fusion\": \"rrf\", \"tau_res\": 8.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "rrf",
+          "tau_res": 8.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.9066666666666666,
+        "top3": 0.96,
+        "mrr": 0.9413333333333334,
+        "mean_rank": 1.2133333333333334,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.6,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 1.0,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.3, \"fusion\": \"max\", \"tau_res\": 3.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 3.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.8933333333333333,
+        "top3": 0.96,
+        "mrr": 0.9331111111111111,
+        "mean_rank": 1.2266666666666666,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.5333333333333333,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.9333333333333333,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.0, \"fusion\": \"max\", \"tau_res\": 3.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 3.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.8933333333333333,
+        "top3": 0.96,
+        "mrr": 0.9331111111111111,
+        "mean_rank": 1.2266666666666666,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.5333333333333333,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.9333333333333333,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.3, \"fusion\": \"max\", \"tau_res\": 3.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 3.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.88,
+        "top3": 0.9466666666666667,
+        "mrr": 0.9246666666666666,
+        "mean_rank": 1.2666666666666666,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.4666666666666667,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.8666666666666667,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.0, \"fusion\": \"max\", \"tau_res\": 3.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 3.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.88,
+        "top3": 0.9466666666666667,
+        "mrr": 0.9246666666666666,
+        "mean_rank": 1.2666666666666666,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.4666666666666667,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.8666666666666667,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.3, \"fusion\": \"max\", \"tau_res\": 3.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 3.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.8933333333333333,
+        "top3": 0.96,
+        "mrr": 0.9331111111111111,
+        "mean_rank": 1.2266666666666666,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.5333333333333333,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.9333333333333333,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.0, \"fusion\": \"max\", \"tau_res\": 3.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 3.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.8933333333333333,
+        "top3": 0.96,
+        "mrr": 0.9331111111111111,
+        "mean_rank": 1.2266666666666666,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.5333333333333333,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.9333333333333333,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.3, \"fusion\": \"max\", \"tau_res\": 3.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 3.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.88,
+        "top3": 0.9466666666666667,
+        "mrr": 0.9246666666666666,
+        "mean_rank": 1.2666666666666666,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.4666666666666667,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.8666666666666667,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.0, \"fusion\": \"max\", \"tau_res\": 3.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 3.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.88,
+        "top3": 0.9466666666666667,
+        "mrr": 0.9246666666666666,
+        "mean_rank": 1.2666666666666666,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.4666666666666667,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.8666666666666667,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.3, \"fusion\": \"max\", \"tau_res\": 3.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 3.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.8933333333333333,
+        "top3": 0.96,
+        "mrr": 0.9331111111111111,
+        "mean_rank": 1.2266666666666666,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.5333333333333333,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.9333333333333333,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.0, \"fusion\": \"max\", \"tau_res\": 3.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 3.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.8933333333333333,
+        "top3": 0.96,
+        "mrr": 0.9331111111111111,
+        "mean_rank": 1.2266666666666666,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.5333333333333333,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.9333333333333333,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.3, \"fusion\": \"max\", \"tau_res\": 3.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 3.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.88,
+        "top3": 0.9466666666666667,
+        "mrr": 0.9246666666666666,
+        "mean_rank": 1.2666666666666666,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.4666666666666667,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.8666666666666667,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.0, \"fusion\": \"max\", \"tau_res\": 3.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 3.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.88,
+        "top3": 0.9466666666666667,
+        "mrr": 0.9246666666666666,
+        "mean_rank": 1.2666666666666666,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.4666666666666667,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.8666666666666667,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.3, \"fusion\": \"max\", \"tau_res\": 5.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 5.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.8933333333333333,
+        "top3": 0.96,
+        "mrr": 0.9331111111111111,
+        "mean_rank": 1.2266666666666666,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.5333333333333333,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.9333333333333333,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.0, \"fusion\": \"max\", \"tau_res\": 5.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 5.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.8933333333333333,
+        "top3": 0.96,
+        "mrr": 0.9331111111111111,
+        "mean_rank": 1.2266666666666666,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.5333333333333333,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.9333333333333333,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.3, \"fusion\": \"max\", \"tau_res\": 5.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 5.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.88,
+        "top3": 0.9466666666666667,
+        "mrr": 0.9246666666666666,
+        "mean_rank": 1.2666666666666666,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.4666666666666667,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.8666666666666667,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.0, \"fusion\": \"max\", \"tau_res\": 5.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 5.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.88,
+        "top3": 0.9466666666666667,
+        "mrr": 0.9246666666666666,
+        "mean_rank": 1.2666666666666666,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.4666666666666667,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.8666666666666667,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.3, \"fusion\": \"max\", \"tau_res\": 5.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 5.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.8933333333333333,
+        "top3": 0.96,
+        "mrr": 0.9331111111111111,
+        "mean_rank": 1.2266666666666666,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.5333333333333333,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.9333333333333333,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.0, \"fusion\": \"max\", \"tau_res\": 5.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 5.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.8933333333333333,
+        "top3": 0.96,
+        "mrr": 0.9331111111111111,
+        "mean_rank": 1.2266666666666666,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.5333333333333333,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.9333333333333333,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.3, \"fusion\": \"max\", \"tau_res\": 5.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 5.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.88,
+        "top3": 0.9466666666666667,
+        "mrr": 0.9246666666666666,
+        "mean_rank": 1.2666666666666666,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.4666666666666667,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.8666666666666667,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.0, \"fusion\": \"max\", \"tau_res\": 5.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 5.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.88,
+        "top3": 0.9466666666666667,
+        "mrr": 0.9246666666666666,
+        "mean_rank": 1.2666666666666666,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.4666666666666667,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.8666666666666667,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.3, \"fusion\": \"max\", \"tau_res\": 5.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 5.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.8933333333333333,
+        "top3": 0.96,
+        "mrr": 0.9331111111111111,
+        "mean_rank": 1.2266666666666666,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.5333333333333333,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.9333333333333333,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.0, \"fusion\": \"max\", \"tau_res\": 5.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 5.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.8933333333333333,
+        "top3": 0.96,
+        "mrr": 0.9331111111111111,
+        "mean_rank": 1.2266666666666666,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.5333333333333333,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.9333333333333333,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.3, \"fusion\": \"max\", \"tau_res\": 5.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 5.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.88,
+        "top3": 0.9466666666666667,
+        "mrr": 0.9246666666666666,
+        "mean_rank": 1.2666666666666666,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.4666666666666667,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.8666666666666667,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.0, \"fusion\": \"max\", \"tau_res\": 5.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 5.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.88,
+        "top3": 0.9466666666666667,
+        "mrr": 0.9246666666666666,
+        "mean_rank": 1.2666666666666666,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.4666666666666667,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.8666666666666667,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.3, \"fusion\": \"max\", \"tau_res\": 8.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 8.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.8933333333333333,
+        "top3": 0.96,
+        "mrr": 0.9308888888888889,
+        "mean_rank": 1.24,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.5333333333333333,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.9333333333333333,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.0, \"fusion\": \"max\", \"tau_res\": 8.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 8.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.8933333333333333,
+        "top3": 0.96,
+        "mrr": 0.9308888888888889,
+        "mean_rank": 1.24,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.5333333333333333,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.9333333333333333,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.3, \"fusion\": \"max\", \"tau_res\": 8.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 8.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.88,
+        "top3": 0.9466666666666667,
+        "mrr": 0.9246666666666666,
+        "mean_rank": 1.2666666666666666,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.4666666666666667,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.8666666666666667,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.0, \"fusion\": \"max\", \"tau_res\": 8.0, \"tau_sli\": 3.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 8.0,
+          "tau_sli": 3.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.88,
+        "top3": 0.9466666666666667,
+        "mrr": 0.9246666666666666,
+        "mean_rank": 1.2666666666666666,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.4666666666666667,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.8666666666666667,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.3, \"fusion\": \"max\", \"tau_res\": 8.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 8.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.8933333333333333,
+        "top3": 0.96,
+        "mrr": 0.9308888888888889,
+        "mean_rank": 1.24,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.5333333333333333,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.9333333333333333,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.0, \"fusion\": \"max\", \"tau_res\": 8.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 8.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.8933333333333333,
+        "top3": 0.96,
+        "mrr": 0.9308888888888889,
+        "mean_rank": 1.24,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.5333333333333333,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.9333333333333333,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.3, \"fusion\": \"max\", \"tau_res\": 8.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 8.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.88,
+        "top3": 0.9466666666666667,
+        "mrr": 0.9246666666666666,
+        "mean_rank": 1.2666666666666666,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.4666666666666667,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.8666666666666667,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.0, \"fusion\": \"max\", \"tau_res\": 8.0, \"tau_sli\": 5.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 8.0,
+          "tau_sli": 5.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.88,
+        "top3": 0.9466666666666667,
+        "mrr": 0.9246666666666666,
+        "mean_rank": 1.2666666666666666,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.4666666666666667,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.8666666666666667,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.3, \"fusion\": \"max\", \"tau_res\": 8.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 8.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.8933333333333333,
+        "top3": 0.96,
+        "mrr": 0.9308888888888889,
+        "mean_rank": 1.24,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.5333333333333333,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.9333333333333333,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.5, \"first_mover_boost\": 0.0, \"fusion\": \"max\", \"tau_res\": 8.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 8.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.5,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.8933333333333333,
+        "top3": 0.96,
+        "mrr": 0.9308888888888889,
+        "mean_rank": 1.24,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.5333333333333333,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.9333333333333333,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.3, \"fusion\": \"max\", \"tau_res\": 8.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 8.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.3
+        },
+        "top1": 0.88,
+        "top3": 0.9466666666666667,
+        "mrr": 0.9246666666666666,
+        "mean_rank": 1.2666666666666666,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.4666666666666667,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.8666666666666667,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      },
+      "{\"callee_discount\": 0.8, \"first_mover_boost\": 0.0, \"fusion\": \"max\", \"tau_res\": 8.0, \"tau_sli\": 8.0}": {
+        "config": {
+          "fusion": "max",
+          "tau_res": 8.0,
+          "tau_sli": 8.0,
+          "callee_discount": 0.8,
+          "first_mover_boost": 0.0
+        },
+        "top1": 0.88,
+        "top3": 0.9466666666666667,
+        "mrr": 0.9246666666666666,
+        "mean_rank": 1.2666666666666666,
+        "by_fault": {
+          "cpu": 0.9333333333333333,
+          "delay": 1.0,
+          "disk": 1.0,
+          "loss": 0.4666666666666667,
+          "mem": 1.0
+        },
+        "by_service": {
+          "adservice": 0.8666666666666667,
+          "cartservice": 1.0,
+          "checkoutservice": 0.9333333333333333,
+          "currencyservice": 0.8,
+          "productcatalogservice": 0.8
+        }
+      }
+    }
+  }
+}

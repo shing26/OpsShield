@@ -15,6 +15,7 @@ from pathlib import Path
 from dataset import candidate_services, load_case, load_index, select_cases
 from methods import METHODS
 from metrics import bootstrap_ci, mrr, rank_position, top_k
+from paired import compare
 
 ROOT = Path(__file__).resolve().parent
 DEFAULT_DATA = ROOT / "data"
@@ -34,6 +35,7 @@ def evaluate(suite: str, split: str, method_names: list[str], seed: int,
     out_dir.mkdir(parents=True, exist_ok=True)
 
     results = []
+    positions_by_method: dict[str, list[tuple[str, str, str, int]]] = {}
     candidate_counts = [len(candidate_services(case.metrics)) for case in cases]
     summary = {
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -54,6 +56,9 @@ def evaluate(suite: str, split: str, method_names: list[str], seed: int,
             ranking = method.rank(case, candidates, seed)
             position = rank_position(ranking, case.root_cause_service)
             positions.append(position)
+            positions_by_method.setdefault(method_name, []).append(
+                (case.name, case.fault, case.root_cause_service, position)
+            )
             results.append({
                 "method": method_name,
                 "case": case.name,
@@ -78,7 +83,16 @@ def evaluate(suite: str, split: str, method_names: list[str], seed: int,
             "mrr": mrr(positions),
             "mrr_ci95": list(bootstrap_ci([1.0 / p for p in positions], seed=seed)),
             "mean_rank": sum(positions) / len(positions),
+            "by_fault": _subset_stats(positions_by_method[method_name], 1),
+            "by_service": _subset_stats(positions_by_method[method_name], 2),
         }
+
+    summary["paired"] = {}
+    for treatment, control in (("dual-arm", "3sigma"), ("topo-first", "3sigma")):
+        if treatment in summary["methods"] and control in summary["methods"]:
+            summary["paired"][f"{treatment}_vs_{control}"] = {
+                f"top{k}": compare(results, treatment, control, k) for k in (1, 3)
+            }
 
     with (out_dir / "results.csv").open("w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, fieldnames=list(results[0]))
@@ -94,6 +108,18 @@ def evaluate(suite: str, split: str, method_names: list[str], seed: int,
     for name, stats in summary["methods"].items():
         print(f"{name:<12}{stats['top1']:>8.3f}{stats['top3']:>8.3f}{stats['mrr']:>8.3f}{stats['mean_rank']:>11.2f}")
     return summary
+
+
+def _subset_stats(rows: list[tuple[str, str, str, int]], field: int) -> dict:
+    """按 fault（field=1）或 truth service（field=2）分组统计。"""
+    groups: dict[str, list[int]] = {}
+    for row in rows:
+        groups.setdefault(row[field], []).append(row[3])
+    return {
+        key: {"n": len(values), "top1": top_k(values, 1), "top3": top_k(values, 3),
+              "mrr": mrr(values)}
+        for key, values in sorted(groups.items())
+    }
 
 
 def main(argv: list[str] | None = None) -> int:
