@@ -6,7 +6,7 @@
 #  - locust 决定压测报告的口径与字段，随附的 `offline/load/reports/*.csv|html` 是**用它跑出来的**；
 #    不锁版本会让"复现命令复现不出随附产物"。
 # 锁定的版本与本机开发 venv 实测一致（2026-09-17）。
-pytest==9.1.1
+pytest==9.2.0
 locust==2.46.7
 # 浏览器级 E2E（ADR-0040）：只跑 Chromium headless。插件 0.10.0 的 Requires-Dist
 # 是 pytest>=7,<10，与上面的 pytest 9.1.1 兼容；两个版本都锁定，避免 runner 漂移。
