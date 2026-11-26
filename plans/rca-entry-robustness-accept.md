@@ -129,3 +129,23 @@ AC-3 的失败必须写清：哪套 dev、哪类故障、δ=120s 掉了多少 pp
   --check` 因此点名 `README.md:421` 与 `README.md:468`（原文写 43）。为让门闩
   复绿，Allowed paths 追加一项：`README.md`（**仅**这两处 ADR 计数）。AC-1..AC-7
   与判定矩阵不变。
+
+## 12. 独立验收记录（2026-11-27）
+
+独立 Verifier（与实现会话分离）在 `HEAD=ff53d47`、`git status --short` 为空的
+状态下逐条重跑，证据与判定如下：
+
+| AC | 结果 | 关键证据 |
+| --- | --- | --- |
+| AC-1 | PASS | SS/OB 各 600 行 `(method, case)` 与 v3 dev 目录 `rank`/`predicted` 0 处不一致 |
+| AC-2 | PASS | 10 格 × 75 case；SS δ=300s 的 2 个 miss 计入分母（69/75=0.920） |
+| AC-3 | **FAIL** | SS −21.33pp、OB −5.33pp；分故障 SS delay −40.0 / loss −46.67 / mem −13.33，OB loss −13.33 |
+| AC-4 | PASS | 五档曲线、miss 数、3σ 对照与报告逐格一致 |
+| AC-5 | PASS | 6000 行输出 0 条 TT；`methods.py`/`detect.py` 未改 |
+| AC-6 | PASS（补录后） | 67 passed；首轮缺 HEAD/status，补于 `R4-report.md` §8（`e98e6a4`，仅文档） |
+| AC-7 | PASS | 独立复跑，证据绑 SHA |
+
+**判定：按 §7 矩阵，AC-3 FAIL → 路线 B 作废，转路线 A。**
+
+“验收通过”指实验按契约完成、结论可信，**不等于方法通过**：AC-3 的 −21.3pp /
+−5.3pp 就是本次的负结果，不接受在本次数据上重挑基线或 δ 来翻案。
