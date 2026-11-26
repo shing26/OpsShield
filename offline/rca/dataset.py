@@ -4,7 +4,7 @@
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import pandas as pd
@@ -29,6 +29,9 @@ SPLIT_REPS = {
     "all": (1, 2, 3, 4, 5),
 }
 
+# 入口偏移后少于这个秒数视为“没有可用故障观测”，记 miss 而不是跳过。
+MIN_FAULTY_SPAN_S = 60
+
 
 @dataclass(frozen=True)
 class Case:
@@ -39,14 +42,36 @@ class Case:
     inject_time: int
     metrics: pd.DataFrame
     system: str = "online-boutique"
+    entry_offset: int = 0
+
+    @property
+    def entry_time(self) -> int:
+        """定位起点：默认为注入时间；入口偏移实验里可整体后移。"""
+        return self.inject_time + self.entry_offset
 
     @property
     def normal(self) -> pd.DataFrame:
-        return self.metrics[self.metrics["time"] < self.inject_time]
+        return self.metrics[self.metrics["time"] < self.entry_time]
 
     @property
     def faulty(self) -> pd.DataFrame:
-        return self.metrics[self.metrics["time"] >= self.inject_time]
+        return self.metrics[self.metrics["time"] >= self.entry_time]
+
+    def with_entry_offset(self, offset: int) -> "Case":
+        if offset < 0:
+            raise ValueError("entry offset must be >= 0")
+        return replace(self, entry_offset=int(offset))
+
+    @property
+    def faulty_span_s(self) -> float:
+        faulty = self.faulty
+        if faulty.empty:
+            return 0.0
+        return float(faulty["time"].max() - faulty["time"].min())
+
+    @property
+    def has_faulty_evidence(self) -> bool:
+        return self.faulty_span_s >= MIN_FAULTY_SPAN_S
 
 
 def load_index(data_dir: Path) -> pd.DataFrame:
