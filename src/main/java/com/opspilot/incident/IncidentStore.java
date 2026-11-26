@@ -1,8 +1,10 @@
 package com.opspilot.incident;
 
+import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Savepoint;
 import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -16,6 +18,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ThreadLocalRandom;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
@@ -283,16 +286,31 @@ public class IncidentStore {
         for (int attempt = 0; attempt < 8; attempt++) {
             String id = newId();
             try {
-                jdbc.update("INSERT INTO incidents (incident_id, tenant, client_id, title, query, service, "
-                                + "error_code, env, alert_id, source, priority, status, owner, created_by, "
-                                + "created_at, updated_at, due_at, sla_state, diagnosis_json, timeline_json) "
-                                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                        id, draft.tenant(), draft.clientId(), draft.title(), draft.query(), draft.service(),
-                        draft.errorCode(), draft.env(), draft.alertId(), draft.source(), draft.priority(),
-                        draft.status(), draft.owner(), draft.createdBy(),
-                        Timestamp.from(draft.createdAt()), Timestamp.from(draft.updatedAt()),
-                        draft.dueAt() == null ? null : Timestamp.from(draft.dueAt()), draft.slaState(),
-                        draft.diagnosisJson(), draft.timelineJson());
+                // savepoint 隔离唯一键冲突：PostgreSQL 冲突后事务会被中止，若不回滚到
+                // savepoint，后面的 findByClientId 回查也会失败（契约 AC2）。
+                jdbc.execute((ConnectionCallback<Void>) con -> {
+                    boolean autoCommit = con.getAutoCommit();
+                    Savepoint savepoint = null;
+                    try {
+                        if (!autoCommit) savepoint = con.setSavepoint();
+                        jdbc.update("INSERT INTO incidents (incident_id, tenant, client_id, title, query, service, "
+                                        + "error_code, env, alert_id, source, priority, status, owner, created_by, "
+                                        + "created_at, updated_at, due_at, sla_state, diagnosis_json, timeline_json) "
+                                        + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                                id, draft.tenant(), draft.clientId(), draft.title(), draft.query(), draft.service(),
+                                draft.errorCode(), draft.env(), draft.alertId(), draft.source(), draft.priority(),
+                                draft.status(), draft.owner(), draft.createdBy(),
+                                Timestamp.from(draft.createdAt()), Timestamp.from(draft.updatedAt()),
+                                draft.dueAt() == null ? null : Timestamp.from(draft.dueAt()), draft.slaState(),
+                                draft.diagnosisJson(), draft.timelineJson());
+                        return null;
+                    } catch (DuplicateKeyException e) {
+                        if (!autoCommit) rollbackQuietly(con, savepoint);
+                        throw e;
+                    } finally {
+                        if (!autoCommit) releaseQuietly(con, savepoint);
+                    }
+                });
                 return find(draft.tenant(), id).orElseThrow();
             } catch (DuplicateKeyException e) {
                 // 可能是主键撞车，也可能是同 clientId 的并发重放：调用方回查后决定
@@ -302,6 +320,24 @@ public class IncidentStore {
             }
         }
         throw new IllegalStateException("事故 ID 连续冲突，拒绝静默覆盖");
+    }
+
+    private static void rollbackQuietly(Connection con, Savepoint savepoint) {
+        if (savepoint == null) return;
+        try {
+            con.rollback(savepoint);
+        } catch (SQLException ignored) {
+            // 回滚失败时仍把原异常抛给 Service，由外层事务统一回滚。
+        }
+    }
+
+    private static void releaseQuietly(Connection con, Savepoint savepoint) {
+        if (savepoint == null) return;
+        try {
+            con.releaseSavepoint(savepoint);
+        } catch (SQLException ignored) {
+            // 某些驱动回滚后已释放 savepoint。
+        }
     }
 
     public boolean update(Incident row) {

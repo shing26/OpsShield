@@ -1,11 +1,16 @@
 package com.opspilot.incident;
 
+import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Savepoint;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
@@ -16,6 +21,8 @@ import org.springframework.stereotype.Repository;
  */
 @Repository
 public class IncidentNotificationStore {
+
+    private static final Logger log = LoggerFactory.getLogger(IncidentNotificationStore.class);
 
     private static final RowMapper<IncidentNotification> MAPPER = (ResultSet rs, int i) ->
             new IncidentNotification(
@@ -50,14 +57,46 @@ public class IncidentNotificationStore {
      */
     public boolean insert(IncidentNotification n) {
         try {
-            return jdbc.update("INSERT INTO incident_notifications "
-                            + "(tenant, recipient, incident_id, kind, title, priority, due_at, "
-                            + "dedupe_key, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    n.tenant(), n.recipient(), n.incidentId(), n.kind(), n.title(), n.priority(),
-                    n.dueAt() == null ? null : Timestamp.from(n.dueAt()),
-                    n.dedupeKey(), Timestamp.from(n.createdAt())) == 1;
+            return Boolean.TRUE.equals(jdbc.execute((ConnectionCallback<Boolean>) con -> {
+                boolean autoCommit = con.getAutoCommit();
+                Savepoint savepoint = null;
+                try {
+                    if (!autoCommit) savepoint = con.setSavepoint();
+                    return jdbc.update("INSERT INTO incident_notifications "
+                                    + "(tenant, recipient, incident_id, kind, title, priority, due_at, "
+                                    + "dedupe_key, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                            n.tenant(), n.recipient(), n.incidentId(), n.kind(), n.title(), n.priority(),
+                            n.dueAt() == null ? null : Timestamp.from(n.dueAt()),
+                            n.dedupeKey(), Timestamp.from(n.createdAt())) == 1;
+                } catch (DuplicateKeyException e) {
+                    // PostgreSQL 在唯一键冲突后会中止整个事务；回滚 savepoint 才能继续
+                    // 写同一事务里的 outbox 行。H2 与 PostgreSQL 语义一致。
+                    if (!autoCommit) rollbackQuietly(con, savepoint);
+                    return false;
+                } finally {
+                    if (!autoCommit) releaseQuietly(con, savepoint);
+                }
+            }));
         } catch (DuplicateKeyException e) {
             return false;
+        }
+    }
+
+    private static void rollbackQuietly(Connection con, Savepoint savepoint) {
+        if (savepoint == null) return;
+        try {
+            con.rollback(savepoint);
+        } catch (SQLException e) {
+            log.warn("notification savepoint rollback failed: {}", e.getSQLState());
+        }
+    }
+
+    private static void releaseQuietly(Connection con, Savepoint savepoint) {
+        if (savepoint == null) return;
+        try {
+            con.releaseSavepoint(savepoint);
+        } catch (SQLException ignored) {
+            // 某些驱动回滚后已释放 savepoint。
         }
     }
 
