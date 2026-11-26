@@ -95,7 +95,9 @@ git status --short
 ## 10. 执行记录（非契约变更）
 
 - 2026-11-26：ADR 编号 `0037` 已被 `0037-incident-notification.md` 占用，本切片 ADR 实际落为
-  `docs/adr/0039-rca-detector-slice.md`。仅为编号避让，Allowed paths 的意图不变，AC 未放宽。
+  `docs/adr/0041-rca-detector-slice.md`（2026-11-27 合并 v3 时因 trunk 已占用
+  `0039`/`0040`，再由 `0039` 顺延为 `0041`；内容与验收结论不变）。
+  仅为编号避让，Allowed paths 的意图不变，AC 未放宽。
 
 ## 11. R1 修订（2026-11-26，**已签收**）
 

@@ -20,6 +20,14 @@
         {
           "file": "docs/repo-map.md",
           "pattern": "单测与集成（(\\d+) 用例"
+        },
+        {
+          "file": "README.md",
+          "pattern": "Java_Tests-(\\d+)_Passed"
+        },
+        {
+          "file": "README.md",
+          "pattern": "Java Tests: (\\d+) passed"
         }
       ]
     },
@@ -615,6 +623,28 @@
         {
           "file": "README.md",
           "pattern": "Python (\\d+) 条 test 函数"
+        },
+        {
+          "file": "README.md",
+          "pattern": "Python: (\\d+) test 函数声明"
+        }
+      ]
+    },
+    {
+      "id": "e2e_test_declarations",
+      "unit": "条 Playwright E2E test 函数声明（e2e/**/*.py；五条旅程各一条）",
+      "derive": {
+        "kind": "grep_count",
+        "globs": [
+          "e2e/**/*.py"
+        ],
+        "pattern": "^def test_"
+      },
+      "format": "int",
+      "cited_in": [
+        {
+          "file": "README.md",
+          "pattern": "Playwright E2E (\\d+) 条"
         }
       ]
     }

@@ -1,6 +1,7 @@
 package com.opspilot.gateway.dto;
 
 import com.opspilot.action.Action;
+import com.opspilot.retrieval.CitationFreshness;
 import java.util.List;
 
 /**
@@ -38,7 +39,27 @@ public record AnswerPayload(
         boolean refused,
         List<NearMiss> nearMiss
 ) {
-    public record Ref(String chunkId, String breadcrumb, String service) {}
+    /**
+     * 引用条目。前三个字段是历史契约，后四个是 S3 新增（ADR-0039），只做加法：
+     * 旧缓存 JSON 缺新字段时反序列化为 null，`staleness` 由紧凑构造器归一为 `unknown`。
+     * `docDigest` 缺失表示"这份答案产生时还不知道版本身份"（旧索引/旧缓存），
+     * 面板应显示"版本未知"而不是编一个版本。
+     */
+    public record Ref(String chunkId, String breadcrumb, String service,
+                      String docId, String docDigest, String reviewedAt, String staleness) {
+        /** 旧三参兼容构造：S3 之前的调用点（测试夹具）默认"版本未知、审查未标注"。 */
+        public Ref(String chunkId, String breadcrumb, String service) {
+            this(chunkId, breadcrumb, service, null, null, null, CitationFreshness.UNKNOWN);
+        }
+
+        public Ref {
+            if (!CitationFreshness.FRESH.equals(staleness)
+                    && !CitationFreshness.STALE.equals(staleness)
+                    && !CitationFreshness.UNKNOWN.equals(staleness)) {
+                staleness = CitationFreshness.UNKNOWN;
+            }
+        }
+    }
 
     /** 拒答时的候选标识符（ADR-0023）：{@code service} + {@code errorCodes}，两者都可为空。 */
     public record NearMiss(String service, List<String> errorCodes) {}

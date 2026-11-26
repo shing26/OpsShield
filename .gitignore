@@ -22,6 +22,9 @@ __pycache__/
 *.pyc
 .pytest_cache/
 
+# Playwright 失败证据（截图/trace/server.log）：按需保留本地产物，不入库
+e2e/artifacts/
+
 # 运行时产物（chunks.jsonl 与评测/压测报告按 ADR-0001 / DoD 需入库，不再排除）
 logs/
 *.log

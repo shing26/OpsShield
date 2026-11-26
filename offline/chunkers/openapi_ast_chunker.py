@@ -11,6 +11,7 @@ import re
 
 from errorcode import ERROR_CODE_RE  # 与在线 Java 词法同源，见 errorcode.py
 from defaults import DEFAULT_TENANT
+from doc_digest import openapi_doc_digest
 
 HTTP_METHODS = ("get", "post", "put", "delete", "patch", "head")
 
@@ -40,6 +41,7 @@ def render_endpoint(title: str, path: str, method: str, op: dict) -> str:
 def chunk_openapi(spec: dict, doc_id: str = "openapi-order-center") -> list[dict]:
     """解析 OpenAPI spec，每个 endpoint 产出一个 chunk。"""
     info_title = (spec.get("info") or {}).get("title", "OpenAPI")
+    doc_digest = openapi_doc_digest(spec)  # 键序无关：同一语义 spec 摘要恒定
     chunks: list[dict] = []
     for path, item in (spec.get("paths") or {}).items():
         for method, op in item.items():
@@ -66,6 +68,8 @@ def chunk_openapi(spec: dict, doc_id: str = "openapi-order-center") -> list[dict
                         "auth_level": 1,
                         "env": "prod",
                         "tenant": DEFAULT_TENANT,
+                        "doc_digest": doc_digest,
+                        "reviewed_at": None,
                     },
                 }
             )

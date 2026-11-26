@@ -12,6 +12,9 @@
 **语义块（Chunk）**:
 切分产物的原子单位——一个 OpenAPI Endpoint 或一段标题感知的 Markdown 小节，自包含且携带元数据。_对外_: 无对外别名。_Avoid_: 片段、分块、文档
 
+**文档版本（Doc Digest）**:
+文档正文的内容摘要（`sha256` 前 12 位小写 hex，`metadata.doc_digest`），由 chunker 现算、同一 `doc_id` 的全部 chunk 共享。它回答"这条引用依据的是哪一版正文"，不是人工维护的版本号——改一个字符摘要必变，只改 front matter（如审查日期）摘要不变。旧语料/旧索引缺该字段为 `null`，引用显示"版本未知"，不编造版本。_对外_: 无对外别名。_Avoid_: 版本号（暗示可手填）、文档修订（暗示有完整版本历史，本切片没有）
+
 **双路召回（Hybrid Retrieval）**:
 ES 倒排（精确符号）与 Qdrant 向量（语义泛化）并行检索后融合的模式。_对外_: 无对外别名。_Avoid_: 混合搜索
 
@@ -207,6 +210,9 @@ H2 主库中的一行用户记录（sub + bcrypt 口令 + tenant + auth_level + 
 **行动契约（Action Contract）**:
 答案下方"下一步该跑什么"的可复制命令清单，**命令不是模型生成的**——从本次引用的 chunk 原文逐字抽出，经四层只读策略（工具白名单 / 子动词闭集 / 外壳负载递归 / 旗标与重定向）核准，认不出的形态判拒并计数。**契约 ⊆ 引用是构造保证**：只从本轮 refs 的 chunk 里抽，因此租户与密级闸不在此重设。网关自身零写操作、无执行回路，复制出去由运维自己动手。两个协议面各有其形：SSE 面走 `done` 帧的结构化 `actions`（恒给键，空给 `[]`），OpenAI 面因无结构化帧位而降级渲染成正文 markdown。_对外_: 只读命令清单。_Avoid_: 建议命令、推荐操作（都会读成模型生成的）；runbook（那是语料里的文档形态，这是运行时产物）
 
+**引用时效（Citation Staleness）**:
+引用条目的审查状态 `fresh | stale | unknown`（ADR-0039）：由可选 front matter `reviewed_at` 与 `opspilot.citation.stale-after-days`（默认 180 天）在**生成答案时**算一次，随载荷缓存；回放不重算。缺失、非法、未来日期一律 `unknown`——**绝不默认新鲜**。它回答"写这条答案时依据的手册是否已过期"，不是"这份手册是否正确"；未标注不等于过期，也不等于可信。_对外_: 未过期 / 已过期 / 未标注。_Avoid_: 可信度（这是审查时间，不是质量评分）、有效期（会读成证书式硬过期）
+
 **闸门（Gate）**:
 这一次请求被**哪道闸**拦下的协议面标记：`none`（正常作答）/ `clarify`（回指澄清，零检索零 LLM）/ `refuse`（知识库无据，检索跑完但低于阈值）。进 SSE `meta` 帧（`gate`），与 `refused` 并存。**必须与"拒答"分开命名**：`CONTEXT.md`「回指澄清」条明确写着"澄清不是拒答"——把两者压成一个 `refused=true` 会让页面只能把它们渲染成同一个徽标，而它们的成因与代价都不同（零检索 vs 跑完检索）。**不得用 `retrieval_ms == 0` 反推澄清**：那是拿性能量当状态量，任何一次缓存命中都会让它误判。_对外_: 无对外别名。_Avoid_: 拒答（作为统称——它会吞掉澄清）、闸门类型（口语可用，字段名统一 `gate`）
 
@@ -227,6 +233,9 @@ H2 主库中的一行用户记录（sub + bcrypt 口令 + tenant + auth_level + 
 `opspilot.storage.mode = live|memory` 的**配置期**开关：`live` = 真中间件（ES + Qdrant + Redis，缺则启动失败，与历史行为一致）；`memory` = 三者**全部**由进程内实现承接（语料从 `offline/corpus/chunks.jsonl` 读进内存），零外部依赖。**默认 `live`、不自动回退**——中间件可达性是**运行期事实**、会抖，把配置期开关套到它上面会产出"同一份代码两次启动跑在不同后端、页面数字却长得一模一样"的假绿实例（[ADR-0022](adr/0022-standalone-storage-mode.md)）。内存实现**复用同一份** `tenant × auth_level` 过滤判据（`IdentityFilter`）与只读策略，**不另写一套**——否则它就成了绕开权限引擎的旁路，而权限隔离正是这个系统最贵的能力。启动摘要与 `/api/v1/admin/health` 自报 `storage=memory` / `backend=in-memory`，让"我这次跑的是哪条链路"成为一条可 grep 的事实。**不承诺任何检索质量数字**：向量是词法哈希、精排是词面覆盖度，拒答门控的行为会随**模型轴**（`dashscope.mode`）变（见 ADR-0022 注记）。_对外_: 零依赖试跑。_Avoid_: 降级档 Level 3（内存实现是**换了一条链路**，不是同链路在压力下的取舍）、离线模式（`memory` 不承诺离线——`DASHSCOPE_MODE=live` 下仍要联网）
 
 ### 架构域
+
+**浏览器级 E2E（Browser E2E）**:
+用真实浏览器把五条核心用户旅程跑一遍的回归层（[ADR-0040](adr/0040-browser-e2e.md)）：Python + Playwright + Chromium headless，真 fat jar + memory/mock + 全新 H2；登录走 UI，业务数据只走公开 API，不 mock 网络。它证明的是"页面、轮询、SSE、事件绑定在真实浏览器里仍然成立"，不替代单测或 HTTP 集成，也不做视觉回归、跨浏览器矩阵、移动端或性能。_对外_: 无对外别名。_Avoid_: 端到端测试（过宽，易被误读为覆盖全部链路）、UI 自动化（暗示可替代人审）
 
 **信任底座（Trust Base）**:
 本系统相对上层 agent 与多场景复用的角色：**只读、确定性、可静态判定的那层机制**——引擎层权限过滤、审计哈希链、降级状态机、逐字护栏、只读命令契约五项构造保证。ADR-0029 把它的适用域从"排障场景"显式扩大为"跨场景"：底座的判据与逻辑**不含任何领域词汇**（错误码、产品命令、领域文案），领域内容一律由插件提供。复用不变量：换插件**只换内容，不换防线**——任何为迁就插件而放松构造保证的提案直接否决（与 ADR-0008"权限是数据层不变量"同源）。**2026-11-16 设计评审 accepted、Lead 已签收**：首个切面是 L1 命令策略白名单**内容**外置为 classpath 数据文件（`src/main/resources/policy/command-policy.json` + `action/CommandPolicyData` 严格加载；机制留 `action/`；不提取 SPI、不新增命令家族），实现已通过独立验证并合并（PR #85 / `7760c40`），契约见 [plans/command-policy-data-accept.md](../plans/command-policy-data-accept.md)。**第二个切面（2026-11-17 契约冻结，契约 [plans/readonly-policy-data-accept.md](../plans/readonly-policy-data-accept.md)）**：L0 只读命令策略的 `TOOLS`/`VERBS`/`SUBVERBS` 三张成员关系表外置为 `src/main/resources/policy/readonly-command-policy.json`，由 `action/ReadOnlyCommandPolicyData` 严格加载；四层判定机制、逐工具旗标/尾部校验、SQL 判据、注入/重定向扫描**全部留在 Java**；`jcmd` 家族已移除（死面收缩：原大写动词因逐字数据与输入小写化而全形态不可达、语料零使用，详见 [ADR-0017 附记](adr/0017-read-only-action-contract.md)）；仍是内容外置，不是接口提取，不引入 SPI / 运行时覆盖面。_对外_: 可信底座。_Avoid_: 第 4 个 agent（ADR-0013 定位否决项，不因复用翻案）、通用框架（未到 rule of three 不提接口）

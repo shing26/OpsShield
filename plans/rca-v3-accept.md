@@ -91,7 +91,7 @@ v3 **不解决检测的产品化**。检测只做零样本迁移诊断，不作�
   `detect.py` / `tune_rank.py` / `report.py` / `tests/**` / `reports/V3-report.md` /
   新运行目录）
 - `plans/rca-v3-accept.md`（本文件）
-- `docs/adr/0041-rca-v3-third-system.md`（新增，Proposed）
+- `docs/adr/0043-rca-v3-third-system.md`（新增；状态见附录 B）
 - `docs/repo-map.md`（仅更新 `offline/rca/` 行 + ADR 计数）
 - `.gitignore`（仅在需要新增 RE1-TT 忽略项时）
 
@@ -163,7 +163,7 @@ git status --short
 | V3-0 | `to_service` 修复 + TT 下载/provenance + `audit.py` TT | AC-1/3/6 过；不跑排名 |
 | V3-1 | SS/OB dev 上 `conf_rrf` 选参 | AC-2 过；两套 dev 分故障约束全过 |
 | V3-2 | TT 125 cases 一次性评估 + 检测诊断 | AC-4/5/7 判定 |
-| V3-3 | `V3-report.md` + ADR-0041 + 独立 Verifier | AC-8/9 |
+| V3-3 | `V3-report.md` + ADR-0043 + 独立 Verifier | AC-8/9 |
 
 ## 11. 风险（写进报告，不许回避）
 
@@ -234,5 +234,11 @@ Verifier 提出的非阻塞观察已记入 `offline/rca/reports/V3-report.md` §
 张力、`download.py --verify` 不校验标签、`tune_rank.py --suite` 缺 `choices`
 护栏。后两条属护栏加固，留待 v4 或后续维护，不在验收后改动已绑定证据的代码。
 
-**签收状态：已签收（2026-11-27，Lead「签收v3」）。** ADR-0041 状态同步为
+**签收状态：已签收（2026-11-27，Lead「签收v3」）。** ADR-0043 状态同步为
 已采纳；本契约 AC-1..AC-9 不放宽，后续若改判据须另立契约（v4）。
+
+**合并时的编号顺延（2026-11-27，仅文档）**：合并到 `main` 时 trunk 已占用
+`0039`（引用溯源）与 `0040`（浏览器级 E2E），故 RCA 系列顺延为
+`0039→0041`（v1）、`0040→0042`（v2）、`0041→0043`（v3）。§5 的 ADR 路径
+随之指向 `docs/adr/0043-rca-v3-third-system.md`；文件内容、验收证据与
+AC-1..AC-9 判定均未改动。

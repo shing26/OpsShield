@@ -140,7 +140,9 @@
   .newbtn{width:100%;background:var(--accent);color:var(--on-accent);border:0;border-radius:6px;
           padding:9px;font-size:12px;font-weight:600}
   .newbtn:hover{background:#f2ede2;color:var(--on-accent)}
-  .inc-list{display:flex;flex-direction:column;gap:2px;min-height:80px}
+  /* 列容器里默认 flex-shrink:1 会把长列表压扁，内容溢出后盖住「加载更多」；
+     让列表保持自身高度，由 .rail 统一滚动。 */
+  .inc-list{display:flex;flex-direction:column;gap:2px;min-height:80px;flex:0 0 auto}
   .inc-more{margin-top:6px;width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;
             background:transparent;color:var(--muted);font-size:11.5px;line-height:1.5;cursor:pointer}
   .inc-more:hover:not(:disabled){color:var(--txt);border-color:var(--muted)}
@@ -331,9 +333,15 @@
   .reflist{display:flex;flex-direction:column;gap:5px}
   .refitem{display:flex;gap:9px;align-items:baseline;font-size:11.5px;color:var(--txt-2);
            background:var(--surface-2);border:1px solid var(--line-soft);border-radius:6px;
-           padding:7px 10px;line-height:1.5}
+           padding:7px 10px;line-height:1.5;flex-wrap:wrap}
   .refitem b{font-family:var(--mono);color:var(--purple);font-weight:500;flex:0 0 auto}
   .refitem .id{font-family:var(--mono);color:var(--txt-2);min-width:0;word-break:break-all}
+  .refitem .ver{font-family:var(--mono);font-size:10px;color:var(--muted);background:var(--surface);
+                border:1px solid var(--line-soft);border-radius:4px;padding:0 5px;word-break:break-all}
+  .refitem .st{font-size:9.5px;padding:1px 6px;border-radius:999px;border:1px solid var(--line);
+               color:var(--muted);flex:0 0 auto}
+  .refitem .st.ok{color:#56d364;border-color:rgba(63,185,80,.35);background:rgba(63,185,80,.08)}
+  .refitem .st.warn{color:#e3b341;border-color:rgba(210,153,34,.35);background:rgba(210,153,34,.08)}
   .refitem .svc{font-family:var(--mono);font-size:10px;color:var(--muted);margin-left:auto;
                 padding-left:8px;flex:0 0 auto}
   .refitem.hl{border-color:var(--accent);background:#16243a}
@@ -1929,11 +1937,20 @@ function contract(r) {
 
 function refs(r) {
   if (!r.refs || !r.refs.length) return '<div class="empty">本轮无引用</div>';
-  return '<div class="reflist">' + r.refs.map((x, i) =>
-    '<div class="refitem" data-ref-item="' + (i + 1) + '">'
-    + '<b>[' + (i + 1) + ']</b><span class="id">' + esc(x.chunkId || '?') + '</span>'
-    + (x.service ? '<span class="svc">' + esc(x.service) + '</span>' : '')
-    + '</div>').join('') + '</div>';
+  return '<div class="reflist">' + r.refs.map((x, i) => {
+    const dg = x.docDigest ? esc(String(x.docDigest)) : '';
+    const st = x.staleness === 'fresh' ? ['未过期', 'ok']
+      : (x.staleness === 'stale' ? ['已过期', 'warn'] : ['未标注', '']);
+    const tip = (x.docDigest ? '摘要 ' + x.docDigest : '版本未知')
+      + (x.reviewedAt ? ' · 审查 ' + x.reviewedAt : ' · 审查日期未标注');
+    return '<div class="refitem" data-ref-item="' + (i + 1) + '">'
+      + '<b>[' + (i + 1) + ']</b><span class="id" data-testid="ref-id">' + esc(x.chunkId || '?') + '</span>'
+      + (x.docId ? '<span class="ver" data-testid="ref-version" title="' + esc(tip) + '">' + esc(x.docId)
+          + (dg ? '@' + dg : '') + '</span>' : '')
+      + '<span class="st ' + st[1] + '" data-testid="ref-staleness">' + st[0] + '</span>'
+      + (x.service ? '<span class="svc">' + esc(x.service) + '</span>' : '')
+      + '</div>';
+  }).join('') + '</div>';
 }
 
 function firstLine(r) {
@@ -1985,7 +2002,7 @@ function verdict(r, k, inc) {
       + '<div class="readbar-lab"><span><i class="sw ret"></i>检索 ' + retMs + 'ms</span>'
       + '<span><i class="sw rest"></i>其余 ' + Math.max(0, totalMs - retMs) + 'ms</span>'
       + '<span class="right">总 ' + totalMs + 'ms</span></div>';
-  return '<section class="card verdict ' + tone + '" aria-label="诊断结论">'
+  return '<section class="card verdict ' + tone + '" data-testid="diagnosis" aria-label="诊断结论">'
     + '<div class="card-hd"><span class="k">诊断结论</span>' + badge(r)
     + (r.meta ? '<span class="pill">cache ' + esc(r.meta.cache_hit || 'none') + '</span>' : '')
     + (r.meta ? '<span class="pill">' + esc(r.meta.degradation_level || 'L0') + '</span>' : '')
@@ -2374,7 +2391,16 @@ async function copyVerdict(k, btn) {
   const rf = r.refs || [];
   if (rf.length) {
     lines.push(''); lines.push('### 参考来源');
-    rf.forEach((x, i) => { lines.push('[' + (i + 1) + '] ' + (x.chunkId || '?') + (x.service ? ' · ' + x.service : '')); });
+    rf.forEach((x, i) => {
+      const ver = x.docId
+        ? ' · 文档 ' + x.docId + (x.docDigest ? '@' + x.docDigest : '（版本未知）') : '';
+      const st = x.staleness === 'fresh'
+        ? '（未过期' + (x.reviewedAt ? '：' + x.reviewedAt : '') + '）'
+        : (x.staleness === 'stale'
+          ? '（已过期' + (x.reviewedAt ? '：' + x.reviewedAt : '') + '）'
+          : '（审查日期未标注）');
+      lines.push('[' + (i + 1) + '] ' + (x.chunkId || '?') + (x.service ? ' · ' + x.service : '') + ver + st);
+    });
   }
   if (refused) { lines.push(''); lines.push('> 拒答是安全信号：覆盖范围内无可靠依据，未输出低置信度正文。'); }
   const ok = await copyText(lines.join('\n'));
@@ -2402,7 +2428,7 @@ function idBlock(k, label) {
     + '<button type="button" class="btn gho" data-act="login:' + k + '"' + (s.busy ? ' disabled' : '') + '>接入</button>'
     + (s.token ? '<span class="pill ok">已接入</span>' : '')
     + '</div>'
-    + (s.err ? '<div class="errline" style="margin-top:6px">' + esc(s.err) + '</div>' : '')
+    + (s.err ? '<div class="errline" data-testid="login-error" style="margin-top:6px">' + esc(s.err) + '</div>' : '')
     + '</div>';
 }
 

@@ -41,7 +41,8 @@ public record OpsPilotProperties(
         @Valid Storm storm,
         @Valid Retrieval retrieval,
         @Valid Degrade degrade,
-        @Valid Alert alert
+        @Valid Alert alert,
+        @Valid Citation citation
 ) {
 
     /**
@@ -67,13 +68,13 @@ public record OpsPilotProperties(
      */
     public OpsPilotProperties(DashScope dashscope, Es es, Qdrant qdrant, Jwt jwt, Cache cache,
                               Storm storm, Retrieval retrieval, Degrade degrade) {
-        this(dashscope, new Storage("live"), es, qdrant, jwt, cache, storm, retrieval, degrade, null);
+        this(dashscope, new Storage("live"), es, qdrant, jwt, cache, storm, retrieval, degrade, null, null);
     }
 
     /** 九参兼容构造（ADR-0035 之前的位置参数调用点）：alert 段缺省。 */
     public OpsPilotProperties(DashScope dashscope, Storage storage, Es es, Qdrant qdrant, Jwt jwt,
                               Cache cache, Storm storm, Retrieval retrieval, Degrade degrade) {
-        this(dashscope, storage, es, qdrant, jwt, cache, storm, retrieval, degrade, null);
+        this(dashscope, storage, es, qdrant, jwt, cache, storm, retrieval, degrade, null, null);
     }
 
     /**
@@ -84,6 +85,12 @@ public record OpsPilotProperties(
     @Override
     public Alert alert() {
         return alert == null ? new Alert(null, null) : alert;
+    }
+
+    /** {@code citation} 的空值兜底：整段缺失时按 180 天判定（与 application.yml 同口径）。 */
+    @Override
+    public Citation citation() {
+        return citation == null ? new Citation(null) : citation;
     }
 
     /**
@@ -173,6 +180,18 @@ public record OpsPilotProperties(
         public Alert {
             if (retentionDays == null) retentionDays = 30;
             if (maxPerTenant == null) maxPerTenant = 500;
+        }
+    }
+
+    /**
+     * 引用时效阈值（ADR-0039）：审查日期距今超过该天数判 stale。默认 180 天。
+     *
+     * <p>字段用 {@code Integer} 而非 {@code int}：整段缺失时 Spring 绑定为 null，
+     * {@code int} 会变 0 并撞 {@code @Min(1)}，把"没配"变成启动失败。
+     */
+    public record Citation(@Min(1) Integer staleAfterDays) {
+        public Citation {
+            if (staleAfterDays == null) staleAfterDays = 180;
         }
     }
 }

@@ -88,7 +88,7 @@ user      → user-db
 - `offline/rca/**`（含 `download.py` / `dataset.py` / `methods.py` / `detect.py` / `topology.py` /
   `run.py` / `report.py` / `tests/**` / `reports/V2-report.md` / 新运行目录）
 - `plans/rca-v2-accept.md`（本文件）
-- `docs/adr/0040-rca-v2-dual-arm.md`（新增，Proposed）
+- `docs/adr/0042-rca-v2-dual-arm.md`（新增）
 - `docs/repo-map.md`（仅更新 `offline/rca/` 行 + ADR 计数 39→40）
 - `.gitignore`（仅在需要新增 RE1-SS 忽略项时）
 
@@ -152,7 +152,7 @@ git status --short
 | V2-0 | RE1-SS 下载 + 双 provenance + 指标族解析 + Sock Shop 拓扑 | 25 cases 端到端，AC-1/2/3 过 |
 | V2-1 | 双检测臂 + dev 选参（误报约束） | RE1-SS dev 覆盖率 ≥ 80%，误报 ≤ 5% |
 | V2-2 | 自适应融合定位 + 分故障非回归选参 | dev 上无故障类型下降 > 5pp |
-| V2-3 | RE1-SS 测试集一次性评估 + 报告 + ADR-0040 + Verifier | AC-4..9 判定 |
+| V2-3 | RE1-SS 测试集一次性评估 + 报告 + ADR-0042 + Verifier | AC-4..9 判定 |
 
 ## 10. 风险（写进报告，不许回避）
 
