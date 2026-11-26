@@ -219,6 +219,47 @@ jobs:
             || { echo "::error::MANIFEST 未登记同代自检结论"; exit 1; }
           echo "OK: 证据快照自洽（$(wc -l < "${archive}CHECKSUMS.sha256") 项）"
 
+  # S4（ADR-0040）：浏览器级 E2E。与 smoke 同形——先打 fat jar，再用真浏览器跑五条
+  # 核心旅程。它不是视觉回归/跨浏览器矩阵；失败必须留 screenshot + trace + server.log，
+  # 由上面的 pytest-playwright 参数与本目录 fixture 共同保证。
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('offline/requirements-dev.txt') }}
+      - name: Install pinned dev deps
+        run: pip install -r offline/requirements-dev.txt
+      - name: Install Chromium
+        run: python -m playwright install --with-deps chromium
+      - name: Build fat jar
+        run: mvn -B -DskipTests package
+      - name: Browser E2E
+        run: >-
+          python -m pytest e2e -q --browser=chromium
+          --tracing=retain-on-failure --screenshot=only-on-failure
+          --output=e2e/artifacts
+      - name: Upload failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-artifacts
+          path: e2e/artifacts
+          retention-days: 7
+          if-no-files-found: ignore
+
   python:
     runs-on: ubuntu-latest
     steps:

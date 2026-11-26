@@ -629,6 +629,24 @@
           "pattern": "Python: (\\d+) test 函数声明"
         }
       ]
+    },
+    {
+      "id": "e2e_test_declarations",
+      "unit": "条 Playwright E2E test 函数声明（e2e/**/*.py；五条旅程各一条）",
+      "derive": {
+        "kind": "grep_count",
+        "globs": [
+          "e2e/**/*.py"
+        ],
+        "pattern": "^def test_"
+      },
+      "format": "int",
+      "cited_in": [
+        {
+          "file": "README.md",
+          "pattern": "Playwright E2E (\\d+) 条"
+        }
+      ]
     }
   ]
 }
