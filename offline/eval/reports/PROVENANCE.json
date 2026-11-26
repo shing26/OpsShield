@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-19T02:04:29+08:00",
+  "generated_at": "2026-11-26T02:54:48+08:00",
   "produced_by": "offline/eval/evaluate.py",
   "reproduce": "cd offline && python eval/build_golden.py && python eval/evaluate.py   # 需活体栈；live 数字还需 DASHSCOPE_API_KEY",
   "report_mode": "live",
@@ -13,7 +13,7 @@
     "files": 70
   },
   "chunks": {
-    "sha256": "e1a873afb729efd4f504ed31eaa3df1a09dd02bb1a458096d8fef9914ecf6bae",
+    "sha256": "bd17b9a430566dbbfc804adfa7ecd34ecab52f193307b6f65df42457cfeb6a89",
     "lines": 459
   },
   "golden": {

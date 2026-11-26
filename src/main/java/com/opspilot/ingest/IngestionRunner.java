@@ -292,7 +292,9 @@ public class IngestionRunner implements ApplicationRunner, InitializingBean {
                                 .properties("error_codes", pp -> pp.keyword(k -> k))
                                 .properties("auth_level", pp -> pp.integer(i -> i))
                                 .properties("env", pp -> pp.keyword(k -> k))
-                                .properties("tenant", pp -> pp.keyword(k -> k))))));
+                                .properties("tenant", pp -> pp.keyword(k -> k))
+                                .properties("doc_digest", pp -> pp.keyword(k -> k))
+                                .properties("reviewed_at", pp -> pp.keyword(k -> k))))));
         log.info("ES staging 索引已建: {}", index);
     }
 
@@ -374,6 +376,8 @@ public class IngestionRunner implements ApplicationRunner, InitializingBean {
                                     .putFields("auth_level", value(c.metadata().authLevel()))
                                     .putFields("env", value(str(c.metadata().env())))
                                     .putFields("tenant", value(str(c.metadata().tenant())))
+                                    .putFields("doc_digest", value(str(c.metadata().docDigest())))
+                                    .putFields("reviewed_at", value(str(c.metadata().reviewedAt())))
                                     .build())
                             .build();
             Map<String, io.qdrant.client.grpc.JsonWithInt.Value> payload = new LinkedHashMap<>();
@@ -472,6 +476,8 @@ public class IngestionRunner implements ApplicationRunner, InitializingBean {
         meta.put("auth_level", c.metadata().authLevel());
         meta.put("env", c.metadata().env());
         meta.put("tenant", c.metadata().tenant());
+        meta.put("doc_digest", c.metadata().docDigest());
+        meta.put("reviewed_at", c.metadata().reviewedAt());
         m.put("metadata", meta);
         return m;
     }

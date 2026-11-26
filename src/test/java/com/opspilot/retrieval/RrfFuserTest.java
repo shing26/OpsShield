@@ -46,4 +46,14 @@ class RrfFuserTest {
         assertEquals("A", out.get(0).chunkId()); // 双路第一，融合分最高
         assertTrue(out.get(0).rrfScore() >= out.get(1).rrfScore());
     }
+
+    /** S3 AC5：融合不得丢掉版本身份（否则引用在融合后静默变成"版本未知"）。 */
+    @Test
+    void applyPreservesDocProvenance() {
+        ScoredChunk a = new ScoredChunk("A", "doc-A", "test", "t", "b", "s", List.of(), 1,
+                "a1b2c3d4e5f6", "2026-09-16", new ScoredChunk.Scores(1, 0, 0, 0));
+        List<ScoredChunk> out = RrfFuser.apply(List.of(a), List.of(), 60);
+        assertEquals("a1b2c3d4e5f6", out.get(0).docDigest());
+        assertEquals("2026-09-16", out.get(0).reviewedAt());
+    }
 }

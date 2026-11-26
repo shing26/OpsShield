@@ -115,6 +115,13 @@ public class EsSearchService implements RetrievalLeg {
                 (String) meta.getOrDefault("service", ""),
                 (List<String>) meta.getOrDefault("error_codes", List.of()),
                 ((Number) meta.getOrDefault("auth_level", 1)).intValue(),
+                blankToNull((String) meta.get("doc_digest")),
+                blankToNull((String) meta.get("reviewed_at")),
                 new ScoredChunk.Scores(h.score() == null ? 0 : h.score(), 0, 0, 0));
+    }
+
+    /** ES/Qdrant 的缺失值是空串：统一归一回 null，避免引用出现 "" 版本身份。 */
+    private static String blankToNull(String s) {
+        return s == null || s.isBlank() ? null : s;
     }
 }

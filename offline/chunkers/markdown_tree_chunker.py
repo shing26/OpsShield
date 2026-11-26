@@ -11,6 +11,7 @@ from pathlib import Path
 
 from errorcode import ERROR_CODE_RE  # 与在线 Java 词法同源，见 errorcode.py
 from defaults import DEFAULT_TENANT
+from doc_digest import markdown_doc_digest, parse_reviewed_at
 
 FENCE_RE = re.compile(r"^\s*(```|~~~)")
 HEADING_RE = re.compile(r"^(#{1,3})\s+(.+?)\s*$")
@@ -58,9 +59,12 @@ def _split_sections(body: str) -> list[dict]:
     return sections
 
 
-def chunk_markdown(raw: str, doc_id: str) -> list[dict]:
+def chunk_markdown(raw: str, doc_id: str, *, where: str | None = None) -> list[dict]:
     meta, body = parse_front_matter(raw)
     sections = _split_sections(body)
+    # 版本身份按"正文"现算，front matter 的变化（如签名 reviewed_at）不制造版本跳变。
+    doc_digest = markdown_doc_digest(body)
+    reviewed_at = parse_reviewed_at(meta, where=where or doc_id)
 
     # 面包屑栈：breadcrumb[level] = title
     crumbs: dict[int, str] = {}
@@ -92,6 +96,8 @@ def chunk_markdown(raw: str, doc_id: str) -> list[dict]:
                     "auth_level": int(meta.get("auth_level", 1)),
                     "env": meta.get("env", "prod"),
                     "tenant": str(meta.get("tenant") or DEFAULT_TENANT),  # front matter 可覆盖
+                    "doc_digest": doc_digest,
+                    "reviewed_at": reviewed_at,
                 },
             }
         )
@@ -103,4 +109,4 @@ def chunk_file(path: str) -> list[dict]:
     # doc_id 取形如 pm-001 / rb-001 的前缀
     m = re.match(r"([a-z]+-\d+)", p.stem)
     doc_id = m.group(1) if m else p.stem
-    return chunk_markdown(p.read_text(encoding="utf-8"), doc_id=doc_id)
+    return chunk_markdown(p.read_text(encoding="utf-8"), doc_id=doc_id, where=p.name)

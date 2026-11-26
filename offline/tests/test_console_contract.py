@@ -52,6 +52,18 @@ def test_diff_table_requires_both_sides() -> None:
     html = _html()
     assert "两侧都完成后才有对照" in html, "对照表缺一侧时必须只给说明、不给表"
 
+
+def test_citation_refs_carry_doc_version_and_staleness() -> None:
+    """S3：引用卡必须消费版本身份与时效；漏一个键，面板就静默退回"看不出是哪一版"。"""
+    html = _html()
+    for token in ("x.docDigest", "x.docId", "x.reviewedAt", "x.staleness"):
+        assert token in html, f"引用卡未消费 {token}（S3 版本身份/时效会静默丢失）"
+    for label in ("未过期", "已过期", "未标注"):
+        assert label in html, f"时效徽标缺「{label}」"
+    assert "esc(x.docId)" in html and "esc(tip)" in html, "新增字段必须走 esc()"
+    assert "文档 ' + x.docId" in html, "复制为工单的参考来源必须带文档身份"
+    assert "（版本未知）" in html, "缺摘要时必须明写版本未知，不能留空占位"
+
 def test_popover_is_viewport_anchored() -> None:
     """#28：弹层必须相对视口定位；absolute + 文档坐标会在滚动后整块跑出视口。"""
     html = _html()

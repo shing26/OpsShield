@@ -80,6 +80,23 @@ class InMemoryIndexTest {
                 "不许拿 System.currentTimeMillis() 冒充'刚刚重建'");
     }
 
+    /** S3 AC5：memory 链路必须把版本身份带到 ScoredChunk；旧语料缺字段为 null 而不是空串。 */
+    @Test
+    void loadCarriesDocVersionMetadata() {
+        Chunk withProvenance = new Chunk("c-prov", "doc-c-prov", "runbook", "t", "b",
+                new Chunk.Metadata("svc-a", null, null, List.of(), 1, "prod", "tenant-internal", null,
+                        "a1b2c3d4e5f6", "2026-09-16"));
+        InMemoryIndex fresh = new InMemoryIndex();
+        fresh.load(List.of(withProvenance), List.of(new float[]{1f}));
+        ScoredChunk c = fresh.visible("tenant-internal", 1).get(0).chunk();
+        assertEquals("a1b2c3d4e5f6", c.docDigest());
+        assertEquals("2026-09-16", c.reviewedAt());
+
+        ScoredChunk legacy = index.visible("tenant-internal", 1).get(0).chunk();
+        assertNull(legacy.docDigest(), "旧语料无版本字段 → null");
+        assertNull(legacy.reviewedAt());
+    }
+
     @Test
     void lexicalLegNeverReturnsChunksAboveTheCallersLevel() {
         Set<String> low = chunkIds(lexical.search("50012_DB_TIMEOUT 排查", "tenant-internal", 1, 10));

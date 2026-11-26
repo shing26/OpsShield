@@ -12,6 +12,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 import openapi_ast_chunker as oa  # noqa: E402
 import markdown_tree_chunker as md  # noqa: E402
+from doc_digest import is_digest  # noqa: E402
 
 
 def build(corpus_dir: Path) -> list[dict]:
@@ -38,7 +39,25 @@ def build(corpus_dir: Path) -> list[dict]:
     if dupes:
         # 显式 raise 而非 assert：python -O 会剥掉 assert，产线闸门不能建在会被优化掉的原语上
         raise ValueError(f"doc_id 撞号（多个文件自称同一篇）: {dupes}")
+    _assert_doc_digests(chunks)
     return chunks
+
+
+def _assert_doc_digests(chunks: list[dict]) -> None:
+    """同一文档的所有 chunk 必须共享同一版本身份；摘要形状必须可校验。
+
+    这是 S3 的构建期构造保证：如果摘要按 chunk 各算一份，同一篇文档会出现多个"版本"，
+    引用面板上同一份 runbook 的两条依据长得像两个版本。
+    """
+    by_doc: dict[str, str] = {}
+    for c in chunks:
+        dg = c["metadata"].get("doc_digest")
+        if not is_digest(dg):
+            raise ValueError(f"chunk 缺少合法 doc_digest（12 位小写 hex）: {c['chunk_id']} -> {dg!r}")
+        prev = by_doc.setdefault(c["doc_id"], dg)
+        if prev != dg:
+            raise ValueError(
+                f"同一文档出现多个 doc_digest: {c['doc_id']} {prev} != {dg}（chunk {c['chunk_id']}）")
 
 
 def _contained(p: Path, root: Path, label: str) -> Path:
