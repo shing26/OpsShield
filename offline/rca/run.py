@@ -22,9 +22,9 @@ DEFAULT_OUT = ROOT / "reports"
 
 
 def evaluate(suite: str, split: str, method_names: list[str], seed: int,
-             data_dir: Path, out_dir: Path) -> dict:
+             data_dir: Path, out_dir: Path, reps: list[int] | None = None) -> dict:
     index = load_index(data_dir)
-    rows = select_cases(index, suite, split)
+    rows = select_cases(index, suite, split, reps)
     if rows.empty:
         raise SystemExit(f"no cases for {suite}/{split}")
 
@@ -39,6 +39,7 @@ def evaluate(suite: str, split: str, method_names: list[str], seed: int,
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "suite": suite,
         "split": split,
+        "reps": reps,
         "seed": seed,
         "n_cases": len(cases),
         "n_candidates": {"min": min(candidate_counts), "max": max(candidate_counts)},
@@ -102,11 +103,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--methods", nargs="+", default=["random"],
                         choices=sorted(METHODS) + ["all"])
     parser.add_argument("--seed", type=int, default=7)
+    parser.add_argument("--reps", nargs="+", type=int, default=None,
+                        help="only these repetitions (e.g. --reps 1 for smoke)")
     parser.add_argument("--data-dir", type=Path, default=DEFAULT_DATA)
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
     args = parser.parse_args(argv)
     methods = list(METHODS) if "all" in args.methods else args.methods
-    evaluate(args.suite, args.split, methods, args.seed, args.data_dir, args.out)
+    evaluate(args.suite, args.split, methods, args.seed, args.data_dir, args.out,
+             args.reps)
     return 0
 
 

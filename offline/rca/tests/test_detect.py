@@ -43,3 +43,31 @@ def test_false_alarm_is_not_a_detection():
     assert counts_as_detection({"alarm_time": 90, "false_alarm": True}) is False
     assert counts_as_detection({"alarm_time": None, "false_alarm": False}) is False
     assert counts_as_detection({"alarm_time": 110, "false_alarm": False}) is True
+
+
+def test_sli_arm_catches_latency_only_fault():
+    rng = np.random.default_rng(29)
+    n = 900
+    inject = 700
+    latency = rng.normal(0.05, 0.002, n)
+    latency[inject:] += 0.05
+    case = Case(
+        name="sli-only",
+        root_cause_service="orders",
+        fault="delay",
+        repetition=1,
+        inject_time=inject,
+        metrics=pd.DataFrame({
+            "time": np.arange(n),
+            "orders_latency-90": latency,
+            "orders_cpu": rng.normal(10, 0.2, n),
+        }),
+        system="sock-shop",
+    )
+    resource = detect_case(case, arms=("resource",), thresholds={"resource": 8.0})
+    sli = detect_case(case, arms=("sli",), thresholds={"sli": 8.0})
+    both = detect_case(case, arms=("resource", "sli"),
+                       thresholds={"resource": 8.0, "sli": 8.0})
+    assert resource["detected"] is False
+    assert sli["detected"] is True
+    assert both["detected"] is True

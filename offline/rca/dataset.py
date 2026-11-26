@@ -17,6 +17,12 @@ REQUIRED_INDEX_COLUMNS = (
     "repetition",
 )
 
+SYSTEMS = {
+    "ob": "online-boutique",
+    "ss": "sock-shop",
+    "tt": "train-ticket",
+}
+
 SPLIT_REPS = {
     "dev": (1, 2, 3),
     "test": (4, 5),
@@ -32,6 +38,7 @@ class Case:
     repetition: int
     inject_time: int
     metrics: pd.DataFrame
+    system: str = "online-boutique"
 
     @property
     def normal(self) -> pd.DataFrame:
@@ -53,18 +60,51 @@ def load_index(data_dir: Path) -> pd.DataFrame:
     return frame
 
 
-def select_cases(index: pd.DataFrame, suite: str, split: str = "dev") -> pd.DataFrame:
+def select_cases(index: pd.DataFrame, suite: str, split: str = "dev",
+                 reps: list[int] | None = None) -> pd.DataFrame:
     if split not in SPLIT_REPS:
         raise ValueError(f"unknown split {split!r}; choose from {sorted(SPLIT_REPS)}")
     label = suite.upper()
     rows = index[index["dataset"] == label]
     rows = rows[rows["repetition"].isin(SPLIT_REPS[split])]
+    if reps:
+        rows = rows[rows["repetition"].isin(reps)]
     return rows.sort_values("case").reset_index(drop=True)
 
 
 def to_service(column: str) -> str:
     """按 RCAEval 的口径把 ``<service>_<indicator>`` 折叠为服务名。"""
     return column.split("_")[0].replace("-db", "")
+
+
+def metric_family(column: str) -> str:
+    """把指标列归入 resource / sli / traffic / other。
+
+    Sock Shop 用 ``carts_latency-90`` 与 ``carts_workload``；Online Boutique 用
+    ``adservice_latency`` 与 ``adservice_load``。两者都必须识别。
+    """
+    name = column.lower()
+    if name.endswith(("_cpu", "_mem", "_diskio")):
+        return "resource"
+    if "_latency" in name or name.endswith("_error"):
+        return "sli"
+    if name.endswith(("_load", "_workload")):
+        return "traffic"
+    return "other"
+
+
+def v1_metric_family(column: str) -> str:
+    """v1 冻结口径：SLI 只认 ``*_latency`` / ``*_error``，不认 ``latency-50/-90``。
+
+    AC-3 要求 v1 六方法与 ``M2-report.md`` 完全一致，因此 v1 方法必须保留这个
+    （后来看是漏读分位列的）口径；v2 的 ``dual-arm`` 才用 ``metric_family``。
+    """
+    name = column.lower()
+    if name.endswith(("_cpu", "_mem", "_diskio")):
+        return "resource"
+    if name.endswith(("_latency", "_error")):
+        return "sli"
+    return "other"
 
 
 def candidate_services(metrics: pd.DataFrame) -> list[str]:
@@ -95,6 +135,7 @@ def load_case(data_dir: Path, row: pd.Series) -> Case:
     if not (metrics["time"].min() < inject_time <= metrics["time"].max()):
         raise ValueError(f"case {name}: inject_time outside telemetry range")
 
+    system_raw = str(row.get("system", "") or "")
     return Case(
         name=name,
         root_cause_service=str(row["root_cause_service"]),
@@ -102,4 +143,5 @@ def load_case(data_dir: Path, row: pd.Series) -> Case:
         repetition=int(row["repetition"]),
         inject_time=inject_time,
         metrics=metrics,
+        system=SYSTEMS.get(system_raw, system_raw or "online-boutique"),
     )

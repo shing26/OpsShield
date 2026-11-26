@@ -1,18 +1,18 @@
 """排序方法注册表。
 
-M0：random。
-M1：static-threshold / 3sigma / baro（BARO 口径的 robust-z 复现）。
-M2：本方法在此追加。
+v1：random / static-threshold / 3sigma / baro(IQR) / mad-z(MAD) / topo-first。
+v2：dual-arm（资源臂 + SLI 臂，按显著性自适应融合）。
 """
 from __future__ import annotations
 
 import random
+from dataclasses import dataclass
 from typing import Protocol, Sequence
 
 import numpy as np
 import pandas as pd
 
-from dataset import Case, to_service
+from dataset import Case, metric_family, to_service, v1_metric_family
 from topology import callees
 
 
@@ -58,8 +58,75 @@ def _collapse(column_scores: dict[str, float]) -> list[str]:
     return [s for s, _ in sorted(best.items(), key=lambda item: (-item[1], item[0]))]
 
 
+def _rank_map(scores: dict[str, float]) -> dict[str, int]:
+    ordered = [s for s, _ in sorted(scores.items(), key=lambda item: (-item[1], item[0]))]
+    return {service: index + 1 for index, service in enumerate(ordered)}
+
+
+@dataclass(frozen=True)
+class ArmScores:
+    resource: dict[str, float]
+    sli: dict[str, float]
+    onset: dict[str, int]
+    duration: int
+
+
+def service_arms(case: Case, materiality_floor: float = 0.08,
+                 persistence_q: float = 90, onset_z: float = 3.0,
+                 family_fn=metric_family, nan_aware: bool = False) -> ArmScores:
+    """把逐指标的正向 robust-z 聚成资源臂与 SLI 臂（两个系统共用）。
+
+    ``nan_aware=False`` 保留 v1 的 NaN 传播语义（AC-3 要求逐 case 一致）；
+    v2 的 ``dual-arm`` 用 ``nan_aware=True``，把缺测当「无证据」（记 0）而不是
+    让整列变 NaN。
+    """
+    normal = case.normal
+    faulty = case.faulty
+    columns = [c for c in normal.columns if c != "time" and c in faulty.columns]
+    if not columns:
+        return ArmScores({}, {}, {}, max(len(faulty) - 1, 1))
+
+    base = normal[columns].to_numpy(dtype=float)
+    current = faulty[columns].to_numpy(dtype=float)
+    median = np.median(base, axis=0)
+    mad = 1.4826 * np.median(np.abs(base - median), axis=0)
+    span = np.percentile(base, 95, axis=0) - np.percentile(base, 5, axis=0)
+    floor = materiality_floor * (np.abs(median) + span + 1e-9)
+    scale = np.maximum.reduce([mad, floor, np.full_like(median, 1e-9)])
+
+    signed = (current - median) / scale
+    positive = np.maximum(signed, 0.0)
+    if nan_aware:
+        has_data = ~np.isnan(positive).all(axis=0)
+        persistent = np.zeros(positive.shape[1], dtype=float)
+        if has_data.any():
+            persistent[has_data] = np.nanpercentile(
+                positive[:, has_data], persistence_q, axis=0
+            )
+    else:
+        persistent = np.percentile(positive, persistence_q, axis=0)
+
+    strong = np.abs(signed) > onset_z
+    onset = np.where(strong.any(axis=0), np.argmax(strong, axis=0), len(current))
+    duration = max(len(current) - 1, 1)
+
+    resource: dict[str, float] = {}
+    sli: dict[str, float] = {}
+    onset_by_service: dict[str, int] = {}
+    for idx, column in enumerate(columns):
+        service = to_service(column)
+        family = family_fn(column)
+        if family == "resource":
+            resource[service] = max(resource.get(service, 0.0), float(persistent[idx]))
+        elif family == "sli":
+            sli[service] = max(sli.get(service, 0.0), float(persistent[idx]))
+        onset_by_service[service] = min(onset_by_service.get(service, duration + 1),
+                                        int(onset[idx]))
+    return ArmScores(resource, sli, onset_by_service, duration)
+
+
 class BaroRanker:
-    """BARO 的逐指标 robust-z 复现（MAD/IQR 口径，取窗口内最大 z）。"""
+    """BARO 的逐指标 robust-z 复现（IQR 口径，取窗口内最大有符号 z）。"""
 
     name = "baro"
 
@@ -75,6 +142,26 @@ class BaroRanker:
             q1, q3 = np.percentile(base, [25, 75])
             iqr = float(q3 - q1)
             scale = iqr if iqr > 0 else 1.0
+            scores[column] = float(np.max((current - median) / scale))
+        return _collapse(scores)
+
+
+class MadZRanker:
+    """契约字面要求的 robust-z（MAD）：1.4826 × 中位绝对偏差，取最大有符号 z。"""
+
+    name = "mad-z"
+
+    def rank(self, case: Case, candidates: Sequence[str], seed: int) -> list[str]:
+        normal, faulty = _prepared(case)
+        scores: dict[str, float] = {}
+        for column in normal.columns:
+            base = normal[column].to_numpy(dtype=float)
+            current = faulty[column].to_numpy(dtype=float)
+            if not len(base) or not len(current):
+                continue
+            median = float(np.median(base))
+            mad = 1.4826 * float(np.median(np.abs(base - median)))
+            scale = mad if mad > 0 else 1.0
             scores[column] = float(np.max((current - median) / scale))
         return _collapse(scores)
 
@@ -99,32 +186,8 @@ class ThreeSigmaRanker:
         return _collapse(scores)
 
 
-class MadZRanker:
-    """契约字面要求的 robust-z（MAD）：1.4826 × 中位绝对偏差，取窗口最大有符号 z。"""
-
-    name = "mad-z"
-
-    def rank(self, case: Case, candidates: Sequence[str], seed: int) -> list[str]:
-        normal, faulty = _prepared(case)
-        scores: dict[str, float] = {}
-        for column in normal.columns:
-            base = normal[column].to_numpy(dtype=float)
-            current = faulty[column].to_numpy(dtype=float)
-            if not len(base) or not len(current):
-                continue
-            median = float(np.median(base))
-            mad = 1.4826 * float(np.median(np.abs(base - median)))
-            scale = mad if mad > 0 else 1.0
-            scores[column] = float(np.max((current - median) / scale))
-        return _collapse(scores)
-
-
 class StaticThresholdRanker:
-    """阈值告警基线：只看 SLI（error / latency）是否越过正常窗基线。
-
-    误差项按"出现即报"计分；时延项按相对正常窗 p99 的超出比例计分。
-    没有越界的服务得 0 分——这正是阈值告警"只看门面"的局限。
-    """
+    """阈值告警基线：只看 SLI（error / latency）是否越过正常窗基线。"""
 
     name = "static-threshold"
 
@@ -156,20 +219,7 @@ class StaticThresholdRanker:
 
 
 class TopoFirstRanker:
-    """本方法：材料性下限 + 持续性 + 拓扑扣减 + 时相加权。
-
-    三个机制各自解决一个已知失败模式（见 plans/rca-benchmark-accept.md §9）：
-
-    1. **材料性下限**：z 分用 MAD 做尺度，但要求变化至少是「|中位数|+正常窗跨度」的
-       8%——否则低方差服务（如 emailservice）的一次抖动就能拿到巨大 z。
-    2. **持续性**：取故障窗内正偏离的 P90，而不是最大值；单点尖峰不算根因。
-    3. **拓扑扣减**：若某服务的被调方资源异常更强，则该服务的分数减半——
-       它的 latency 很可能只是下游症状，不是根因。
-    4. **时相加权**：异常起始更早的服务加权（根因先动，症状后动）。
-
-    正偏离而非绝对值，是 RE1 的故障类型先验：cpu/mem/disk/delay/loss 都表现为升高；
-    下降通常是被调方流量减少的症状。该先验不适用于"服务宕机"类故障，报告需声明。
-    """
+    """v1 方法：材料性下限 + P90 持续性 + 拓扑扣减 + 时相加权。"""
 
     name = "topo-first"
     materiality_floor = 0.08
@@ -180,50 +230,90 @@ class TopoFirstRanker:
     onset_z = 3.0
 
     def rank(self, case: Case, candidates: Sequence[str], seed: int) -> list[str]:
-        normal = case.normal
-        faulty = case.faulty
-        columns = [c for c in normal.columns if c != "time" and c in faulty.columns]
-        if not columns:
-            return list(candidates)
-
-        base = normal[columns].to_numpy(dtype=float)
-        current = faulty[columns].to_numpy(dtype=float)
-        median = np.median(base, axis=0)
-        mad = 1.4826 * np.median(np.abs(base - median), axis=0)
-        span = np.percentile(base, 95, axis=0) - np.percentile(base, 5, axis=0)
-        floor = self.materiality_floor * (np.abs(median) + span + 1e-9)
-        scale = np.maximum.reduce([mad, floor, np.full_like(median, 1e-9)])
-
-        signed = (current - median) / scale
-        positive = np.maximum(signed, 0.0)
-        persistent = np.percentile(positive, self.persistence_q, axis=0)
-
-        strong = np.abs(signed) > self.onset_z
-        onset = np.where(strong.any(axis=0), np.argmax(strong, axis=0), len(current))
-        duration = max(len(current) - 1, 1)
-
-        resource: dict[str, float] = {}
-        sli: dict[str, float] = {}
-        onset_by_service: dict[str, int] = {}
-        for idx, column in enumerate(columns):
-            service = to_service(column)
-            if column.endswith(("_cpu", "_mem", "_diskio")):
-                resource[service] = max(resource.get(service, 0.0), float(persistent[idx]))
-            elif column.endswith(("_latency", "_error")):
-                sli[service] = max(sli.get(service, 0.0), float(persistent[idx]))
-            onset_by_service[service] = min(onset_by_service.get(service, duration + 1),
-                                            int(onset[idx]))
-
+        arms = service_arms(case, self.materiality_floor, self.persistence_q,
+                            self.onset_z, family_fn=v1_metric_family)
         scores: dict[str, float] = {}
-        for service in set(resource) | set(sli):
-            score = resource.get(service, 0.0) + self.sli_weight * sli.get(service, 0.0)
-            if any(resource.get(down, 0.0) > max(resource.get(service, 0.0), 1e-9)
-                   for down in callees(service)):
+        for service in set(arms.resource) | set(arms.sli):
+            score = arms.resource.get(service, 0.0) + self.sli_weight * arms.sli.get(service, 0.0)
+            if any(arms.resource.get(down, 0.0) > max(arms.resource.get(service, 0.0), 1e-9)
+                   for down in callees(service, case.system)):
                 score *= self.callee_discount
-            start = onset_by_service.get(service, duration)
-            if start < duration:
-                score *= 1.0 + self.first_mover_boost * (1.0 - start / duration)
+            start = arms.onset.get(service, arms.duration)
+            if start < arms.duration:
+                score *= 1.0 + self.first_mover_boost * (1.0 - start / arms.duration)
             scores[service] = score
+        return [s for s, _ in sorted(scores.items(), key=lambda item: (-item[1], item[0]))]
+
+
+class DualArmRanker:
+    """v2 方法：资源臂 + SLI 臂，按显著性自适应融合。
+
+    - 两臂都显著：``weighted`` 按两臂峰值加权归一化；``rrf`` 按秩融合；``max`` 取大。
+    - 仅一臂显著：直接用该臂，避免另一臂的噪声顶替。
+    - 都不显著：退回两臂原始分的较大者。
+    - 拓扑扣减只作用于 SLI 分量（调用方的延迟可能是被调方症状）。
+    """
+
+    name = "dual-arm"
+    materiality_floor = 0.08
+    persistence_q = 90
+    onset_z = 3.0
+    tau_res = 3.0
+    tau_sli = 3.0
+    fusion = "weighted"  # weighted | rrf | max
+    rrf_k = 60
+    callee_discount = 0.5
+    first_mover_boost = 0.3
+
+    def rank(self, case: Case, candidates: Sequence[str], seed: int) -> list[str]:
+        arms = service_arms(case, self.materiality_floor, self.persistence_q,
+                            self.onset_z, nan_aware=True)
+        resource = dict(arms.resource)
+        sli = dict(arms.sli)
+        for service in list(sli):
+            if any(resource.get(down, 0.0) > resource.get(service, 0.0)
+                   or sli.get(down, 0.0) > sli.get(service, 0.0)
+                   for down in callees(service, case.system)):
+                sli[service] *= self.callee_discount
+
+        services = set(resource) | set(sli)
+        max_res = max(resource.values(), default=0.0)
+        max_sli = max(sli.values(), default=0.0)
+        res_sig = max_res >= self.tau_res
+        sli_sig = max_sli >= self.tau_sli
+
+        if res_sig and sli_sig and self.fusion == "rrf":
+            res_rank = _rank_map(resource)
+            sli_rank = _rank_map(sli)
+            size = len(services)
+            scores = {
+                service: 1.0 / (self.rrf_k + res_rank.get(service, size + 1))
+                + 1.0 / (self.rrf_k + sli_rank.get(service, size + 1))
+                for service in services
+            }
+        elif res_sig and sli_sig and self.fusion == "weighted":
+            total = max_res + max_sli
+            w_res, w_sli = max_res / total, max_sli / total
+            scores = {
+                service: w_res * (resource.get(service, 0.0) / max_res)
+                + w_sli * (sli.get(service, 0.0) / max_sli)
+                for service in services
+            }
+        elif res_sig and not sli_sig:
+            scores = {service: resource.get(service, 0.0) for service in services}
+        elif sli_sig and not res_sig:
+            scores = {service: sli.get(service, 0.0) for service in services}
+        else:
+            scores = {
+                service: max(resource.get(service, 0.0), sli.get(service, 0.0))
+                for service in services
+            }
+
+        for service in scores:
+            start = arms.onset.get(service, arms.duration)
+            if start < arms.duration:
+                scores[service] *= 1.0 + self.first_mover_boost * (1.0 - start / arms.duration)
+        scores = {s: (0.0 if not np.isfinite(v) else v) for s, v in scores.items()}
 
         return [s for s, _ in sorted(scores.items(), key=lambda item: (-item[1], item[0]))]
 
@@ -235,4 +325,5 @@ METHODS: dict[str, Ranker] = {
     ThreeSigmaRanker.name: ThreeSigmaRanker(),
     StaticThresholdRanker.name: StaticThresholdRanker(),
     TopoFirstRanker.name: TopoFirstRanker(),
+    DualArmRanker.name: DualArmRanker(),
 }
