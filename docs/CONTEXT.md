@@ -234,6 +234,9 @@ H2 主库中的一行用户记录（sub + bcrypt 口令 + tenant + auth_level + 
 
 ### 架构域
 
+**浏览器级 E2E（Browser E2E）**:
+用真实浏览器把五条核心用户旅程跑一遍的回归层（[ADR-0040](adr/0040-browser-e2e.md)）：Python + Playwright + Chromium headless，真 fat jar + memory/mock + 全新 H2；登录走 UI，业务数据只走公开 API，不 mock 网络。它证明的是"页面、轮询、SSE、事件绑定在真实浏览器里仍然成立"，不替代单测或 HTTP 集成，也不做视觉回归、跨浏览器矩阵、移动端或性能。_对外_: 无对外别名。_Avoid_: 端到端测试（过宽，易被误读为覆盖全部链路）、UI 自动化（暗示可替代人审）
+
 **信任底座（Trust Base）**:
 本系统相对上层 agent 与多场景复用的角色：**只读、确定性、可静态判定的那层机制**——引擎层权限过滤、审计哈希链、降级状态机、逐字护栏、只读命令契约五项构造保证。ADR-0029 把它的适用域从"排障场景"显式扩大为"跨场景"：底座的判据与逻辑**不含任何领域词汇**（错误码、产品命令、领域文案），领域内容一律由插件提供。复用不变量：换插件**只换内容，不换防线**——任何为迁就插件而放松构造保证的提案直接否决（与 ADR-0008"权限是数据层不变量"同源）。**2026-11-16 设计评审 accepted、Lead 已签收**：首个切面是 L1 命令策略白名单**内容**外置为 classpath 数据文件（`src/main/resources/policy/command-policy.json` + `action/CommandPolicyData` 严格加载；机制留 `action/`；不提取 SPI、不新增命令家族），实现已通过独立验证并合并（PR #85 / `7760c40`），契约见 [plans/command-policy-data-accept.md](../plans/command-policy-data-accept.md)。**第二个切面（2026-11-17 契约冻结，契约 [plans/readonly-policy-data-accept.md](../plans/readonly-policy-data-accept.md)）**：L0 只读命令策略的 `TOOLS`/`VERBS`/`SUBVERBS` 三张成员关系表外置为 `src/main/resources/policy/readonly-command-policy.json`，由 `action/ReadOnlyCommandPolicyData` 严格加载；四层判定机制、逐工具旗标/尾部校验、SQL 判据、注入/重定向扫描**全部留在 Java**；`jcmd` 家族已移除（死面收缩：原大写动词因逐字数据与输入小写化而全形态不可达、语料零使用，详见 [ADR-0017 附记](adr/0017-read-only-action-contract.md)）；仍是内容外置，不是接口提取，不引入 SPI / 运行时覆盖面。_对外_: 可信底座。_Avoid_: 第 4 个 agent（ADR-0013 定位否决项，不因复用翻案）、通用框架（未到 rule of three 不提接口）
 
