@@ -14,6 +14,7 @@ RE1-SS 只有 6 分钟注入前数据，因此观察窗 ``pre = min(600s, 注入
 
     python offline/rca/detect.py --suite re1-ob --split test --arms resource
     python offline/rca/detect.py --suite re1-ss --split test --arms both
+    python offline/rca/detect.py --suite re1-tt --split all --arms both
 """
 from __future__ import annotations
 
@@ -287,7 +288,8 @@ def run(suite: str, split: str, arms: tuple[str, ...], thresholds: dict[str, flo
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Online detection simulation")
-    parser.add_argument("--suite", default="re1-ob", choices=["re1-ob", "re1-ss"])
+    parser.add_argument("--suite", default="re1-ob",
+                        choices=["re1-ob", "re1-ss", "re1-tt"])
     parser.add_argument("--split", default="dev", choices=["dev", "test", "all"])
     parser.add_argument("--arms", default="both", choices=["resource", "sli", "both"])
     parser.add_argument("--threshold-resource", type=float,
