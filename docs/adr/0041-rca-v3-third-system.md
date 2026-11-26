@@ -1,6 +1,6 @@
 # 0041. RCA v3：置信加权秩融合在第三系统复现定位增益，检测仍不可迁移
 
-- 状态：Proposed（待 Lead 签收）
+- 状态：已采纳（2026-11-27，Lead 签收；验收 HEAD `211cea1`，独立 Verifier AC-1..AC-9 全 PASS）
 - 日期：2026-11-27
 - 契约：`plans/rca-v3-accept.md`（FROZEN）
 - 证据：`offline/rca/reports/V3-report.md`（验收证据绑定复验时的 HEAD）

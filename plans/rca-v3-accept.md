@@ -234,4 +234,5 @@ Verifier 提出的非阻塞观察已记入 `offline/rca/reports/V3-report.md` §
 张力、`download.py --verify` 不校验标签、`tune_rank.py --suite` 缺 `choices`
 护栏。后两条属护栏加固，留待 v4 或后续维护，不在验收后改动已绑定证据的代码。
 
-**签收状态：待 Lead 书面签收。** 签收前 ADR-0041 保持 Proposed。
+**签收状态：已签收（2026-11-27，Lead「签收v3」）。** ADR-0041 状态同步为
+已采纳；本契约 AC-1..AC-9 不放宽，后续若改判据须另立契约（v4）。
