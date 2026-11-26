@@ -268,7 +268,8 @@ def run(suite: str, split: str, arms: tuple[str, ...], thresholds: dict[str, flo
     records = []
     for case in cases:
         result = detect_case(case, arms, thresholds, alarm_filter=alarm_filter)
-        record = {"case": case.name, "truth": case.root_cause_service, **result}
+        record = {"case": case.name, "truth": case.root_cause_service,
+                  "fault": case.fault, **result}
         record.pop("arms")
         # 下面评分用合并口径；arms 的原始结果保留在 per-arm 字段里。
         record["arms"] = result["arms"]

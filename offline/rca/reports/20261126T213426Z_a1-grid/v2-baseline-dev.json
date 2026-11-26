@@ -1,0 +1,28 @@
+{
+  "re1-ss": {
+    "coverage": 0.9067,
+    "false_alarms": 1,
+    "latency_median_s": 17.5,
+    "latency_p90_s": 28.200000000000017,
+    "per_fault": {
+      "cpu": 1.0,
+      "delay": 1.0,
+      "disk": 0.6,
+      "loss": 0.9333,
+      "mem": 1.0
+    }
+  },
+  "re1-ob": {
+    "coverage": 0.48,
+    "false_alarms": 31,
+    "latency_median_s": 17.0,
+    "latency_p90_s": 58.5,
+    "per_fault": {
+      "cpu": 0.2,
+      "delay": 0.6667,
+      "disk": 0.3333,
+      "loss": 0.6667,
+      "mem": 0.5333
+    }
+  }
+}

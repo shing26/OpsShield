@@ -1,0 +1,70 @@
+{
+  "generated_at": "2026-11-26T21:16:48+00:00",
+  "suite": "re1-ob",
+  "split": "dev",
+  "reps": null,
+  "n_cases": 75,
+  "arms": [
+    "resource",
+    "sli"
+  ],
+  "thresholds": {
+    "resource": 20.0,
+    "sli": 8.0
+  },
+  "filter": {
+    "modes": [
+      "coherence",
+      "duration"
+    ],
+    "z0": 3.5,
+    "k": 3,
+    "window_s": 60,
+    "fraction": 0.6
+  },
+  "params": {
+    "baseline_s": 300,
+    "sustain": 3,
+    "horizon_s": 300,
+    "pre_s": 600,
+    "post_s": 600,
+    "materiality_floor": 0.08
+  },
+  "detected": 34,
+  "detection_rate": 0.4533333333333333,
+  "false_alarms": 21,
+  "no_alarm": 18,
+  "detection_failures": 41,
+  "latency_median_s": 34.0,
+  "latency_p90_s": 57.7,
+  "per_arm": {
+    "resource": {
+      "detected": 1,
+      "detection_rate": 0.013333333333333334,
+      "false_alarms": 0,
+      "no_alarm": 74,
+      "latency_median_s": 8.0,
+      "latency_p90_s": 8.0
+    },
+    "sli": {
+      "detected": 34,
+      "detection_rate": 0.4533333333333333,
+      "false_alarms": 21,
+      "no_alarm": 18,
+      "latency_median_s": 34.0,
+      "latency_p90_s": 57.7
+    }
+  },
+  "dual-arm_oracle_top1_all": 0.8933333333333333,
+  "dual-arm_detected_top1_all": 0.38666666666666666,
+  "dual-arm_detected_conditional_top1": 0.8529411764705882,
+  "dual-arm_detected_conditional_mrr": 0.9088235294117647,
+  "topo-first_oracle_top1_all": 0.7866666666666666,
+  "topo-first_detected_top1_all": 0.24,
+  "topo-first_detected_conditional_top1": 0.5294117647058824,
+  "topo-first_detected_conditional_mrr": 0.6322372888549359,
+  "3sigma_oracle_top1_all": 0.6933333333333334,
+  "3sigma_detected_top1_all": 0.24,
+  "3sigma_detected_conditional_top1": 0.5294117647058824,
+  "3sigma_detected_conditional_mrr": 0.6965686274509804
+}

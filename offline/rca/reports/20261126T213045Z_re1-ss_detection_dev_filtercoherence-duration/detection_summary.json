@@ -1,0 +1,70 @@
+{
+  "generated_at": "2026-11-26T21:31:12+00:00",
+  "suite": "re1-ss",
+  "split": "dev",
+  "reps": null,
+  "n_cases": 75,
+  "arms": [
+    "resource",
+    "sli"
+  ],
+  "thresholds": {
+    "resource": 20.0,
+    "sli": 8.0
+  },
+  "filter": {
+    "modes": [
+      "coherence",
+      "duration"
+    ],
+    "z0": 4.0,
+    "k": 4,
+    "window_s": 60,
+    "fraction": 0.8
+  },
+  "params": {
+    "baseline_s": 300,
+    "sustain": 3,
+    "horizon_s": 300,
+    "pre_s": 600,
+    "post_s": 600,
+    "materiality_floor": 0.08
+  },
+  "detected": 50,
+  "detection_rate": 0.6666666666666666,
+  "false_alarms": 0,
+  "no_alarm": 25,
+  "detection_failures": 25,
+  "latency_median_s": 61.0,
+  "latency_p90_s": 67.0,
+  "per_arm": {
+    "resource": {
+      "detected": 0,
+      "detection_rate": 0.0,
+      "false_alarms": 0,
+      "no_alarm": 75,
+      "latency_median_s": null,
+      "latency_p90_s": null
+    },
+    "sli": {
+      "detected": 50,
+      "detection_rate": 0.6666666666666666,
+      "false_alarms": 0,
+      "no_alarm": 25,
+      "latency_median_s": 61.0,
+      "latency_p90_s": 67.0
+    }
+  },
+  "dual-arm_oracle_top1_all": 0.9466666666666667,
+  "dual-arm_detected_top1_all": 0.5333333333333333,
+  "dual-arm_detected_conditional_top1": 0.8,
+  "dual-arm_detected_conditional_mrr": 0.895,
+  "topo-first_oracle_top1_all": 0.6933333333333334,
+  "topo-first_detected_top1_all": 0.36,
+  "topo-first_detected_conditional_top1": 0.54,
+  "topo-first_detected_conditional_mrr": 0.6925,
+  "3sigma_oracle_top1_all": 0.84,
+  "3sigma_detected_top1_all": 0.06666666666666667,
+  "3sigma_detected_conditional_top1": 0.1,
+  "3sigma_detected_conditional_mrr": 0.3296031746031746
+}
