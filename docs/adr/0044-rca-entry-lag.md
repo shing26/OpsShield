@@ -1,6 +1,6 @@
 # 0044. RCA 入口迟滞下 B0 未通过：告警入口路线作废，转自建检测
 
-- 状态：Proposed（待 Lead 签收）
+- 状态：已采纳（2026-11-27，Lead 签收；验收 HEAD `ff53d47`，AC-3 FAIL 为实验结论）
 - 日期：2026-11-27
 - 契约：`plans/rca-entry-robustness-accept.md`（FROZEN）
 - 上位：`plans/rca-roadmap.md`（路线 B 的 B0）
