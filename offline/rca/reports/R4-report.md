@@ -99,3 +99,24 @@ offline/rca/.venv/Scripts/python.exe offline/rca/report.py --dir <run_dir> --che
 ```
 
 （OB 拆成三次是内存约束下的等价执行；一次跑完五档在内存充足时同样有效。）
+
+## 8. 证据绑定
+
+- 验收对象 HEAD：`ff53d47a61d3658e25416b4ff600fd757377605a`
+- 该 HEAD 上 `git status --short`：**空**（独立 Verifier 复验开始与结束时各取一次，
+  两次均为空）
+- 本节于该 HEAD 之后补录：此前版本漏写这两项，触发 AC-6 FAIL；补录只加本节，
+  实现、测试与全部运行产物未改（后续提交仅文档）。
+
+TT 未读取的自检（在仓库根执行，输出即证据）：
+
+```powershell
+offline/rca/.venv/Scripts/python.exe -c "import glob,os,pandas as pd; ds=sorted(glob.glob('offline/rca/reports/*_entry*s')); rows=0; tt=0; cs=set()
+for d in ds:
+    f=pd.read_csv(os.path.join(d,'results.csv')); rows+=len(f); cs|=set(f['case'])
+    tt+=int(f['case'].astype(str).str.contains('re1tt').sum())+int(f['truth'].astype(str).str.startswith('ts-').sum())
+print(len(ds), rows, len(cs), tt)"
+```
+
+本次输出：`10 6000 150 0`——10 个运行目录、6000 行、150 个唯一 case
+（SS 75 + OB 75）、TT 命中 0。
