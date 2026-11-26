@@ -136,5 +136,8 @@ foreach ($z in 3.5,4.0) { foreach ($k in 3,4) { foreach ($w in 60,120) { foreach
 
 ## 8. 证据绑定
 
-- 验收对象 HEAD：`c07acd1`（A1-1 实现）+ 本报告的文档提交
-- `git status --short`：复验时应为空（若有未提交产物，Verifier 须先记录）
+- 验收对象 HEAD：`a06695b`（A1-1 实现 `c07acd1` 之后、包含本报告与 32 次网格运行）
+- 该 HEAD 上 `git status --short`：**空**
+- 本节于该 HEAD 之后补录（仅文档）；同时删除了 `20261126T213411Z_a1-grid`
+  （一次被 `213426Z_a1-grid` 取代的中间聚合，含 A1-1 冒烟运行，从未被引用；
+  32 个运行目录与 `213426Z` 汇总未动）。
