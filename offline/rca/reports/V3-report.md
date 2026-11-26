@@ -1,7 +1,9 @@
 # RCA v3 结果（置信加权秩融合 + RE1-TT 第三系统外部验证）
 
 > 契约：`plans/rca-v3-accept.md`（FROZEN 2026-11-27）
-> 分支：`codex/rca-v3`；方法代码冻结：`23edeee`（TT 结果绑定本文件所在 commit 的 HEAD）
+> 分支：`codex/rca-v3`；方法代码冻结：`23edeee`（TT 结果绑定 `211cea1` 的 HEAD）
+> `211cea1` 对 `detect.py` 的改动仅为 `--suite` 增加 `re1-tt` 选项与 docstring，
+> 无逻辑变化；检测数字重跑与已提交结果逐字节一致。
 > 数据：RE1-SS/RE1-OB dev 选参；RE1-TT 125 cases 纯 holdout
 
 ## 结论（先说结果）
@@ -195,3 +197,34 @@ offline/rca/.venv/Scripts/python.exe offline/rca/report.py --dir offline/rca/rep
 - 选参：`reports/V3-rank-sweep.json`
 - dev：`reports/20261126T171403Z_re1-ss_dev`、`reports/20261126T171404Z_re1-ob_dev`
 - v1 护栏：`reports/20261125T201149Z_re1-ob_test/` 与 `reports/M2-report.md`（只读）
+
+## 7. 独立验收记录（2026-11-27）
+
+独立 Verifier（与实现会话分离）逐条重跑 AC-1..AC-9，结论 **PASS（9/9）**：
+
+| 项 | 结果 |
+| --- | --- |
+| 证据绑定 | HEAD `211cea10faae207a01b66d0733577dc618e68183`；`git status --short` 为空 |
+| AC-1 | `--verify` exit 0（251 文件 / 125 cases）；标签与 `inject_time` 独立核对 0 处不一致 |
+| AC-2 | 选参 JSON 重跑 sha256 与已提交一致；payload 无 TT 字段；标签不变性测试通过 |
+| AC-3 | `regression.py` 300 行 / 6 方法一致；14,170 个列名 `to_service` 新旧逐列等价 |
+| AC-4 | 0.744 vs 0.448 = +29.6pp，CI [+18.4,+40.0]，p=1.24e-6 |
+| AC-5 | 最差分故障 mem +16.0pp，无回退 |
+| AC-6 | 125/125；候选 64；`"ts"` 桶 0 例 |
+| AC-7 | 30.4% / 67.2% 如实写入报告 |
+| AC-8 | 61 passed；`report.py --check` OK；重跑 `results.csv`/`detection.csv` 逐字节一致 |
+
+Verifier 另记录 6 条非阻塞观察，其中 3 条已在本提交修正或记录：
+
+1. `RandomRanker`（v1 基线）用 `case.name` 做 seed，TT 上 Top-1=0.024 接近
+   1/64 随机水平，无可测泄漏；`test_leakage_methods.py` 已记录该行为。
+2. 契约 §9 字面把 `inject_time` 列为标签，但切窗必须用它；与 §1“检测起点已知”
+   及 v1/v2 口径一致，属措辞张力，非违约。
+3. 本报告原写“方法代码冻结 `23edeee`”不精确，已在头部更正。
+4. `download.py --verify` 只校验 sha256，不校验标签一致性；AC-1 的该子项由
+   `audit.py` 覆盖。
+5. `tune_rank.py --suite` 未设 `choices`，护栏偏弱；实际 payload 无 TT。
+6. `main...HEAD` 含更早未合并的 v1/v2 文件；v3 增量 `4b6c842..HEAD` 完全落在
+   Allowed paths。
+
+第 4、5 条属护栏加固，留待 v4 或后续维护，不在验收后改动已绑定证据的代码。

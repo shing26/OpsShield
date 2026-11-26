@@ -210,3 +210,28 @@ RRF 失败机制：delay 故障时 SLI 臂把真因排第 1（score 600–2500�
 
 结论：OB 的正常 z 尾部与故障重叠，阈值类方法无法同时保住覆盖与误报；
 这是 v4 的独立研究问题，不应阻塞 v3 的定位外部验证。
+
+## 附录 B：独立验收记录（2026-11-27）
+
+> 本附录只记录验收结果，不放宽、不改写 AC-1..AC-9。
+
+独立 Verifier（与实现会话分离，未继承实现方上下文）在
+`HEAD=211cea10faae207a01b66d0733577dc618e68183`、`git status --short` 为空的
+状态下逐条重跑，判定 **AC-1..AC-9 全部 PASS**，按 §8 矩阵结论为
+**v3 成立：定位增益在第三个系统复现；仍不接产品面（检测未产品化）**。
+
+关键复验结果（Verifier 自算，非引用实现方日志）：
+
+- AC-4：0.744 vs 0.448 = +29.6pp，配对 95% CI [+18.4, +40.0]，McNemar
+  p=1.24e-6，独对 48 / 独错 11。
+- AC-5：cpu +60.0pp、delay +24.0pp、disk +24.0pp、loss +24.0pp、mem +16.0pp；
+  最差 +16.0pp，无任一类回退。
+- AC-8：61 passed / 0 skipped；固定 seed 重跑 `results.csv`、`detection.csv`
+  与已提交版本逐字节一致；TT sha256 重算逐位一致。
+
+Verifier 提出的非阻塞观察已记入 `offline/rca/reports/V3-report.md` §7：
+`random` 基线用 case 名做 seed（无可测泄漏）、`inject_time` 切窗的契约措辞
+张力、`download.py --verify` 不校验标签、`tune_rank.py --suite` 缺 `choices`
+护栏。后两条属护栏加固，留待 v4 或后续维护，不在验收后改动已绑定证据的代码。
+
+**签收状态：待 Lead 书面签收。** 签收前 ADR-0041 保持 Proposed。
