@@ -253,3 +253,53 @@ PY
 
 实现者与 Verifier 不得为同一会话。本次签收只授权实现，不含合并授权；
 合并须另行书面签收。
+
+## 签收记录（2026-11-26，PR #106）
+
+**结论：通过。** 用户书面签收，授权 squash 合并。
+
+### 人审四问
+
+1. **证据充分性：无异议**——独立 Verifier 在 `1d82ee7` 亲跑全部命令与活体验收；
+   实现方自评与其日志未作为裁决证据。过程中抓出并修复 2 个 P1，均由同一 Verifier 复验关闭：
+   - README 首屏 Java 徽章仍为 587（正文与 `mvn test` 均为 601）；
+     已改为 601，并把 `Java_Tests-` / `Java Tests: ` / `Python Probes: ` 三种徽章写法登记进
+     `doc_numbers.json`（33 条 / 52 处引用），门禁反证三次均红、恢复后绿。
+   - CI 第二道同代门闩 `eval/answer_eval.py --check` 绑旧语料摘要；
+     已用 `qa_gen_quality_probes.py V2 V4 V9` 在 memory + mock 栈上真实重生成
+     `grounding_report.json`（answers=11 / codes=21 / ungrounded=0），
+     `chunks_sha256` 与实际 `chunks.jsonl`、`PROVENANCE.json` 三方一致；未手改摘要。
+2. **判据纪律：无异议**——未改/删/弱化断言，未跳测试（`Skipped: 0`）；
+   `src/test` 与 `offline/tests` 的 diff 为纯新增。`mvn -o test` 601 / 0 / 0 / 0，
+   `pytest offline/tests` 703 passed。
+3. **变更面封闭：无异议**——`0dcb539..1d82ee7` 的改动全部在 Allowed paths 内；
+   V1–V11 迁移零 diff；事故 / 通知 / 评论 / 历史分页 / 告警语义零 diff。
+   `chunks.jsonl` 重建 459 行、dba 包 43 行，逐字段证明只新增 `doc_digest` / `reviewed_at`；
+   `golden_dataset.jsonl` 逐字节未变。
+4. **遗留边界：接受为已知项**——见下。
+
+### 契约补正追认（随本次签收）
+
+1. `offline/domains/dba/corpus/chunks.jsonl` 纳入 Allowed paths 与 AC4：
+   既有 `test_domain_pack.py::test_chunks_are_reproducible_with_existing_chunker`
+   强制它与 chunker 现算结果逐字节一致，chunker 加字段后必须同批重建。
+2. `offline/eval/reports/grounding_report.json` 纳入 Allowed paths，
+   Verification commands 增加 `eval/answer_eval.py --check`：
+   CI 的第二道同代门闩要求接地报告随语料重建同批重跑 V9 探针。
+
+两条补正均为构建产物/门禁同步，不改变契约语义；用户于 2026-11-26 书面签收时一并追认。
+
+### 已知边界（接受）
+
+- 现有 0/69 篇有 `reviewed_at`，首版引用全部显示「未标注」；回填需事实来源，另立数据任务。
+- 时效判定用 UTC 日期，180 天线上最多 1 天日界偏差（ADR-0039 已记录）。
+- 接地报告来自 memory + mock 栈，其 `known_boundary` 明写 mock 上判据恒真；
+  live 模型口径的接地强度仍需另测，本切片不冒充。
+- `Ref` / `ScoredChunk` / `Chunk.Metadata` 保留旧参数个数的兼容构造器，旧调用点零改动。
+- `PROVENANCE.json` 与 `grounding_report.json` 均为重生成产物；
+  其合法性由「只加字段、正文/错误码/文档身份逐字不变」的独立比对支撑，
+  不是手改摘要，也未声称重跑了 live 评测。
+
+### 合并授权
+
+用户于 2026-11-26 书面回复「签收」，授权 squash 合并 PR #106。
