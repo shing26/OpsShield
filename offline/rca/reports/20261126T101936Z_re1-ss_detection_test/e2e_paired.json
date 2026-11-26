@@ -1,0 +1,71 @@
+{
+  "run": "20261126T101936Z_re1-ss_detection_test",
+  "n_cases": 50,
+  "methods": [
+    "dual-arm",
+    "topo-first",
+    "3sigma"
+  ],
+  "paired": {
+    "dual-arm_vs_3sigma": {
+      "top1": {
+        "k": 1,
+        "treatment": "dual-arm",
+        "control": "3sigma",
+        "n": 50,
+        "diff": 0.16,
+        "ci95": [
+          0.06,
+          0.26
+        ],
+        "treatment_only": 8,
+        "control_only": 0,
+        "p": 0.0078125
+      },
+      "top3": {
+        "k": 3,
+        "treatment": "dual-arm",
+        "control": "3sigma",
+        "n": 50,
+        "diff": 0.02,
+        "ci95": [
+          0.0,
+          0.06
+        ],
+        "treatment_only": 1,
+        "control_only": 0,
+        "p": 1.0
+      }
+    },
+    "topo-first_vs_3sigma": {
+      "top1": {
+        "k": 1,
+        "treatment": "topo-first",
+        "control": "3sigma",
+        "n": 50,
+        "diff": -0.06,
+        "ci95": [
+          -0.22,
+          0.1
+        ],
+        "treatment_only": 6,
+        "control_only": 9,
+        "p": 0.60723876953125
+      },
+      "top3": {
+        "k": 3,
+        "treatment": "topo-first",
+        "control": "3sigma",
+        "n": 50,
+        "diff": -0.14,
+        "ci95": [
+          -0.24,
+          -0.04
+        ],
+        "treatment_only": 0,
+        "control_only": 7,
+        "p": 0.015625
+      }
+    }
+  }
+}
