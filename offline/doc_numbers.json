@@ -626,7 +626,7 @@
         },
         {
           "file": "README.md",
-          "pattern": "Python Probes: (\\d+) passed"
+          "pattern": "Python: (\\d+) test 函数声明"
         }
       ]
     }
