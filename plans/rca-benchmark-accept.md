@@ -97,7 +97,7 @@ git status --short
 - 2026-11-26：ADR 编号 `0037` 已被 `0037-incident-notification.md` 占用，本切片 ADR 实际落为
   `docs/adr/0039-rca-detector-slice.md`。仅为编号避让，Allowed paths 的意图不变，AC 未放宽。
 
-## 11. R1 修订（2026-11-26，待 Lead 签收）
+## 11. R1 修订（2026-11-26，**已签收**）
 
 独立 Verifier 首次验收时发现冻结文本与实现口径不一致。以下修订均为**收紧或事实同步**，
 未放宽任何质量门槛：
@@ -111,4 +111,4 @@ git status --short
 - **AC-10 路径**：`docs/repo-map.md` 允许"新增 `offline/rca/` 一行 + 同步 ADR 计数 38→39"，
   其余仍禁止改动。
 
-**签收前状态**：R1 未签收时，Verifier 的 AC-4 / AC-10 判定仍以冻结原文为准。
+**签收记录**：Lead 于 2026-11-26 回复「签收 R1」。AC-4 / AC-5 / AC-7 / AC-10 的判定以本节为准。

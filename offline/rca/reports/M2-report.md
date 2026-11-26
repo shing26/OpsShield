@@ -1,6 +1,6 @@
 # RCA 薄切片结果（M2/M3）
 
-> 契约：`plans/rca-benchmark-accept.md`（FROZEN 2026-11-26；R1 修订待签收）
+> 契约：`plans/rca-benchmark-accept.md`（FROZEN 2026-11-26；R1 已签收 2026-11-26）
 > 数据：RCAEval RE1-OB，125 cases（5 服务 × 5 故障 × 5 重复），49–59 指标，4201 时间步，70 分钟
 > 划分：rep 1–3 开发（75）/ rep 4–5 测试（50）；测试集只跑一次
 > 代码：`codex/rca-benchmark`
