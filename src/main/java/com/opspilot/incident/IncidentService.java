@@ -17,7 +17,9 @@ import java.util.regex.Pattern;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -62,16 +64,22 @@ public class IncidentService {
     private final ObjectMapper json;
     private final IncidentSlaProperties slaProperties;
     private final IncidentNotificationService notifications;
+    private final IncidentPushService push;
+    private final TransactionTemplate transaction;
 
     public IncidentService(IncidentStore store, UserStore users, AuditService audit, ObjectMapper json,
                            IncidentSlaProperties slaProperties,
-                           IncidentNotificationService notifications) {
+                           IncidentNotificationService notifications,
+                           IncidentPushService push,
+                           PlatformTransactionManager transactionManager) {
         this.store = store;
         this.users = users;
         this.audit = audit;
         this.json = json;
         this.slaProperties = slaProperties;
         this.notifications = notifications;
+        this.push = push;
+        this.transaction = new TransactionTemplate(transactionManager);
     }
 
     public List<Incident> list(UserContext user) {
@@ -319,6 +327,14 @@ public class IncidentService {
         return store.find(tenant, id);
     }
 
+    /**
+     * 建单的显式事务边界（ADR-0045 / 契约 AC2）。
+     *
+     * <p>用 {@link TransactionTemplate} 而不是在私有方法上挂 {@code @Transactional}：
+     * 并发 clientId 重放时，INSERT 唯一键冲突会让事务进入 rollback-only；若 catch 仍在
+     * 同一事务里，回查路线会一起报废。Template 先把事务完整回滚，再在事务外独立回查，
+     * 重放因此返回既有事故且不会重复入 outbox。
+     */
     private Created createInternal(String tenant, UserContext actor, IncidentRequests.Create req) {
         String clientId = blankToNull(req.clientId());
         if (clientId == null) clientId = UUID.randomUUID().toString();
@@ -341,11 +357,14 @@ public class IncidentService {
                 null, initialTimeline(source, req.alertId(), now),
                 dueAt, Incident.SLA_OK);
         try {
-            Incident saved = store.insert(draft);
-            audit.logIncident(actor, saved.id(), "create", "ok", source);
-            return new Created(saved, true);
+            return transaction.execute(status -> {
+                Incident saved = store.insert(draft);
+                audit.logIncident(actor, saved.id(), "create", "ok", source);
+                push.onCreated(saved);
+                return new Created(saved, true);
+            });
         } catch (DuplicateKeyException e) {
-            // 并发重放：另一条请求已经用同一 clientId 建好，回查即幂等
+            // 并发重放：事务已由 Template 回滚，这里在独立连接上回查，不污染 rollback-only 事务。
             return new Created(store.findByClientId(tenant, clientId).orElseThrow(() -> e), false);
         }
     }
