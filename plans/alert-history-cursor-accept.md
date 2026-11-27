@@ -1,7 +1,7 @@
 # 验收契约：告警历史键集分页
 
 > 来源：2026-11-27 用户确认路线「先 `alert-history-cursor`，再单独起 Boot 4.2 / ES 9 兼容性 spike」。
-> **状态：已冻结（R1，2026-11-27）。** 基线 `main` @ `686abf5`；
+> **状态：已冻结（R2，2026-11-27）。** 基线 `main` @ `471ab5f`；
 > 本分支只承载契约；实现分支为 `codex/alert-history-cursor-impl`（契约合并后从 main 切出）。
 
 ## Task ID
@@ -77,7 +77,8 @@ offline/doc_numbers.json
 2. **API**：`GET /api/v1/admin/alerts/history`，平台门禁与 `/alerts/recent` 同口径
    （非平台 403 且审计留痕）；无 `cursor` 即第一页。
    响应 `{alerts, nextCursor, hasMore, retention_days, max_per_tenant}`；
-   每行字段与 `/alerts/recent` 的 `alerts[]` **逐字段一致**（前端可复用同一渲染）。
+   每行字段与 `/alerts/recent` 的 `alerts[]` **逐字段一致**（前端可复用同一渲染），
+   且两个端点都新增 `lastSeenMicros`（`last_seen` 的微秒值；毫秒 `lastSeen` 保留不动）。
    `nextCursor` 无更多页时为 `null`；`hasMore=false` 与 `nextCursor=null` 必须同时成立。
 3. **键集正确性**：造 7 条以上、含**相同 `last_seen`**、含**两个租户同名 `alertId`** 的种子，
    以 `limit=2` 逐页走到 `nextCursor=null`；并集等于全量、无重复、无遗漏，
@@ -94,7 +95,8 @@ offline/doc_numbers.json
    - 首屏改为 `/history?limit=50`，用返回页的 `max(lastSeen)` 初始化 `alertSince`，
      并保存 `nextCursor`/`hasMore`；
    - 轮询继续 `/recent?since=alertSince`，按 `(tenant, alertId)` 合并去重，水位只前进；
-   - 展示顺序统一为 `(lastSeen DESC, tenant DESC, alertId DESC)`，与后端一致；
+   - 展示顺序统一为 `(lastSeenMicros DESC, tenant DESC, alertId DESC)`，与后端一致；
+     不得用毫秒 `lastSeen` 排序；`lastSeenMicros` 缺失时才退回 `lastSeen * 1000`；
    - 去掉 `S.alerts.length > 100` 截断；客户端上限 1000，到顶后按钮显示上限文案。
 9. **「加载更多」**：告警表下方新增按钮；点击用 `cursor` 拉下一页并**追加**，
    按 `(tenant, alertId)` 去重，不重排已加载页；`hasMore=false` 时按钮显示
@@ -104,7 +106,8 @@ offline/doc_numbers.json
     「新告警超过单次窗口，列表已刷新到最新」；旧页丢失可接受，但**不得静默留洞**。
 11. **重置**：切换身份、401、登出时同时清空 `S.alerts`、`alertSince`、`nextCursor`、
     `hasMore`；不得用上一身份的游标继续翻页。
-12. **不回归**：`/alerts/recent` 响应字段与夹取行为不变；一键建单、平台门禁、审计、
+12. **不回归**：`/alerts/recent` 只允许新增 `lastSeenMicros`（附加字段），
+    既有字段的删除/改名/语义与 `limit` 夹取行为不变；一键建单、平台门禁、审计、
     保留清理、事故/通知/推送语义零改动；面板契约十层、`check_public_copy.py --check`、
     `doc_numbers.py --check` 通过。
 13. **文档**：ADR-0047（键集 / 微秒 / 快照边界 / 与轮询的分工）；
@@ -170,3 +173,13 @@ V13 只加索引；新端点与前端按钮均为增量。回滚实现提交后�
 契约合并后 `main` 前移到 `686abf5`：RCA A1 切片先占用 ADR-0046
 （`0046-rca-a1-detection-features.md`）。本切片的 ADR 顺延为 **0047**，
 其余判定口径、Allowed paths 范围与验收项**零变更**；实现与验证按本 R1 文本执行。
+
+## R2 修订（2026-11-27，补微秒排序字段）
+
+独立 Verifier 在 `c3f31d9` 发现 P1：后端按微秒排序，但 API 行只暴露毫秒 `lastSeen`，
+前端轮询合并后按毫秒重排，导致同一毫秒内的既有行在**无新增告警**时也换位，违反 AC8
+「不得对服务端页二次排序」。
+
+修订（仅此一项）：`alertView` 在两个端点的每行新增 `lastSeenMicros`；
+前端 `alertOrder` 改用 `lastSeenMicros` 作为首键，毫秒 `lastSeen` 仅用于显示与保留窗口判断。
+既有字段、端点语义、游标格式与其余验收项**零变更**。
