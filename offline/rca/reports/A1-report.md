@@ -116,9 +116,9 @@ OB case（`checkoutservice_loss_1` 319/327s、`productcatalogservice_cpu_1` 437s
 | AC-5 OB 误报 | **FAIL** | 最好 16/75 = 21.3% > 5% |
 | AC-6 分故障 | **FAIL** | SS loss −20pp；OB cpu −20pp、loss −13.3pp；多类 <0.70 |
 | AC-7 延迟 | PASS | 中位 46s / 44s，P90 55s / 60.6s；32 条迟到报警已单列、未计检出 |
-| AC-8 未越界 | **FAIL（已披露，待 Lead 签收 §5 R1 修订）** | TT 与 rep 4–5 未读；v2 阈值与默认行为未改。但 `docs/repo-map.md` 的 `docs/adr/` 行按 `doc_numbers` 门闩要求更新，超出 §5 “仅 offline/rca 行”；披露不等于认可，见契约 §13/§14 |
+| AC-8 未越界 | **PASS** | TT 与 rep 4–5 未读；v2 阈值与默认行为未改。`docs/repo-map.md` 的 `docs/adr/` 行已由 Lead 于 2026-11-27 签收 §5 R1 修订，纳入授权范围，见契约 §14 |
 | AC-9 可复现 | 见 §7 | 75 passed；固定 seed；SHA/status 见 §7 |
-| AC-10 独立验收 | PASS | Verifier 独立重跑 AC-1..AC-9；AC-7 → PASS、AC-8 维持 FAIL，见 §9 |
+| AC-10 独立验收 | PASS | Verifier 独立重跑 AC-1..AC-9；AC-7 → PASS，AC-8 经 §5 R1 签收后改判 PASS，见 §9 |
 
 注：AC-2..AC-5 形式上是“对选中配置”判定；合规集为空时，本报告按 best-effort
 记录。即便按最宽松读法，AC-4/5/6 仍失败，结论不依赖这一读法。
@@ -171,7 +171,8 @@ foreach ($z in 3.5,4.0) { foreach ($k in 3,4) { foreach ($w in 60,120) { foreach
 - AC-1..AC-9 逐条重跑。AC-7 的 32 条迟到报警与 Verifier 从 32 个
   `detection.csv` 独立重算的结果完全相等（16 个 OB 运行、0 个 SS；最小
   310s；全部 `detected=False` / `false_alarm=False`；配置错配 0）。
-- AC-7 由上轮 FAIL 改判 **PASS**；AC-8 维持 **FAIL**（已披露、未获 Lead
-  认可）；AC-4/AC-5/AC-6 维持 FAIL，A1 结论仍为 **FAIL**。
-- 本轮 `§14 R1` 与 ADR 状态措辞是 Verifier 复核后的待签收文档变更，不改变
+- AC-7 由上轮 FAIL 改判 **PASS**；AC-8 在冻结契约下原为 FAIL，Lead 于
+  2026-11-27 签收 §14 R1 后改判 **PASS**；AC-4/AC-5/AC-6 维持 FAIL，
+  A1 结论仍为 **FAIL**。
+- §14 R1 与 ADR-0045 的签收状态变更发生在 Verifier 复核之后，不改变
   AC-1..AC-9 的任何证据或判定。

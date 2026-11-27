@@ -189,7 +189,7 @@ git status --short
    （实测 0.493）。逐 case 对账后改为“过滤器不新增事件，只做重选择：
    FA→检出 +12、检出→miss −11，净 +1”。**FAIL 判定不变**。
 
-## 14. R1 修订（提案，待 Lead 签收；2026-11-27）
+## 14. R1 修订（已签收；2026-11-27）
 
 > 性质：仅修订 §5 Allowed paths 中 `docs/repo-map.md` 的授权范围，用于消除
 > 与既有文档编号门闩的冲突。**不放宽、不改写 AC-1..AC-10、§8 判定矩阵或任何
@@ -208,7 +208,6 @@ git status --short
 - 签收效力：Lead 书面签收本 §14 后，AC-8 由 FAIL 改为 PASS；未签收则
   AC-8 保持 FAIL，本分支不合并。两种情况下 A1 FAIL 均不变。
 
-**签收状态：待 Lead 签收。** 签收范围是本 §14 的 Allowed paths 修订 +
-ADR-0045 的 A1 FAIL 决策；AC-1..AC-10 与 A1 FAIL 均不变。签收后 AC-8 由
-FAIL 改 PASS、ADR-0045 由 Proposed 改为“已采纳”；未签收则 AC-8 保持 FAIL、
-本分支不合并。
+**签收状态：已签收（2026-11-27，Lead「签收 §5 R1 修订并接受 A1 FAIL」）。**
+签收范围是 §14 的 Allowed paths 修订 + ADR-0045 的 A1 FAIL 决策；AC-1..AC-10
+与 A1 FAIL 均不变。AC-8 由 FAIL 改判 PASS，ADR-0045 同步为“已采纳”。
