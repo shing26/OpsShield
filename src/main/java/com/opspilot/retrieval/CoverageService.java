@@ -178,7 +178,7 @@ public class CoverageService {
     private Long builtAt(ElasticsearchClient es) {
         try {
             var got = es.indices().get(g -> g.index(props.es().index()));
-            return got.result().values().stream()
+            return got.indices().values().stream()
                     .map(IndexState::settings)
                     .filter(Objects::nonNull)
                     .map(CoverageService::creationDate)

@@ -64,8 +64,8 @@ public class EsSearchService implements RetrievalLeg {
                 Query.of(q -> q.term(t -> t.field(IdentityFilter.TENANT_FIELD)
                         .value(co.elastic.clients.elasticsearch._types.FieldValue
                                 .of(tenant == null ? "" : tenant)))),
-                Query.of(q -> q.range(r -> r.field(IdentityFilter.AUTH_LEVEL_FIELD)
-                        .lte(co.elastic.clients.json.JsonData.of(authLevel)))));
+                Query.of(q -> q.range(r -> r.number(n -> n.field(IdentityFilter.AUTH_LEVEL_FIELD)
+                        .lte((double) authLevel)))));
     }
 
     @Override

@@ -2,8 +2,11 @@ package com.opspilot.config;
 
 import java.lang.reflect.Field;
 import java.time.Duration;
-import org.apache.http.client.config.RequestConfig;
-import org.apache.http.impl.nio.conn.PoolingNHttpClientConnectionManager;
+import org.apache.hc.client5.http.HttpRoute;
+import org.apache.hc.client5.http.config.ConnectionConfig;
+import org.apache.hc.client5.http.config.RequestConfig;
+import org.apache.hc.client5.http.impl.nio.PoolingAsyncClientConnectionManager;
+import org.apache.hc.core5.http.HttpHost;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -64,8 +67,8 @@ class OutboundTimeoutTest {
     @Test
     void esRequestConfigCarriesConfiguredTimeouts() {
         RequestConfig c = EsConfig.requestConfig(es(3000, 10000));
-        assertThat(c.getConnectTimeout()).isEqualTo(3000);
-        assertThat(c.getSocketTimeout()).isEqualTo(10000);
+        assertThat(c.getConnectTimeout().toMilliseconds()).isEqualTo(3000);
+        assertThat(c.getResponseTimeout().toMilliseconds()).isEqualTo(10000);
     }
 
     @Test
@@ -73,7 +76,8 @@ class OutboundTimeoutTest {
         // 口径钉住：socket 兜底必须比业务级预算（retrieval.leg-timeout-ms）松，
         // 否则两者赛跑，抛出的是原始 socket 异常而不是业务降级信号。
         int legBudgetMs = 4500;   // = application.yml 的 retrieval.leg-timeout-ms 默认值
-        assertThat(EsConfig.requestConfig(es(3000, 10000)).getSocketTimeout()).isGreaterThan(legBudgetMs);
+        assertThat(EsConfig.connectionConfig(es(3000, 10000)).getSocketTimeout().toMilliseconds())
+                .isGreaterThan(legBudgetMs);
         assertThat(RestClientConfig.settings(dashScope(3000, 15000)).read())
                 .isGreaterThan(Duration.ofMillis(legBudgetMs));
     }
@@ -84,12 +88,12 @@ class OutboundTimeoutTest {
         // 不能只存在于 yml 的几个字里——与 applyTimeouts 同一条"测试即生产路径"纪律。
         // 断言对象是 applyHttpConfig 真正建出的 HttpAsyncClient 内部连接池
         // （InternalHttpAsyncClient 为库内部类，字段名随 4.1.5 钉死的 BOM 走；换版本时这里会红）。
-        PoolingNHttpClientConnectionManager cm = poolOfProductionClient(es(3000, 10000));
+        PoolingAsyncClientConnectionManager cm = poolOfProductionClient(es(3000, 10000));
         try {
             assertThat(cm.getMaxTotal()).isEqualTo(100);
-            assertThat(cm.getDefaultMaxPerRoute()).isEqualTo(100);
+            assertThat(cm.getMaxPerRoute(route())).isEqualTo(100);
         } finally {
-            cm.shutdown();
+            cm.close();
         }
     }
 
@@ -98,12 +102,12 @@ class OutboundTimeoutTest {
         // 反证：改配置必须改行为。若池上限被写死，这条会红。
         OpsPilotProperties.Es tuned = new OpsPilotProperties.Es(
                 "http://localhost:9200", "idx", "elastic", "", 3000, 10000, 55, 44);
-        PoolingNHttpClientConnectionManager cm = poolOfProductionClient(tuned);
+        PoolingAsyncClientConnectionManager cm = poolOfProductionClient(tuned);
         try {
             assertThat(cm.getMaxTotal()).isEqualTo(55);
-            assertThat(cm.getDefaultMaxPerRoute()).isEqualTo(44);
+            assertThat(cm.getMaxPerRoute(route())).isEqualTo(44);
         } finally {
-            cm.shutdown();
+            cm.close();
         }
     }
 
@@ -115,19 +119,11 @@ class OutboundTimeoutTest {
     }
 
     /** 走生产函数 {@link EsConfig#applyHttpConfig} 建客户端，取出其内部连接池。 */
-    private static PoolingNHttpClientConnectionManager poolOfProductionClient(OpsPilotProperties.Es es)
-            throws Exception {
-        var client = EsConfig.applyHttpConfig(
-                org.apache.http.impl.nio.client.HttpAsyncClients.custom(), es).build();
-        for (Class<?> c = client.getClass(); c != null; c = c.getSuperclass()) {
-            try {
-                Field f = c.getDeclaredField("connmgr");
-                f.setAccessible(true);
-                return (PoolingNHttpClientConnectionManager) f.get(client);
-            } catch (NoSuchFieldException e) {
-                // 继续向父类找
-            }
-        }
-        throw new IllegalStateException("InternalHttpAsyncClient.connmgr 不存在——httpasyncclient 版本变了");
+    private static PoolingAsyncClientConnectionManager poolOfProductionClient(OpsPilotProperties.Es es) {
+        return EsConfig.connectionManager(es);
+    }
+
+    private static HttpRoute route() {
+        return new HttpRoute(new HttpHost("http", "localhost", 9200));
     }
 }

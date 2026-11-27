@@ -142,8 +142,8 @@ class CoverageServiceTest {
         assertEquals("metadata.tenant", filters.get(0).term().field());
         assertEquals("tenant-acme", filters.get(0).term().value().stringValue());
 
-        assertEquals("metadata.auth_level", filters.get(1).range().field());
-        assertEquals(3, filters.get(1).range().lte().to(Integer.class));
+        assertEquals("metadata.auth_level", filters.get(1).range().number().field());
+        assertEquals(3.0, filters.get(1).range().number().lte());
     }
 
     /**
@@ -217,14 +217,14 @@ class CoverageServiceTest {
 
         // 线上真实形状：settings.index.creation_date
         when(indices.get(any(Function.class))).thenReturn(GetIndexResponse.of(b -> b
-                .result("opspilot-chunks-20261019052630",
+                .indices("opspilot-chunks-20261019052630",
                         IndexState.of(s -> s.settings(IndexSettings.of(
                                 st -> st.index(i -> i.creationDate(BUILT_AT))))))));
         assertEquals(BUILT_AT, service().coverage("tenant-internal", 2).builtAt());
 
         // 外层形态（客户端把值摊平到 settings 上时）
         when(indices.get(any(Function.class))).thenReturn(GetIndexResponse.of(b -> b
-                .result("opspilot-chunks-20261019052630",
+                .indices("opspilot-chunks-20261019052630",
                         IndexState.of(s -> s.settings(IndexSettings.of(st -> st.creationDate(BUILT_AT)))))));
         assertEquals(BUILT_AT, service().coverage("tenant-internal", 2).builtAt());
 

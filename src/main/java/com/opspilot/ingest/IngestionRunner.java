@@ -413,7 +413,7 @@ public class IngestionRunner implements ApplicationRunner, InitializingBean {
         try {
             // GetAliasResponse 是 index→aliases 的字典：按别名反查后取首个 index（本服务别名恒指单索引）
             var got = es.indices().getAlias(g -> g.name(alias));
-            oldPhys = got.result().keySet().stream().findFirst().orElse(null);
+            oldPhys = got.aliases().keySet().stream().findFirst().orElse(null);
         } catch (Exception notFound) {
             // 首次：别名不存在
         }

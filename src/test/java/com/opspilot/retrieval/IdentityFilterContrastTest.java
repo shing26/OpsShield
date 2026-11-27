@@ -51,8 +51,8 @@ class IdentityFilterContrastTest {
 
         Query range = f.get(1);
         assertTrue(range.isRange());
-        assertEquals(IdentityFilter.AUTH_LEVEL_FIELD, range.range().field());
-        assertEquals((double) LEVEL, range.range().lte().to(Double.class, MAPPER),
+        assertEquals(IdentityFilter.AUTH_LEVEL_FIELD, range.range().number().field());
+        assertEquals((double) LEVEL, range.range().number().lte(),
                 "必须是 lte（doc.level <= user.level）；gte 会让低密级用户看到高密级文档");
     }
 
@@ -96,7 +96,7 @@ class IdentityFilterContrastTest {
         }
         // ES/Qdrant 侧无法对"单条文档"求值（那是引擎的事），但它们构造出的条件里
         // 算子与字段已经在上面的用例里被钉住——谓词是这三者的共同语义说明。
-        assertTrue(EsSearchService.identityFilters(TENANT, LEVEL).get(1).range().lte() != null);
+        assertTrue(EsSearchService.identityFilters(TENANT, LEVEL).get(1).range().number().lte() != null);
         assertTrue(QdrantSearchService.authFilter(TENANT, LEVEL).getMust(1).getField().getRange().getLte()
                 > 0);
     }
