@@ -422,7 +422,7 @@ $PY load/l1_latency.py       # L1 回放延迟（热点命中口径）→ load/r
 
 ## 📐 架构决策记录
 
-系统的演进过程严格遵从 ADR 机制，每篇含否决项与后果。关键决策索引如下（完整 **47 篇**见 [docs/adr/](docs/adr/)）：
+系统的演进过程严格遵从 ADR 机制，每篇含否决项与后果。关键决策索引如下（完整 **48 篇**见 [docs/adr/](docs/adr/)）：
 
 | # | 决策 | 一句话理由 |
 | --- | --- | --- |
@@ -456,10 +456,11 @@ $PY load/l1_latency.py       # L1 回放延迟（热点命中口径）→ load/r
 | [0038](docs/adr/0038-incident-history-cursor.md) | 事故单历史键集分页：服务端唯一排序事实源、不透明游标绑定筛选、`openCount` 全租户统计（Flyway V11） | 60 条硬上限之外的历史必须可达；游标不能用 tenant 或前端二次排序换取假分页 |
 | [0045](docs/adr/0045-alert-push-outbox.md) | 外发改为持久化 outbox（Flyway V12）+ 多通道 + 有界重试/死信 | 请求线程不直发；重启不丢；429/5xx 可解释、可补发 |
 | [0047](docs/adr/0047-alert-history-cursor.md) | 告警回看键集分页：`(last_seen DESC, tenant DESC, alert_id DESC)`、微秒不透明游标、只覆盖保留窗口（Flyway V13） | 保留窗口内的老告警必须可逐页读完；轮询继续走 since 水位，两种语义不混 |
+| [0048](docs/adr/0048-boot42-es9-upgrade-decision.md) | Boot 4.2 采纳；ES 9 客户端等待服务端 9.x | Boot 4.2 仅版本门文档不同步；8.14 服务端 + 9.x 客户端不在官方兼容矩阵 |
 
 ---
 
-**新增文档入口**：`docs/ops/alert-push.md`（IM 外发配置/验签/死信排查）、`docs/ops/feedback-loop.md`（反馈质量闭环）、`docs/ops/case-study-self-dogfood.md`（自证 dogfood）、`docs/ops/g1-remaining.md`（门禁 6 余项）、`docs/ops/gate6-7-30day-observation.md`（确定性时钟与 up=1 覆盖修正）、`docs/design-mockups/README.md`（三个设计样机）。
+**新增文档入口**：`docs/ops/alert-push.md`（IM 外发配置/验签/死信排查）、`docs/ops/feedback-loop.md`（反馈质量闭环）、`docs/ops/case-study-self-dogfood.md`（自证 dogfood）、`docs/ops/g1-remaining.md`（门禁 6 余项）、`docs/ops/gate6-7-30day-observation.md`（确定性时钟与 up=1 覆盖修正）、`docs/ops/boot42-es9-spike.md`（Boot 4.2 / ES 9 兼容性矩阵）、`docs/design-mockups/README.md`（三个设计样机）。
 
 ## 🗺️ 仓库导航
 
@@ -471,7 +472,7 @@ $PY load/l1_latency.py       # L1 回放延迟（热点命中口径）→ load/r
 | 日常运维、脚本索引、**债务触发线** | [OPS.md](OPS.md)（脚本按"服务生命周期 / 门禁检查 / 故障注入与演示"分组索引） |
 | 领域词汇 | [docs/CONTEXT.md](docs/CONTEXT.md) |
 | 目录地图 / 逐包职责 / 维护者向内容 | [docs/repo-map.md](docs/repo-map.md) |
-| 架构决策与否决理由 | [docs/adr/](docs/adr/)（47 篇，每篇含否决项与后果） |
+| 架构决策与否决理由 | [docs/adr/](docs/adr/)（48 篇，每篇含否决项与后果） |
 
 ---
 
