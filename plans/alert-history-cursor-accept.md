@@ -1,7 +1,7 @@
 # 验收契约：告警历史键集分页
 
 > 来源：2026-11-27 用户确认路线「先 `alert-history-cursor`，再单独起 Boot 4.2 / ES 9 兼容性 spike」。
-> **状态：已冻结（2026-11-27）。** 基线 `main` @ `9620189`；
+> **状态：已冻结（R1，2026-11-27）。** 基线 `main` @ `686abf5`；
 > 本分支只承载契约；实现分支为 `codex/alert-history-cursor-impl`（契约合并后从 main 切出）。
 
 ## Task ID
@@ -63,7 +63,7 @@ src/test/java/com/opspilot/alert/**
 src/test/java/com/opspilot/auth/FlywayMigrationTest.java
 offline/tests/test_console_contract.py
 docs/CONTEXT.md
-docs/adr/0046-alert-history-cursor.md
+docs/adr/0047-alert-history-cursor.md
 docs/repo-map.md
 README.md
 offline/doc_numbers.json
@@ -107,7 +107,7 @@ offline/doc_numbers.json
 12. **不回归**：`/alerts/recent` 响应字段与夹取行为不变；一键建单、平台门禁、审计、
     保留清理、事故/通知/推送语义零改动；面板契约十层、`check_public_copy.py --check`、
     `doc_numbers.py --check` 通过。
-13. **文档**：ADR-0046（键集 / 微秒 / 快照边界 / 与轮询的分工）；
+13. **文档**：ADR-0047（键集 / 微秒 / 快照边界 / 与轮询的分工）；
     `docs/CONTEXT.md` 增加「告警回看（Alert History Browse）」词条并说明
     **只覆盖保留窗口、不是永久历史**；`docs/repo-map.md` 与 README 的 ADR/测试计数同步。
 14. **性能边界（登记，不在本切片实现）**：跨租户台账总量 > 50,000 行或
@@ -164,3 +164,9 @@ V13 只加索引；新端点与前端按钮均为增量。回滚实现提交后�
 
 实现者与 Verifier 不得为同一会话。本次签收只授权实现，不含实现 PR 的合并授权；
 实现 PR 合并须另行书面签收。
+
+## R1 修订（2026-11-27，仅编号）
+
+契约合并后 `main` 前移到 `686abf5`：RCA A1 切片先占用 ADR-0046
+（`0046-rca-a1-detection-features.md`）。本切片的 ADR 顺延为 **0047**，
+其余判定口径、Allowed paths 范围与验收项**零变更**；实现与验证按本 R1 文本执行。
