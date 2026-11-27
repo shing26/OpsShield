@@ -183,7 +183,7 @@ OB 混合约 360s 与约 2100s（部分 `m=1` 报警在注入前 600s，正好�
 | AC-8 延迟 | PASS（有检出配置） | 中位 ≤23.5s、P90 ≤52.4s；迟到报警 0 |
 | AC-9 未越界 | PASS | TT 与 rep 4–5 未读；v2 阈值/默认行为未改；diff 落在 §5 |
 | AC-10 可复现 | 见 §7 | pytest 全绿；固定 seed；SHA/status 见 §7 |
-| AC-11 独立验收 | 待 Verifier | 由独立 Verifier 逐条重跑 AC-1..AC-10 |
+| AC-11 独立验收 | PASS | 独立 Verifier 覆盖 HEAD `57ddb94`，见 §10 |
 
 注：AC-2/AC-3/AC-6/AC-7 形式上是“对选中配置”判定；合规集为空时，本报告
 按 best-effort 记录。即便按最宽松读法，AC-3/AC-4/AC-5 仍失败，结论不依赖
@@ -237,3 +237,23 @@ offline/rca/.venv/Scripts/python.exe offline/rca/detect_cusum.py --suite re1-ob 
 5. **下一步**：A3 一次性 holdout 不启动。若继续路线 A，需要另一份契约，
    先证明机制能同时改善“新增检出”和“误报/覆盖”的兑换率；单纯再调
    CUSUM 的 `k/h/m` 不在本契约允许范围内。
+
+## 10. 独立验收记录（Verifier，2026-11-27）
+
+- 复核对象：HEAD `57ddb94`；`git status --short` 为空。
+- 独立重跑：`pytest offline/rca/tests -q` → 81 passed / 0 skipped；
+  v2 复现 SS 0.907 / 误报 1、OB 0.480 / 误报 31；best-effort 单配置
+  复跑与已提交 `detection.csv` 的 SHA256 逐字节一致；
+  `offline/doc_numbers.py --check` → 34 条 / 53 处引用全部相符。
+- 从 32 个 `detection.csv` 独立重算：合规集 0/16；SS best 0.893 /
+  4 误报 / +5 / 丢 6；OB best 0.760 / 11 误报 / +24 / 丢 3；
+  AC-6 的联合满足配置是 `k=1,h=12,m=2`（SS +5/丢 6、OB +24/丢 5）；
+  AC-8 所有有检出配置通过、`late=0`。
+- Verifier 首轮指出报告两处口径（P90 下限、AC-6 混用两套配置），已在
+  `57ddb94` 修正；增量复核确认 `2b70912..57ddb94` 只改本报告，
+  AC-1..AC-10 证据链不变，AC-11 覆盖 `57ddb94`。
+- 最终判定：**A2 FAIL**，与报告 §6 和 ADR-0047 一致。
+- 合并前提醒：`main` 已新增 `docs/adr/0047-alert-history-cursor.md`；
+  本分支的 ADR-0047 在合并时须顺延（预期 0048），并同步
+  `docs/repo-map.md` 与 README 的 ADR 计数、契约 §13 的执行记录。
+  这是文档编号冲突，不影响 A2 的任何 AC 或 FAIL 判定。
