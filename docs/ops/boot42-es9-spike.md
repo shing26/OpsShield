@@ -11,6 +11,8 @@
   - B：`47460a1`（Boot 4.2.0 only + README 版本门修正）
   - C：`1ed359b`（ES 9.5.6 only + 机械迁移）
   - D：`2fce507`（Boot 4.2.0 + ES 9.5.6）
+- 文档分支：`codex/boot42-es9-spike-impl`（本报告与 ADR-0048；HEAD 见提交记录）。
+- 工作树：实验分支与文档分支的 `git status --short` 均为空（生成物已还原/未入库）。
 - 环境：Windows 11 / PowerShell，`JAVA_HOME=E:\java\jdk21`（Temurin 21.0.12），
   Maven 3.9.14，`MAVEN_OPTS=-Xmx1g`；Maven 联网（未用 `-o`）。
 - 运行时：memory + mock，`SERVER_PORT=18081`，fat jar，H2 文件库；
