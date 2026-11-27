@@ -3395,9 +3395,15 @@ function resetAlerts() {
   S.alertHistoryLoaded = false; S.alertLoadingMore = false;
 }
 
+/** 排序首键用微秒（缺失时退回毫秒），避免同一毫秒内的行被二次重排。 */
+function alertMicros(a) {
+  const v = a && a.lastSeenMicros;
+  return (v === null || v === undefined) ? (a.lastSeen || 0) * 1000 : Number(v);
+}
+
 /** 与服务端 ORDER BY 同序：last_seen DESC, tenant DESC, alert_id DESC。 */
 function alertOrder(a, b) {
-  const t = (b.lastSeen || 0) - (a.lastSeen || 0);
+  const t = alertMicros(b) - alertMicros(a);
   if (t) return t;
   if (a.tenant !== b.tenant) return a.tenant < b.tenant ? 1 : -1;
   return a.alertId === b.alertId ? 0 : (a.alertId < b.alertId ? 1 : -1);

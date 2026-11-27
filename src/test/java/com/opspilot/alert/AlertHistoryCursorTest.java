@@ -126,6 +126,34 @@ class AlertHistoryCursorTest {
     }
 
     @Test
+    void bothEndpointsExposeMicrosecondSortKeyForSameMillisecondRows() {
+        Instant early = BASE.plusNanos(222_456_000L);
+        Instant late = BASE.plusNanos(222_457_000L);
+        insert("t-ms", "early", early);
+        insert("t-ms", "late", late);
+
+        List<Map<String, Object>> historyRows = rows(service.history(null, "50"));
+        List<Map<String, Object>> recentRows = rows(service.recent(0, 50));
+        assertEquals(List.of("late", "early"),
+                historyRows.stream().map(r -> r.get("alertId")).toList(),
+                "history 顺序必须与微秒排序一致");
+        assertEquals(List.of("late", "early"),
+                recentRows.stream().map(r -> r.get("alertId")).toList(),
+                "recent 顺序也必须一致");
+        assertEquals(historyRows.get(0).get("lastSeen"), historyRows.get(1).get("lastSeen"),
+                "两行必须落在同一毫秒（显示字段相同）");
+        assertEquals(((Number) historyRows.get(0).get("lastSeenMicros")).longValue() - 1,
+                ((Number) historyRows.get(1).get("lastSeenMicros")).longValue(),
+                "lastSeenMicros 必须保留 1 微秒差异");
+        assertEquals(historyRows, recentRows, "两个端点的行字段（含 lastSeenMicros）必须逐字段一致");
+
+        AlertIntake lateRow = store.find("t-ms", "late").orElseThrow();
+        assertEquals(AlertHistoryCursor.toMicros(lateRow.lastSeen()),
+                ((Number) historyRows.get(0).get("lastSeenMicros")).longValue(),
+                "lastSeenMicros 必须取数据库回读值");
+    }
+
+    @Test
     void invalidCursorsAreBadRequestAndNeverFiveHundred() {
         insert("t-x", "a", BASE);
         insert("t-x", "b", BASE.minusSeconds(1));
@@ -204,10 +232,14 @@ class AlertHistoryCursorTest {
         assertEquals(30, history.get("retention_days"));
         assertEquals(500, history.get("max_per_tenant"));
         assertFalse(history.containsKey("truncated"), "history 不复制 recent 的 truncated");
+        assertTrue(rows(history).get(0).containsKey("lastSeenMicros"),
+                "history 行必须暴露 lastSeenMicros");
 
         Map<String, Object> recent = service.recent(0, 50);
         assertEquals(List.of("alerts", "nextSince", "retention_days", "max_per_tenant", "truncated"),
                 new ArrayList<>(recent.keySet()), "/alerts/recent 响应字段零改动");
+        assertTrue(rows(recent).get(0).containsKey("lastSeenMicros"),
+                "recent 行必须暴露 lastSeenMicros");
         assertEquals(rows(recent).get(0), rows(history).get(0), "每行字段必须与 recent 逐字段一致");
 
         var clamped = admin.alertsRecent(0, 0, withUser(PLATFORM));

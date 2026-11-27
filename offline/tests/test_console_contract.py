@@ -395,6 +395,12 @@ def test_alert_history_cursor_frontend_contract() -> None:
     assert "alertSince = rows.reduce" in html, "alertSince 必须用首页 max(lastSeen) 初始化"
     assert "S.alertNextCursor" in html and "S.alertHasMore" in html, \
         "前端必须保存并消费 nextCursor/hasMore"
+    assert "function alertMicros" in html and "a.lastSeenMicros" in html, \
+        "排序首键必须用 lastSeenMicros"
+    assert "(a.lastSeen || 0) * 1000" in html, "lastSeenMicros 缺失时必须退回毫秒"
+    assert "alertMicros(b) - alertMicros(a)" in html, "alertOrder 首键必须是微秒"
+    assert "(b.lastSeen || 0) - (a.lastSeen || 0)" not in html, \
+        "不得继续用毫秒 lastSeen 排序已加载行"
     assert 'data-act="alertmore"' in html and 'id="alertMore"' in html, \
         "告警表下方必须有「加载更多」"
     assert "已到保留窗口起点" in html, "hasMore=false 必须明示已到保留窗口起点"

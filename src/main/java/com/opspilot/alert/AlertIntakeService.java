@@ -235,6 +235,8 @@ public class AlertIntakeService {
         m.put("alertStatus", a.alertStatus());
         m.put("firstSeen", a.firstSeen() == null ? null : a.firstSeen().toEpochMilli());
         m.put("lastSeen", a.lastSeen() == null ? null : a.lastSeen().toEpochMilli());
+        m.put("lastSeenMicros",
+                a.lastSeen() == null ? null : AlertHistoryCursor.toMicros(a.lastSeen()));
         m.put("seenCount", a.seenCount());
         m.put("incidentId", a.incidentId());
         return m;
