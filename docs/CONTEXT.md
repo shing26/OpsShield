@@ -230,6 +230,9 @@ H2 主库中的一行用户记录（sub + bcrypt 口令 + tenant + auth_level + 
 **保留窗口（Retention Window）**:
 告警台账的有界留存口径：默认保留 30 天，且每租户最多 500 条，超出由每日 `@Scheduled` 清理。阈值来自 `opspilot.alert.retention-days` / `max-per-tenant`，面板显示的窗口与后端清理读同一组配置。_对外_: 无对外别名。_Avoid_: 永久保留、只写"30 天"（漏掉每租户条数上限会让人误以为是无限台账）
 
+**告警回看（Alert History Browse）**:
+在保留窗口内逐页读取老告警的能力（`GET /api/v1/admin/alerts/history`，[ADR-0047](adr/0047-alert-history-cursor.md)）。排序键统一为 `(last_seen DESC, tenant DESC, alert_id DESC)`；游标是不透明键集位置（微秒时间 + 租户 + 告警 ID），只表达"下一页从哪开始"，不是授权凭据——端点仍是平台门禁，跨租户可见性与 `/alerts/recent` 相同。轮询继续用 `/alerts/recent?since=` 拉增量，两者分工明确：回看负责历史深度，水位负责新告警。行被 `touch` 后前移、被保留任务删除后会从后续页消失，刷新即最新（键集分页对可变排序键的快照边界）。**只覆盖保留窗口，不是永久历史**：窗口之外没有读取路径。_对外_: 无对外别名。_Avoid_: 告警历史归档（暗示永久存储）、全量搜索（本切片无筛选/搜索）
+
 ### 部署域
 
 **存储模式（Storage Mode）**:

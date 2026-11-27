@@ -119,6 +119,26 @@ class FlywayMigrationTest {
         }
     }
 
+    /** V13 只加索引：名字存在，且列顺序必须是 (last_seen, tenant, alert_id)。 */
+    private static void assertAlertHistoryIndex(DataSource ds) throws Exception {
+        try (Connection c = ds.getConnection(); Statement st = c.createStatement()) {
+            try (ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM INFORMATION_SCHEMA.INDEXES"
+                    + " WHERE TABLE_NAME = 'ALERT_INTAKE'"
+                    + " AND INDEX_NAME = 'IDX_ALERT_INTAKE_HISTORY'")) {
+                assertTrue(rs.next());
+                assertEquals(1, rs.getInt(1), "V13 必须建出告警历史游标索引");
+            }
+            try (ResultSet rs = st.executeQuery("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.INDEX_COLUMNS"
+                    + " WHERE INDEX_NAME = 'IDX_ALERT_INTAKE_HISTORY'"
+                    + " ORDER BY ORDINAL_POSITION")) {
+                java.util.List<String> columns = new java.util.ArrayList<>();
+                while (rs.next()) columns.add(rs.getString(1));
+                assertEquals(java.util.List.of("LAST_SEEN", "TENANT", "ALERT_ID"), columns,
+                        "告警历史游标索引列顺序必须是 (last_seen, tenant, alert_id)");
+            }
+        }
+    }
+
     @Test
     void v6UpgradesExistingV5DataAndAddsAssignmentTable() throws Exception {
         DataSource ds = ds("v5-to-v6");
@@ -225,10 +245,16 @@ class FlywayMigrationTest {
                 assertTrue(rs.next());
                 assertEquals(1, rs.getInt(1), "空库一次跑完必须留下 V12 版本记录");
             }
+            try (ResultSet rs = st.executeQuery(
+                    "SELECT COUNT(*) FROM \"flyway_schema_history\" WHERE \"version\" = '13' AND \"success\"")) {
+                assertTrue(rs.next());
+                assertEquals(1, rs.getInt(1), "空库一次跑完必须留下 V13 版本记录");
+            }
         }
         assertEquals(4000, bodyColumnWidth(ds), "空库跑完 V1..V9 后 body 应为 VARCHAR(4000)");
         assertHistoryCursorIndex(ds);
         assertPushOutbox(ds);
+        assertAlertHistoryIndex(ds);
     }
 
     /** V11 库升级到 V12：只新增 outbox 表，既有事故/通知数据必须原样保留。 */
@@ -269,8 +295,14 @@ class FlywayMigrationTest {
                 assertTrue(rs.next());
                 assertEquals(1, rs.getInt(1), "已有 V11 库升级后必须留下 V12 版本记录");
             }
+            try (ResultSet rs = st.executeQuery(
+                    "SELECT COUNT(*) FROM \"flyway_schema_history\" WHERE \"version\" = '13' AND \"success\"")) {
+                assertTrue(rs.next());
+                assertEquals(1, rs.getInt(1), "已有库升级后必须留下 V13 版本记录");
+            }
         }
         assertPushOutbox(ds);
+        assertAlertHistoryIndex(ds);
     }
 
     /** V9 库升级到 V10：只新增通知表，既有事故/评论/台账数据必须原样保留。 */

@@ -387,13 +387,40 @@ def test_alert_intake_block_is_before_results_and_uses_row_tenant() -> None:
     assert "建事故单失败：" in html, "建单失败必须 toast 明示"
 
 
-def test_alert_truncated_is_consumed_and_labelled() -> None:
-    """ADR-0035 / R2：since 是新告警水位不是游标；truncated=true 必须显式告知只看到一部分。"""
+def test_alert_history_cursor_frontend_contract() -> None:
+    """ADR-0047：首屏历史分页、加载更多、1000 上限；truncated 不得再留死胡同文案。"""
     html = _html()
-    assert "仅显示最近 " in html, "truncated=true 时面板必须显示「仅显示最近 N 条」"
-    assert "meta.truncated" in html, "renderAlerts 必须读取响应里的 truncated"
-    assert "S.alertTruncated" in html, "增量轮询不得把首屏的 truncated 事实覆盖掉"
-    assert "仅显示最近 ' + S.alerts.length" in html, "N 必须取当前渲染行数（与表体同口径）"
+    assert "/api/v1/admin/alerts/history" in html, "首屏必须走 /alerts/history"
+    assert "function loadAlertHistory" in html, "缺历史分页逻辑"
+    assert "alertSince = rows.reduce" in html, "alertSince 必须用首页 max(lastSeen) 初始化"
+    assert "S.alertNextCursor" in html and "S.alertHasMore" in html, \
+        "前端必须保存并消费 nextCursor/hasMore"
+    assert 'data-act="alertmore"' in html and 'id="alertMore"' in html, \
+        "告警表下方必须有「加载更多」"
+    assert "已到保留窗口起点" in html, "hasMore=false 必须明示已到保留窗口起点"
+    assert "已加载最近 1000 条，请用保留窗口缩小范围" in html, "到达 1000 上限必须有明确文案"
+    assert "S.alerts.length >= 1000" in html, "客户端必须限制最多 1000 条"
+    assert "S.alertHistoryLoaded" in html and "S.alertLoadingMore" in html, \
+        "首屏加载与加载中状态必须可区分"
+
+    # 轮询空洞：truncated=true 必须重载第一页并明确提示，不得保留「仅显示最近 N 条」。
+    assert "if (d.truncated === true)" in html, "轮询必须读取 recent 的 truncated"
+    truncated_at = html.index("if (d.truncated === true)")
+    truncated_block = html[truncated_at:truncated_at + 500]
+    assert "await loadAlertHistory(true)" in truncated_block, "truncated=true 必须重载历史第一页"
+    assert "新告警超过单次窗口，列表已刷新到最新" in truncated_block, "重载后必须 toast 明确提示"
+    assert "仅显示最近 " not in html, "不得保留旧的死胡同文案"
+    assert "S.alertTruncated" not in html, "truncated 不得再被锁存"
+
+    # 切身份 / 401 / 登出：列表、水位、游标、分页状态一起清空。
+    assert "function resetAlerts" in html, "缺统一的告警状态重置入口"
+    reset_start = html.index("function resetAlerts")
+    reset_block = html[reset_start:reset_start + 400]
+    assert "S.alertNextCursor = null" in reset_block and "S.alertHasMore = false" in reset_block, \
+        "重置必须清空游标与 hasMore"
+    assert "alertSince = 0" in reset_block and "S.alertHistoryLoaded = false" in reset_block, \
+        "重置必须清空水位与首屏标记"
+    assert html.count("resetAlerts();") >= 2, "切换身份与 401/登出路径都必须重置告警状态"
 
 
 def test_cross_tenant_incident_toast_names_tenant_and_id() -> None:

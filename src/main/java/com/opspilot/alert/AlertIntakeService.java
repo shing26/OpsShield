@@ -39,6 +39,7 @@ public class AlertIntakeService {
     private static final int MAX_SUMMARY = 200;
     private static final int MAX_TRACE = 64;
     private static final int MAX_LIMIT = 200;
+    private static final int DEFAULT_HISTORY_LIMIT = 50;
     private static final Set<String> PRIORITIES = Set.of("P1", "P2", "P3");
 
     private final AlertIntakeStore store;
@@ -112,6 +113,47 @@ public class AlertIntakeService {
         out.put("max_per_tenant", props.alert().maxPerTenant());
         out.put("truncated", truncated);
         return out;
+    }
+
+    /**
+     * 历史回看（ADR-0047）：跨租户键集分页，顺序
+     * {@code (last_seen DESC, tenant DESC, alert_id DESC)}。
+     *
+     * <p>游标只承载排序位置，不含授权语义；tenant 永远不是可见性开关。
+     * 默认 limit=50，合法 1..200；非法游标/越界或非数字 limit 一律 400。
+     */
+    public Map<String, Object> history(String cursor, String limit) {
+        int cap = parseHistoryLimit(limit);
+        AlertHistoryCursor after = cursor == null ? null : AlertHistoryCursor.decode(cursor);
+        List<AlertIntake> fetched = store.history(after, cap + 1);
+        boolean hasMore = fetched.size() > cap;
+        List<AlertIntake> kept = hasMore ? fetched.subList(0, cap) : fetched;
+        String nextCursor = null;
+        if (hasMore) {
+            AlertIntake last = kept.get(kept.size() - 1);
+            nextCursor = AlertHistoryCursor.encode(last.lastSeen(), last.tenant(), last.alertId());
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("alerts", kept.stream().map(this::alertView).toList());
+        out.put("nextCursor", nextCursor);
+        out.put("hasMore", hasMore);
+        out.put("retention_days", props.alert().retentionDays());
+        out.put("max_per_tenant", props.alert().maxPerTenant());
+        return out;
+    }
+
+    /** limit 缺省 50，合法 1..200；空串、非数字、越界一律 400（只用于历史端点）。 */
+    private static int parseHistoryLimit(String raw) {
+        if (raw == null) return DEFAULT_HISTORY_LIMIT;
+        String value = raw.trim();
+        if (value.isEmpty() || !value.matches("\\d{1,3}")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "limit 必须是 1..200 的整数");
+        }
+        int parsed = Integer.parseInt(value);
+        if (parsed < 1 || parsed > MAX_LIMIT) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "limit 必须是 1..200 的整数");
+        }
+        return parsed;
     }
 
     /**
