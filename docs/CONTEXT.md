@@ -66,7 +66,10 @@ Reciprocal Rank Fusion，倒数排名融合（k=60），将双路排名无量纲
 按收件人持久化的事故事件记录（`incident_notifications`，ADR-0037）：指派/转交、SLA 临期/超时、重开各生成一行，只带事故 ID、标题、优先级、时限与事件类型，不复制 query、诊断正文、评论正文或引用片段。通知与事故变更同一事务写入，唯一键 `(tenant, recipient, dedupe_key)` 去重；查询、已读与全部已读都只用 JWT 里的 tenant/sub。_对外_: 无对外别名。_Avoid_: 消息（会读成聊天正文）、推送（那只指可选外发）
 
 **通知外发（Notification Webhook）**:
-可选的租户级群机器人投递：`opspilot.incident.notify.webhook-url` 为空即关闭。配置后只在事务提交后进入有界队列，单线程单次尝试、3s 超时、不重试、不阻塞请求线程；载荷同样不含 query/诊断/评论正文。_对外_: 无对外别名。_Avoid_: 个人私聊（本切片不解用户 IM 身份）、告警投递（那是 Alertmanager 告警链路）
+可选的 IM 频道投递（ADR-0045）：默认关闭；旧 `webhook-url` 映射为 `default` 单通道，新配置走 `channels.<id>`。业务事务只写 outbox，单线程调度器负责 HTTP；2xx 成功、429 读 `Retry-After`、5xx/超时指数退避、其他 4xx 进死信，最多 8 次。载荷不含 query/诊断/评论正文/secret。_对外_: 无对外别名。_Avoid_: 个人私聊（本切片不解用户 IM 身份）、告警投递（那是 Alertmanager 告警链路）
+
+**外发投递（Outbox Delivery）**:
+`incident_push_outbox` 里的一条持久化待发事实（ADR-0045）。站内通知行或建单事故行与它**同一事务**写入；唯一键 `(tenant, event_key, channel_id)` 让同一业务事件对同一频道只入一行（`created` 为 `c:<incidentId>`，通知为 `n:<dedupeKey>`）。`pending` 永不清理，`sent`/`dead` 90 天留存；进程重启后 pending 继续投递。运营可用管理端点查 `dead` 并手动重试。_对外_: 无对外别名。_Avoid_: 消息队列（本项目不引入 MQ/Redis）、重试任务（outbox 是事实，不是临时任务）
 
 **静默期（Quiet Hours）**:
 只约束通知外发的时间窗，默认 `22:00–08:00`（`Asia/Shanghai`，可配）。窗内非 P1 只落站内、不外发，并记 `suppressed=quiet_hours`；P1 不受限。站内记录永不被静默期丢弃。_对外_: 无对外别名。_Avoid_: 免打扰（易读成站内也不记录）、告警抑制（那是风暴线）

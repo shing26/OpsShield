@@ -3,6 +3,8 @@ package com.opspilot.gateway;
 import com.opspilot.auth.JwtAuthFilter;
 import com.opspilot.auth.UserContext;
 import com.opspilot.alert.AlertIntakeService;
+import com.opspilot.incident.IncidentPushOutbox;
+import com.opspilot.incident.IncidentPushService;
 import com.opspilot.cache.L1CacheService;
 import com.opspilot.cache.L2SemanticCacheService;
 import com.opspilot.config.BackupStatusService;
@@ -54,6 +56,7 @@ public class AdminController {
     private final BackupStatusService backupStatus;   // 最近成功备份的可观测面（G0）
     private final org.springframework.boot.info.BuildProperties build; // 面板 build 指纹（build-info 缺省时为 null）
     private final AlertIntakeService alerts;          // 告警台账（ADR-0035）
+    private final IncidentPushService pushes;         // 外发投递查询/重试（ADR-0045）
 
     public AdminController(OpsMetrics metrics, DegradationState degrade,
                            L1CacheService l1, L2SemanticCacheService l2, OpsPilotProperties props,
@@ -64,11 +67,10 @@ public class AdminController {
                            BackupStatusService backupStatus,
                            @org.springframework.lang.Nullable org.springframework.boot.info.BuildProperties build) {
         this(metrics, degrade, l1, l2, props, ingestion, users, healthProbe, audit, singleFlight,
-                quota, backupStatus, build, null);
+                quota, backupStatus, build, null, null);
     }
 
-    /** Spring 装配入口：多一个告警台账依赖；13 参构造保留给既有单测。 */
-    @org.springframework.beans.factory.annotation.Autowired
+    /** 保留给既有单测/调用方的 14 参构造；Spring 用下面的 15 参入口。 */
     public AdminController(OpsMetrics metrics, DegradationState degrade,
                            L1CacheService l1, L2SemanticCacheService l2, OpsPilotProperties props,
                            com.opspilot.ingest.IngestionRunner ingestion, com.opspilot.auth.UserStore users,
@@ -78,6 +80,21 @@ public class AdminController {
                            BackupStatusService backupStatus,
                            @org.springframework.lang.Nullable org.springframework.boot.info.BuildProperties build,
                            AlertIntakeService alerts) {
+        this(metrics, degrade, l1, l2, props, ingestion, users, healthProbe, audit, singleFlight,
+                quota, backupStatus, build, alerts, null);
+    }
+
+    /** Spring 装配入口：多一个外发投递依赖；旧构造保留给既有单测。 */
+    @org.springframework.beans.factory.annotation.Autowired
+    public AdminController(OpsMetrics metrics, DegradationState degrade,
+                           L1CacheService l1, L2SemanticCacheService l2, OpsPilotProperties props,
+                           com.opspilot.ingest.IngestionRunner ingestion, com.opspilot.auth.UserStore users,
+                           com.opspilot.health.HealthProbe healthProbe, com.opspilot.metrics.AuditService audit,
+                           com.opspilot.storm.SingleFlight singleFlight,
+                           com.opspilot.resilience.QuotaService quota,
+                           BackupStatusService backupStatus,
+                           @org.springframework.lang.Nullable org.springframework.boot.info.BuildProperties build,
+                           AlertIntakeService alerts, IncidentPushService pushes) {
         this.metrics = metrics;
         this.degrade = degrade;
         this.l1 = l1;
@@ -92,6 +109,7 @@ public class AdminController {
         this.backupStatus = backupStatus;
         this.build = build;
         this.alerts = alerts;
+        this.pushes = pushes;
     }
 
     /** 平台门禁 + 拒绝留痕（QA P1-2：破坏性端点被拒/成功都必须可回溯）。 */
@@ -294,6 +312,52 @@ public class AdminController {
     }
 
     /**
+     * 外发投递只读查询（ADR-0045 / 契约 AC9）。跨租户可见，但 tenant 必填——
+     * 响应不含 URL/secret/载荷，last_error 已在写入时脱敏并截断 500。
+     */
+    @GetMapping("/notifications/deliveries")
+    public Map<String, Object> notificationsDeliveries(
+            @RequestParam(name = "tenant", required = false) String tenant,
+            @RequestParam(name = "status", required = false) String status,
+            @RequestParam(name = "channel", required = false) String channel,
+            @RequestParam(name = "limit", required = false) Integer limit,
+            HttpServletRequest http) {
+        requirePlatformAdmin(http, "notifications/deliveries");
+        if (pushes == null) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "外发投递服务未装配");
+        }
+        java.util.List<Map<String, Object>> rows = pushes.list(tenant, status, channel, limit)
+                .stream().map(AdminController::deliveryView).toList();
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("deliveries", rows);
+        return out;
+    }
+
+    /** 死信/待发手动重试：只允许 dead/pending；sent 409，跨租户/不存在 404，动作写审计。 */
+    @PostMapping("/notifications/deliveries/{id}/retry")
+    public Map<String, Object> retryNotificationDelivery(
+            @PathVariable long id,
+            @RequestParam(name = "tenant", required = false) String tenant,
+            HttpServletRequest http) {
+        requirePlatformAdmin(http, "notifications/deliveries/retry");
+        if (pushes == null) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "外发投递服务未装配");
+        }
+        UserContext u = JwtAuthFilter.from(http);
+        IncidentPushOutbox row;
+        try {
+            row = pushes.retry(tenant, id);
+        } catch (ResponseStatusException e) {
+            audit.logAdmin(u, "notifications/deliveries/retry", "rejected",
+                    "id=" + id + " status=" + e.getStatusCode());
+            throw e;
+        }
+        audit.logAdmin(u, "notifications/deliveries/retry", "ok",
+                "id=" + id + " tenant=" + row.tenant());
+        return deliveryView(row);
+    }
+
+    /**
      * 部署 commit（G1-W1.4）：{@code OPSPILOT_BUILD_COMMIT} 优先，其次 {@code GIT_COMMIT}，
      * 都没有回 {@code unknown}。
      *
@@ -314,6 +378,25 @@ public class AdminController {
             }
         }
         return "unknown";
+    }
+
+    /** 管理面投递视图：只给定位/状态字段，永不含 URL、secret 或载荷。 */
+    static Map<String, Object> deliveryView(IncidentPushOutbox row) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", row.id());
+        m.put("tenant", row.tenant());
+        m.put("incidentId", row.incidentId());
+        m.put("kind", row.kind());
+        m.put("priority", row.priority());
+        m.put("channel", row.channelId());
+        m.put("status", row.status());
+        m.put("attempts", row.attempts());
+        m.put("lastStatus", row.lastStatus());
+        m.put("lastError", row.lastError());
+        m.put("nextAttemptAt", row.nextAttemptAt());
+        m.put("sentAt", row.sentAt());
+        m.put("createdAt", row.createdAt());
+        return m;
     }
 
     /** 备份状态子块：last_success（epoch 秒，0=无记录）/ age_hours（-1=无记录）/ verified。 */

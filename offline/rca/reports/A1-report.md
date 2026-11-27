@@ -174,5 +174,5 @@ foreach ($z in 3.5,4.0) { foreach ($k in 3,4) { foreach ($w in 60,120) { foreach
 - AC-7 由上轮 FAIL 改判 **PASS**；AC-8 在冻结契约下原为 FAIL，Lead 于
   2026-11-27 签收 §14 R1 后改判 **PASS**；AC-4/AC-5/AC-6 维持 FAIL，
   A1 结论仍为 **FAIL**。
-- §14 R1 与 ADR-0045 的签收状态变更发生在 Verifier 复核之后，不改变
+- §14 R1 与 ADR-0046 的签收状态变更发生在 Verifier 复核之后，不改变
   AC-1..AC-9 的任何证据或判定。

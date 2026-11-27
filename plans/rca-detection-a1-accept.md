@@ -72,7 +72,7 @@ v2 冻结参数（resource=20 / SLI=8 / sustain=3 / 材料性 8%）的实测：
 - `offline/rca/reports/A1-report.md` 与新的运行目录
 - `plans/rca-detection-a1-accept.md`（本文件）
 - `plans/rca-roadmap.md`（仅回填 A1 结论）
-- `docs/adr/0045-*.md`（新增，Proposed）
+- `docs/adr/0046-*.md`（新增，Proposed）
 - `docs/repo-map.md`（仅 `offline/rca/` 行）
 - `README.md`（**仅** ADR 计数两处，若新增 ADR 导致门闩点名）
 
@@ -144,7 +144,7 @@ git status --short
 | 阶段 | 内容 | 出口 |
 | --- | --- | --- |
 | A1-1 | C/D/P 特征 + 过滤开关（默认关）+ 单测 | AC-1、v2 复现护栏 |
-| A1-2 | 16 配置 × 2 套 dev 网格 + `A1-report.md` + ADR-0045 | AC-2..AC-7 |
+| A1-2 | 16 配置 × 2 套 dev 网格 + `A1-report.md` + ADR-0046 | AC-2..AC-7 |
 | A1-3 | 独立 Verifier | AC-8..AC-10；按 §8 判 A1 去留 |
 
 ## 12. Lead 裁决记录（2026-11-27，冻结时）
@@ -171,7 +171,7 @@ git status --short
 
 > 以下均为事实记录或实现偏差披露，**不改 AC-1..AC-10，也不改判定矩阵**。
 
-1. **Allowed paths 追加（与 §5 冲突，需 Lead 认可）**：新增 ADR-0045 后
+1. **Allowed paths 追加（与 §5 冲突，需 Lead 认可）**：新增 ADR-0046 后
    `doc_numbers.py --check` 要求 `docs/repo-map.md` 的 `docs/adr/` 行同步计数与
    条目（该行被 `offline/doc_numbers.json` 登记为 `adr_count` 引用点）。
    因此实际修改了这一行，超出 §5 的“仅 `offline/rca/` 行”。
@@ -197,17 +197,22 @@ git status --short
 
 - 原文：`docs/repo-map.md`（仅 `offline/rca/` 行）
 - R1：`docs/repo-map.md`（仅 `offline/rca/` 行，以及 `docs/adr/` 计数行）
-- 冲突事实：新增 ADR-0045 后，`offline/doc_numbers.json` 把
+- 冲突事实：新增 ADR-0046 后，`offline/doc_numbers.json` 把
   `docs/repo-map.md` 的 `docs/adr/` 行登记为 `adr_count` 引用点，
-  `doc_numbers.py --check` 要求该行同步“45 项架构决策”与 0045 条目；
+  `doc_numbers.py --check` 要求该行同步“46 项架构决策”与 0045/0046 条目；
   §5 原文只授权改 `offline/rca/` 行，无法同时满足门闩。
 - 备选与取舍：(a) 改 `doc_numbers` 登记——削弱既有门闩；(b) 保留门闩红——
   允许已知失败进入分支；(c) 仅修订本行授权范围。取 (c)。
-- 修订边界：只允许 `docs/adr/` 行的 ADR 计数与 0045 条目随新增 ADR 同步；
+- 修订边界：只允许 `docs/adr/` 行的 ADR 计数与 0046 条目随新增 ADR 同步；
   不得改该行其他 ADR 条目，也不得改 `docs/repo-map.md` 的其他行。
 - 签收效力：Lead 书面签收本 §14 后，AC-8 由 FAIL 改为 PASS；未签收则
   AC-8 保持 FAIL，本分支不合并。两种情况下 A1 FAIL 均不变。
 
 **签收状态：已签收（2026-11-27，Lead「签收 §5 R1 修订并接受 A1 FAIL」）。**
-签收范围是 §14 的 Allowed paths 修订 + ADR-0045 的 A1 FAIL 决策；AC-1..AC-10
-与 A1 FAIL 均不变。AC-8 由 FAIL 改判 PASS，ADR-0045 同步为“已采纳”。
+签收范围是 §14 的 Allowed paths 修订 + ADR-0046 的 A1 FAIL 决策；AC-1..AC-10
+与 A1 FAIL 均不变。AC-8 由 FAIL 改判 PASS，ADR-0046 同步为“已采纳”。
+
+**合并记录（2026-11-27）**：合并 `main@9620189` 时发现 `ADR-0045` 已被
+alert-push 占用，RCA A1 的 ADR 顺延为 `ADR-0046`，`docs/adr/` 行同步为
+46 项并同时登记 0045/0046。该调整只解决编号冲突，不改变 R1 授权范围、
+AC-1..AC-10 或 A1 FAIL。

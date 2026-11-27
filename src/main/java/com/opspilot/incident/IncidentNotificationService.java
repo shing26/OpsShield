@@ -14,8 +14,6 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
@@ -29,8 +27,9 @@ import org.springframework.web.server.ResponseStatusException;
  * <p><b>去重</b>：唯一键 {@code (tenant, recipient, dedupe_key)} 冲突按正常分支吞掉；
  * 去重键里只含事故 ID、事件与分钟桶，不含任何用户输入正文。
  *
- * <p><b>外发</b>：只有真正落库的通知才注册 {@code afterCommit} 回调；外发失败
- * 只记 WARN 与指标，不影响接口结果，也不回滚事务。
+ * <p><b>外发</b>（ADR-0045）：只有真正落库的通知才写 outbox 行；outbox 与通知行同事务，
+ * 回滚时一起消失。真正的 HTTP 由 {@link IncidentPushDispatcher} 在独立调度线程发出，
+ * 请求线程只做数据库写入。
  */
 @Service
 public class IncidentNotificationService {
@@ -43,17 +42,17 @@ public class IncidentNotificationService {
     private final IncidentNotificationStore store;
     private final UserStore users;
     private final IncidentNotificationMetrics metrics;
-    private final IncidentWebhookDispatcher dispatcher;
+    private final IncidentPushService push;
     private final IncidentNotificationProperties props;
 
     public IncidentNotificationService(IncidentNotificationStore store, UserStore users,
                                        IncidentNotificationMetrics metrics,
-                                       IncidentWebhookDispatcher dispatcher,
+                                       IncidentPushService push,
                                        IncidentNotificationProperties props) {
         this.store = store;
         this.users = users;
         this.metrics = metrics;
-        this.dispatcher = dispatcher;
+        this.push = push;
         this.props = props;
     }
 
@@ -95,7 +94,6 @@ public class IncidentNotificationService {
     private void create(Incident incident, List<String> recipients, String kind,
                         String dedupeKey, Instant now) {
         if (recipients.isEmpty()) return;
-        List<IncidentNotification> inserted = new ArrayList<>();
         for (String recipient : recipients) {
             // 收件人必须在本租户且启用；被猜到的跨租户 sub 不会收到任何行。
             if (!receivable(incident.tenant(), recipient)) continue;
@@ -104,24 +102,10 @@ public class IncidentNotificationService {
                     incident.dueAt(), dedupeKey, now, null);
             if (store.insert(row)) {
                 metrics.notification(kind);
-                inserted.add(row);
+                // 同一事务：通知回滚则 outbox 一起回滚（契约 AC2）。
+                push.onNotification(incident, kind, dedupeKey, recipient);
             }
         }
-        if (!inserted.isEmpty()) afterCommit(inserted);
-    }
-
-    /** 外发必须在提交后：回滚的事务里不产生任何 webhook 请求。 */
-    private void afterCommit(List<IncidentNotification> rows) {
-        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            rows.forEach(dispatcher::dispatch);
-            return;
-        }
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                rows.forEach(dispatcher::dispatch);
-            }
-        });
     }
 
     private static List<String> recipients(Incident incident, String exclude) {

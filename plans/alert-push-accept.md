@@ -5,6 +5,8 @@
 > 契约冻结；实现分支 `codex/alert-push-impl` 从契约合并后的 `main` 切出。
 > 本切片取代 ADR-0037 决策 4 的「单次尝试、不重试」与决策 6 的「不做失败重试」；
 > 不改 ADR-0034 的评论未读水位，也不改 ADR-0036 的单实例调度边界。
+> **R1（2026-11-27，集成重编号）：** 契约合并后 `main` 已占用 ADR-0044（RCA 入口迟滞），
+> 本切片 ADR 重编号为 `0045-alert-push-outbox.md`；仅编号变化，语义与验收不变。
 
 ## Task ID
 
@@ -70,7 +72,7 @@ src/main/java/com/opspilot/gateway/AdminController.java
 src/main/resources/application.yml
 src/test/java/com/opspilot/incident/**
 src/test/java/com/opspilot/auth/FlywayMigrationTest.java
-docs/adr/0044-alert-push-outbox.md
+docs/adr/0045-alert-push-outbox.md
 docs/ops/alert-push.md
 docs/CONTEXT.md
 docs/repo-map.md
@@ -143,7 +145,7 @@ offline/doc_numbers.json
     事故列表/详情/评论/转交/SLA 响应不变；现有五条 Playwright E2E 全绿；
     `mvn -o test`、`pytest offline/tests`、面板契约、对外用词、文档数字、
     provenance、answer_eval 全绿。
-12. **文档**：ADR-0044 记录 outbox/多通道/重试/安全决策与否决项；
+12. **文档**：ADR-0045 记录 outbox/多通道/重试/安全决策与否决项；
     `docs/ops/alert-push.md` 给出 Feishu/generic 配置、签名校验、死信排查与手动重试；
     `docs/CONTEXT.md` 增「外发投递（outbox）」词条；`docs/repo-map.md`、`README.md`
     与 `offline/doc_numbers.json` 同步。

@@ -72,6 +72,53 @@ class FlywayMigrationTest {
         }
     }
 
+    /** V12 只新增 outbox 表：列、唯一键与两个索引必须齐全。 */
+    private static void assertPushOutbox(DataSource ds) throws Exception {
+        try (Connection c = ds.getConnection(); Statement st = c.createStatement()) {
+            try (ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM incident_push_outbox")) {
+                assertTrue(rs.next());
+                assertEquals(0, rs.getInt(1), "V12 必须建出空的推送 outbox 表");
+            }
+            try (ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS"
+                    + " WHERE TABLE_NAME = 'INCIDENT_PUSH_OUTBOX'")) {
+                assertTrue(rs.next());
+                assertEquals(18, rs.getInt(1), "V12 outbox 列数必须与契约一致");
+            }
+            try (ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM INFORMATION_SCHEMA.INDEXES"
+                    + " WHERE TABLE_NAME = 'INCIDENT_PUSH_OUTBOX'"
+                    + " AND INDEX_NAME = 'UQ_INCIDENT_PUSH_OUTBOX_EVENT_CHANNEL'")) {
+                assertTrue(rs.next());
+                assertEquals(1, rs.getInt(1), "V12 必须有 (tenant, event_key, channel_id) 唯一键");
+            }
+            try (ResultSet rs = st.executeQuery("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.INDEX_COLUMNS"
+                    + " WHERE INDEX_NAME = 'UQ_INCIDENT_PUSH_OUTBOX_EVENT_CHANNEL'"
+                    + " ORDER BY ORDINAL_POSITION")) {
+                java.util.List<String> columns = new java.util.ArrayList<>();
+                while (rs.next()) columns.add(rs.getString(1));
+                assertEquals(java.util.List.of("TENANT", "EVENT_KEY", "CHANNEL_ID"), columns,
+                        "唯一键列顺序必须是 (tenant, event_key, channel_id)");
+            }
+            try (ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM INFORMATION_SCHEMA.INDEXES"
+                    + " WHERE TABLE_NAME = 'INCIDENT_PUSH_OUTBOX'"
+                    + " AND INDEX_NAME IN ('IDX_INCIDENT_PUSH_OUTBOX_DUE',"
+                    + " 'IDX_INCIDENT_PUSH_OUTBOX_TENANT_CREATED')")) {
+                assertTrue(rs.next());
+                assertEquals(2, rs.getInt(1), "V12 必须有 pending 到期与租户+时间两个索引");
+            }
+            // 唯一键必须真的生效：同 (tenant, event_key, channel_id) 第二次插入被拒。
+            st.execute("INSERT INTO incident_push_outbox (tenant, event_key, incident_id, kind, title,"
+                    + " channel_id) VALUES ('tenant-1', 'c:INC-V12-1', 'INC-V12-1', 'created', 'V12', 'default')");
+            boolean rejected = false;
+            try {
+                st.execute("INSERT INTO incident_push_outbox (tenant, event_key, incident_id, kind, title,"
+                        + " channel_id) VALUES ('tenant-1', 'c:INC-V12-1', 'INC-V12-1', 'created', 'V12', 'default')");
+            } catch (java.sql.SQLException e) {
+                rejected = true;
+            }
+            assertTrue(rejected, "V12 必须有 (tenant, event_key, channel_id) 唯一索引");
+        }
+    }
+
     @Test
     void v6UpgradesExistingV5DataAndAddsAssignmentTable() throws Exception {
         DataSource ds = ds("v5-to-v6");
@@ -173,9 +220,57 @@ class FlywayMigrationTest {
                 assertTrue(rs.next());
                 assertEquals(1, rs.getInt(1), "空库一次跑完必须留下 V11 版本记录");
             }
+            try (ResultSet rs = st.executeQuery(
+                    "SELECT COUNT(*) FROM \"flyway_schema_history\" WHERE \"version\" = '12' AND \"success\"")) {
+                assertTrue(rs.next());
+                assertEquals(1, rs.getInt(1), "空库一次跑完必须留下 V12 版本记录");
+            }
         }
         assertEquals(4000, bodyColumnWidth(ds), "空库跑完 V1..V9 后 body 应为 VARCHAR(4000)");
         assertHistoryCursorIndex(ds);
+        assertPushOutbox(ds);
+    }
+
+    /** V11 库升级到 V12：只新增 outbox 表，既有事故/通知数据必须原样保留。 */
+    @Test
+    void v12AddsPushOutboxOnExistingV11Database() throws Exception {
+        DataSource ds = ds("v11-to-v12");
+        Flyway.configure()
+                .dataSource(ds)
+                .locations("classpath:db/migration")
+                .baselineOnMigrate(true)
+                .baselineVersion("1")
+                .target("11")
+                .load()
+                .migrate();
+
+        try (Connection c = ds.getConnection(); Statement st = c.createStatement()) {
+            st.execute("INSERT INTO incidents (incident_id, tenant, client_id, title, query, source, status,"
+                    + " created_by) VALUES ('INC-V11-1', 'tenant-1', 'cid-v11', 'V11 旧单', '排查', 'manual',"
+                    + " 'open', 't1-alice')");
+            st.execute("INSERT INTO incident_notifications (tenant, recipient, incident_id, kind, title,"
+                    + " dedupe_key) VALUES ('tenant-1', 't1-alice', 'INC-V11-1', 'assigned', 'V11 旧单', 'k-v11')");
+        }
+
+        flyway(ds).migrate();
+
+        try (Connection c = ds.getConnection(); Statement st = c.createStatement()) {
+            try (ResultSet rs = st.executeQuery(
+                    "SELECT title FROM incidents WHERE incident_id = 'INC-V11-1'")) {
+                assertTrue(rs.next(), "V12 升级不得丢已有事故行");
+                assertEquals("V11 旧单", rs.getString("title"));
+            }
+            try (ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM incident_notifications")) {
+                assertTrue(rs.next());
+                assertEquals(1, rs.getInt(1), "V12 升级不得丢已有通知");
+            }
+            try (ResultSet rs = st.executeQuery(
+                    "SELECT COUNT(*) FROM \"flyway_schema_history\" WHERE \"version\" = '12' AND \"success\"")) {
+                assertTrue(rs.next());
+                assertEquals(1, rs.getInt(1), "已有 V11 库升级后必须留下 V12 版本记录");
+            }
+        }
+        assertPushOutbox(ds);
     }
 
     /** V9 库升级到 V10：只新增通知表，既有事故/评论/台账数据必须原样保留。 */

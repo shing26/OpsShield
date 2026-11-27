@@ -145,7 +145,7 @@ class IncidentNotificationTest {
         IncidentNotification row = listFor(BOB).get(0);
         assertEquals("事故 " + inc.id(), row.title(), "通知标题不得复用 query 派生标题");
         assertFalse(row.title().contains(marker), "通知行不得包含 query marker");
-        assertFalse(IncidentWebhookDispatcher.text(row).contains(marker),
+        assertFalse(IncidentPushPayload.text(row).contains(marker),
                 "webhook 载荷不得包含 query marker");
     }
 
@@ -162,7 +162,7 @@ class IncidentNotificationTest {
 
         IncidentNotification row = listFor(BOB).get(0);
         assertEquals(title, row.title(), "非空标题必须原样透传");
-        assertFalse(IncidentWebhookDispatcher.text(row).contains(marker),
+        assertFalse(IncidentPushPayload.text(row).contains(marker),
                 "显式标题透传时 query 仍不得进入 webhook");
     }
 
