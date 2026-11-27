@@ -1,0 +1,107 @@
+{
+  "suite": "re1-ob",
+  "split": "dev",
+  "config": {
+    "k": 0.5,
+    "h": 6.0,
+    "min_metrics": 2
+  },
+  "n_cases": 75,
+  "arms": [
+    "resource",
+    "sli"
+  ],
+  "statuses": {
+    "detected": 52,
+    "false_alarm": 23,
+    "late": 0,
+    "none": 0
+  },
+  "v2_statuses": {
+    "detected": 36,
+    "false_alarm": 31,
+    "late": 1,
+    "none": 7
+  },
+  "transitions": {
+    "detected->detected": 32,
+    "detected->false_alarm": 4,
+    "false_alarm->detected": 14,
+    "false_alarm->false_alarm": 17,
+    "late->detected": 1,
+    "none->detected": 5,
+    "none->false_alarm": 2
+  },
+  "gross_new": 20,
+  "lost": 4,
+  "v2_detection_rate": 0.48,
+  "a2_detection_rate": 0.6933333333333334,
+  "a2_false_alarm_rate": 0.30666666666666664,
+  "v2_latency_median_s": 9.0,
+  "v2_latency_p90_s": 42.300000000000004,
+  "a2_latency_median_s": 12.0,
+  "a2_latency_p90_s": 34.0,
+  "per_fault": {
+    "v2": {
+      "cpu": {
+        "n": 15,
+        "detected": 3,
+        "coverage": 0.2
+      },
+      "delay": {
+        "n": 15,
+        "detected": 10,
+        "coverage": 0.6666666666666666
+      },
+      "disk": {
+        "n": 15,
+        "detected": 5,
+        "coverage": 0.3333333333333333
+      },
+      "loss": {
+        "n": 15,
+        "detected": 10,
+        "coverage": 0.6666666666666666
+      },
+      "mem": {
+        "n": 15,
+        "detected": 8,
+        "coverage": 0.5333333333333333
+      }
+    },
+    "a2": {
+      "cpu": {
+        "n": 15,
+        "detected": 13,
+        "coverage": 0.8666666666666667
+      },
+      "delay": {
+        "n": 15,
+        "detected": 11,
+        "coverage": 0.7333333333333333
+      },
+      "disk": {
+        "n": 15,
+        "detected": 4,
+        "coverage": 0.26666666666666666
+      },
+      "loss": {
+        "n": 15,
+        "detected": 9,
+        "coverage": 0.6
+      },
+      "mem": {
+        "n": 15,
+        "detected": 15,
+        "coverage": 1.0
+      }
+    }
+  },
+  "params": {
+    "baseline_s": 300,
+    "materiality_floor": 0.08,
+    "pre_s": 600,
+    "post_s": 600,
+    "horizon_s": 300
+  }
+}

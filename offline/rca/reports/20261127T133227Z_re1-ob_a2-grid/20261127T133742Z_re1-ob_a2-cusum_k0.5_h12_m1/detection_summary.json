@@ -1,0 +1,105 @@
+{
+  "suite": "re1-ob",
+  "split": "dev",
+  "config": {
+    "k": 0.5,
+    "h": 12.0,
+    "min_metrics": 1
+  },
+  "n_cases": 75,
+  "arms": [
+    "resource",
+    "sli"
+  ],
+  "statuses": {
+    "detected": 1,
+    "false_alarm": 74,
+    "late": 0,
+    "none": 0
+  },
+  "v2_statuses": {
+    "detected": 36,
+    "false_alarm": 31,
+    "late": 1,
+    "none": 7
+  },
+  "transitions": {
+    "detected->detected": 1,
+    "detected->false_alarm": 35,
+    "false_alarm->false_alarm": 31,
+    "late->false_alarm": 1,
+    "none->false_alarm": 7
+  },
+  "gross_new": 0,
+  "lost": 35,
+  "v2_detection_rate": 0.48,
+  "a2_detection_rate": 0.013333333333333334,
+  "a2_false_alarm_rate": 0.9866666666666667,
+  "v2_latency_median_s": 9.0,
+  "v2_latency_p90_s": 42.300000000000004,
+  "a2_latency_median_s": -206.0,
+  "a2_latency_p90_s": -162.0,
+  "per_fault": {
+    "v2": {
+      "cpu": {
+        "n": 15,
+        "detected": 3,
+        "coverage": 0.2
+      },
+      "delay": {
+        "n": 15,
+        "detected": 10,
+        "coverage": 0.6666666666666666
+      },
+      "disk": {
+        "n": 15,
+        "detected": 5,
+        "coverage": 0.3333333333333333
+      },
+      "loss": {
+        "n": 15,
+        "detected": 10,
+        "coverage": 0.6666666666666666
+      },
+      "mem": {
+        "n": 15,
+        "detected": 8,
+        "coverage": 0.5333333333333333
+      }
+    },
+    "a2": {
+      "cpu": {
+        "n": 15,
+        "detected": 0,
+        "coverage": 0.0
+      },
+      "delay": {
+        "n": 15,
+        "detected": 1,
+        "coverage": 0.06666666666666667
+      },
+      "disk": {
+        "n": 15,
+        "detected": 0,
+        "coverage": 0.0
+      },
+      "loss": {
+        "n": 15,
+        "detected": 0,
+        "coverage": 0.0
+      },
+      "mem": {
+        "n": 15,
+        "detected": 0,
+        "coverage": 0.0
+      }
+    }
+  },
+  "params": {
+    "baseline_s": 300,
+    "materiality_floor": 0.08,
+    "pre_s": 600,
+    "post_s": 600,
+    "horizon_s": 300
+  }
+}

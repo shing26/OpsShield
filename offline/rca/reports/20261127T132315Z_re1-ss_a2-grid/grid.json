@@ -1,0 +1,1762 @@
+{
+  "suite": "re1-ss",
+  "split": "dev",
+  "arms": [
+    "resource",
+    "sli"
+  ],
+  "n_configs": 16,
+  "configs": [
+    {
+      "k": 0.5,
+      "h": 6.0,
+      "min_metrics": 1
+    },
+    {
+      "k": 0.5,
+      "h": 6.0,
+      "min_metrics": 2
+    },
+    {
+      "k": 0.5,
+      "h": 8.0,
+      "min_metrics": 1
+    },
+    {
+      "k": 0.5,
+      "h": 8.0,
+      "min_metrics": 2
+    },
+    {
+      "k": 0.5,
+      "h": 10.0,
+      "min_metrics": 1
+    },
+    {
+      "k": 0.5,
+      "h": 10.0,
+      "min_metrics": 2
+    },
+    {
+      "k": 0.5,
+      "h": 12.0,
+      "min_metrics": 1
+    },
+    {
+      "k": 0.5,
+      "h": 12.0,
+      "min_metrics": 2
+    },
+    {
+      "k": 1.0,
+      "h": 6.0,
+      "min_metrics": 1
+    },
+    {
+      "k": 1.0,
+      "h": 6.0,
+      "min_metrics": 2
+    },
+    {
+      "k": 1.0,
+      "h": 8.0,
+      "min_metrics": 1
+    },
+    {
+      "k": 1.0,
+      "h": 8.0,
+      "min_metrics": 2
+    },
+    {
+      "k": 1.0,
+      "h": 10.0,
+      "min_metrics": 1
+    },
+    {
+      "k": 1.0,
+      "h": 10.0,
+      "min_metrics": 2
+    },
+    {
+      "k": 1.0,
+      "h": 12.0,
+      "min_metrics": 1
+    },
+    {
+      "k": 1.0,
+      "h": 12.0,
+      "min_metrics": 2
+    }
+  ],
+  "results": [
+    {
+      "suite": "re1-ss",
+      "split": "dev",
+      "config": {
+        "k": 0.5,
+        "h": 6.0,
+        "min_metrics": 1
+      },
+      "n_cases": 75,
+      "arms": [
+        "resource",
+        "sli"
+      ],
+      "statuses": {
+        "detected": 0,
+        "false_alarm": 75,
+        "late": 0,
+        "none": 0
+      },
+      "v2_statuses": {
+        "detected": 68,
+        "false_alarm": 1,
+        "late": 0,
+        "none": 6
+      },
+      "transitions": {
+        "detected->false_alarm": 68,
+        "false_alarm->false_alarm": 1,
+        "none->false_alarm": 6
+      },
+      "gross_new": 0,
+      "lost": 68,
+      "v2_detection_rate": 0.9066666666666666,
+      "a2_detection_rate": 0.0,
+      "a2_false_alarm_rate": 1.0,
+      "v2_latency_median_s": 17.0,
+      "v2_latency_p90_s": 27.80000000000001,
+      "a2_latency_median_s": -208.0,
+      "a2_latency_p90_s": -188.59999999999997,
+      "per_fault": {
+        "v2": {
+          "cpu": {
+            "n": 15,
+            "detected": 15,
+            "coverage": 1.0
+          },
+          "delay": {
+            "n": 15,
+            "detected": 15,
+            "coverage": 1.0
+          },
+          "disk": {
+            "n": 15,
+            "detected": 9,
+            "coverage": 0.6
+          },
+          "loss": {
+            "n": 15,
+            "detected": 14,
+            "coverage": 0.9333333333333333
+          },
+          "mem": {
+            "n": 15,
+            "detected": 15,
+            "coverage": 1.0
+          }
+        },
+        "a2": {
+          "cpu": {
+            "n": 15,
+            "detected": 0,
+            "coverage": 0.0
+          },
+          "delay": {
+            "n": 15,
+            "detected": 0,
+            "coverage": 0.0
+          },
+          "disk": {
+            "n": 15,
+            "detected": 0,
+            "coverage": 0.0
+          },
+          "loss": {
+            "n": 15,
+            "detected": 0,
+            "coverage": 0.0
+          },
+          "mem": {
+            "n": 15,
+            "detected": 0,
+            "coverage": 0.0
+          }
+        }
+      },
+      "params": {
+        "baseline_s": 300,
+        "materiality_floor": 0.08,
+        "pre_s": 600,
+        "post_s": 600,
+        "horizon_s": 300
+      }
+    },
+    {
+      "suite": "re1-ss",
+      "split": "dev",
+      "config": {
+        "k": 0.5,
+        "h": 6.0,
+        "min_metrics": 2
+      },
+      "n_cases": 75,
+      "arms": [
+        "resource",
+        "sli"
+      ],
+      "statuses": {
+        "detected": 51,
+        "false_alarm": 24,
+        "late": 0,
+        "none": 0
+      },
+      "v2_statuses": {
+        "detected": 68,
+        "false_alarm": 1,
+        "late": 0,
+        "none": 6
+      },
+      "transitions": {
+        "detected->detected": 48,
+        "detected->false_alarm": 20,
+        "false_alarm->false_alarm": 1,
+        "none->detected": 3,
+        "none->false_alarm": 3
+      },
+      "gross_new": 3,
+      "lost": 20,
+      "v2_detection_rate": 0.9066666666666666,
+      "a2_detection_rate": 0.68,
+      "a2_false_alarm_rate": 0.32,
+      "v2_latency_median_s": 17.0,
+      "v2_latency_p90_s": 27.80000000000001,
+      "a2_latency_median_s": 11.0,
+      "a2_latency_p90_s": 29.60000000000001,
+      "per_fault": {
+        "v2": {
+          "cpu": {
+            "n": 15,
+            "detected": 15,
+            "coverage": 1.0
+          },
+          "delay": {
+            "n": 15,
+            "detected": 15,
+            "coverage": 1.0
+          },
+          "disk": {
+            "n": 15,
+            "detected": 9,
+            "coverage": 0.6
+          },
+          "loss": {
+            "n": 15,
+            "detected": 14,
+            "coverage": 0.9333333333333333
+          },
+          "mem": {
+            "n": 15,
+            "detected": 15,
+            "coverage": 1.0
+          }
+        },
+        "a2": {
+          "cpu": {
+            "n": 15,
+            "detected": 8,
+            "coverage": 0.5333333333333333
+          },
+          "delay": {
+            "n": 15,
+            "detected": 9,
+            "coverage": 0.6
+          },
+          "disk": {
+            "n": 15,
+            "detected": 12,
+            "coverage": 0.8
+          },
+          "loss": {
+            "n": 15,
+            "detected": 11,
+            "coverage": 0.7333333333333333
+          },
+          "mem": {
+            "n": 15,
+            "detected": 11,
+            "coverage": 0.7333333333333333
+          }
+        }
+      },
+      "params": {
+        "baseline_s": 300,
+        "materiality_floor": 0.08,
+        "pre_s": 600,
+        "post_s": 600,
+        "horizon_s": 300
+      }
+    },
+    {
+      "suite": "re1-ss",
+      "split": "dev",
+      "config": {
+        "k": 0.5,
+        "h": 8.0,
+        "min_metrics": 1
+      },
+      "n_cases": 75,
+      "arms": [
+        "resource",
+        "sli"
+      ],
+      "statuses": {
+        "detected": 0,
+        "false_alarm": 75,
+        "late": 0,
+        "none": 0
+      },
+      "v2_statuses": {
+        "detected": 68,
+        "false_alarm": 1,
+        "late": 0,
+        "none": 6
+      },
+      "transitions": {
+        "detected->false_alarm": 68,
+        "false_alarm->false_alarm": 1,
+        "none->false_alarm": 6
+      },
+      "gross_new": 0,
+      "lost": 68,
+      "v2_detection_rate": 0.9066666666666666,
+      "a2_detection_rate": 0.0,
+      "a2_false_alarm_rate": 1.0,
+      "v2_latency_median_s": 17.0,
+      "v2_latency_p90_s": 27.80000000000001,
+      "a2_latency_median_s": -207.0,
+      "a2_latency_p90_s": -184.59999999999997,
+      "per_fault": {
+        "v2": {
+          "cpu": {
+            "n": 15,
+            "detected": 15,
+            "coverage": 1.0
+          },
+          "delay": {
+            "n": 15,
+            "detected": 15,
+            "coverage": 1.0
+          },
+          "disk": {
+            "n": 15,
+            "detected": 9,
+            "coverage": 0.6
+          },
+          "loss": {
+            "n": 15,
+            "detected": 14,
+            "coverage": 0.9333333333333333
+          },
+          "mem": {
+            "n": 15,
+            "detected": 15,
+            "coverage": 1.0
+          }
+        },
+        "a2": {
+          "cpu": {
+            "n": 15,
+            "detected": 0,
+            "coverage": 0.0
+          },
+          "delay": {
+            "n": 15,
+            "detected": 0,
+            "coverage": 0.0
+          },
+          "disk": {
+            "n": 15,
+            "detected": 0,
+            "coverage": 0.0
+          },
+          "loss": {
+            "n": 15,
+            "detected": 0,
+            "coverage": 0.0
+          },
+          "mem": {
+            "n": 15,
+            "detected": 0,
+            "coverage": 0.0
+          }
+        }
+      },
+      "params": {
+        "baseline_s": 300,
+        "materiality_floor": 0.08,
+        "pre_s": 600,
+        "post_s": 600,
+        "horizon_s": 300
+      }
+    },
+    {
+      "suite": "re1-ss",
+      "split": "dev",
+      "config": {
+        "k": 0.5,
+        "h": 8.0,
+        "min_metrics": 2
+      },
+      "n_cases": 75,
+      "arms": [
+        "resource",
+        "sli"
+      ],
+      "statuses": {
+        "detected": 52,
+        "false_alarm": 22,
+        "late": 0,
+        "none": 1
+      },
+      "v2_statuses": {
+        "detected": 68,
+        "false_alarm": 1,
+        "late": 0,
+        "none": 6
+      },
+      "transitions": {
+        "detected->detected": 49,
+        "detected->false_alarm": 19,
+        "false_alarm->none": 1,
+        "none->detected": 3,
+        "none->false_alarm": 3
+      },
+      "gross_new": 3,
+      "lost": 19,
+      "v2_detection_rate": 0.9066666666666666,
+      "a2_detection_rate": 0.6933333333333334,
+      "a2_false_alarm_rate": 0.29333333333333333,
+      "v2_latency_median_s": 17.0,
+      "v2_latency_p90_s": 27.80000000000001,
+      "a2_latency_median_s": 12.5,
+      "a2_latency_p90_s": 32.10000000000001,
+      "per_fault": {
+        "v2": {
+          "cpu": {
+            "n": 15,
+            "detected": 15,
+            "coverage": 1.0
+          },
+          "delay": {
+            "n": 15,
+            "detected": 15,
+            "coverage": 1.0
+          },
+          "disk": {
+            "n": 15,
+            "detected": 9,
+            "coverage": 0.6
+          },
+          "loss": {
+            "n": 15,
+            "detected": 14,
+            "coverage": 0.9333333333333333
+          },
+          "mem": {
+            "n": 15,
+            "detected": 15,
+            "coverage": 1.0
+          }
+        },
+        "a2": {
+          "cpu": {
+            "n": 15,
+            "detected": 9,
+            "coverage": 0.6
+          },
+          "delay": {
+            "n": 15,
+            "detected": 8,
+            "coverage": 0.5333333333333333
+          },
+          "disk": {
+            "n": 15,
+            "detected": 12,
+            "coverage": 0.8
+          },
+          "loss": {
+            "n": 15,
+            "detected": 11,
+            "coverage": 0.7333333333333333
+          },
+          "mem": {
+            "n": 15,
+            "detected": 12,
+            "coverage": 0.8
+          }
+        }
+      },
+      "params": {
+        "baseline_s": 300,
+        "materiality_floor": 0.08,
+        "pre_s": 600,
+        "post_s": 600,
+        "horizon_s": 300
+      }
+    },
+    {
+      "suite": "re1-ss",
+      "split": "dev",
+      "config": {
+        "k": 0.5,
+        "h": 10.0,
+        "min_metrics": 1
+      },
+      "n_cases": 75,
+      "arms": [
+        "resource",
+        "sli"
+      ],
+      "statuses": {
+        "detected": 0,
+        "false_alarm": 75,
+        "late": 0,
+        "none": 0
+      },
+      "v2_statuses": {
+        "detected": 68,
+        "false_alarm": 1,
+        "late": 0,
+        "none": 6
+      },
+      "transitions": {
+        "detected->false_alarm": 68,
+        "false_alarm->false_alarm": 1,
+        "none->false_alarm": 6
+      },
+      "gross_new": 0,
+      "lost": 68,
+      "v2_detection_rate": 0.9066666666666666,
+      "a2_detection_rate": 0.0,
+      "a2_false_alarm_rate": 1.0,
+      "v2_latency_median_s": 17.0,
+      "v2_latency_p90_s": 27.80000000000001,
+      "a2_latency_median_s": -204.0,
+      "a2_latency_p90_s": -179.19999999999993,
+      "per_fault": {
+        "v2": {
+          "cpu": {
+            "n": 15,
+            "detected": 15,
+            "coverage": 1.0
+          },
+          "delay": {
+            "n": 15,
+            "detected": 15,
+            "coverage": 1.0
+          },
+          "disk": {
+            "n": 15,
+            "detected": 9,
+            "coverage": 0.6
+          },
+          "loss": {
+            "n": 15,
+            "detected": 14,
+            "coverage": 0.9333333333333333
+          },
+          "mem": {
+            "n": 15,
+            "detected": 15,
+            "coverage": 1.0
+          }
+        },
+        "a2": {
+          "cpu": {
+            "n": 15,
+            "detected": 0,
+            "coverage": 0.0
+          },
+          "delay": {
+            "n": 15,
+            "detected": 0,
+            "coverage": 0.0
+          },
+          "disk": {
+            "n": 15,
+            "detected": 0,
+            "coverage": 0.0
+          },
+          "loss": {
+            "n": 15,
+            "detected": 0,
+            "coverage": 0.0
+          },
+          "mem": {
+            "n": 15,
+            "detected": 0,
+            "coverage": 0.0
+          }
+        }
+      },
+      "params": {
+        "baseline_s": 300,
+        "materiality_floor": 0.08,
+        "pre_s": 600,
+        "post_s": 600,
+        "horizon_s": 300
+      }
+    },
+    {
+      "suite": "re1-ss",
+      "split": "dev",
+      "config": {
+        "k": 0.5,
+        "h": 10.0,
+        "min_metrics": 2
+      },
+      "n_cases": 75,
+      "arms": [
+        "resource",
+        "sli"
+      ],
+      "statuses": {
+        "detected": 57,
+        "false_alarm": 18,
+        "late": 0,
+        "none": 0
+      },
+      "v2_statuses": {
+        "detected": 68,
+        "false_alarm": 1,
+        "late": 0,
+        "none": 6
+      },
+      "transitions": {
+        "detected->detected": 53,
+        "detected->false_alarm": 15,
+        "false_alarm->detected": 1,
+        "none->detected": 3,
+        "none->false_alarm": 3
+      },
+      "gross_new": 4,
+      "lost": 15,
+      "v2_detection_rate": 0.9066666666666666,
+      "a2_detection_rate": 0.76,
+      "a2_false_alarm_rate": 0.24,
+      "v2_latency_median_s": 17.0,
+      "v2_latency_p90_s": 27.80000000000001,
+      "a2_latency_median_s": 16.0,
+      "a2_latency_p90_s": 35.0,
+      "per_fault": {
+        "v2": {
+          "cpu": {
+            "n": 15,
+            "detected": 15,
+            "coverage": 1.0
+          },
+          "delay": {
+            "n": 15,
+            "detected": 15,
+            "coverage": 1.0
+          },
+          "disk": {
+            "n": 15,
+            "detected": 9,
+            "coverage": 0.6
+          },
+          "loss": {
+            "n": 15,
+            "detected": 14,
+            "coverage": 0.9333333333333333
+          },
+          "mem": {
+            "n": 15,
+            "detected": 15,
+            "coverage": 1.0
+          }
+        },
+        "a2": {
+          "cpu": {
+            "n": 15,
+            "detected": 8,
+            "coverage": 0.5333333333333333
+          },
+          "delay": {
+            "n": 15,
+            "detected": 13,
+            "coverage": 0.8666666666666667
+          },
+          "disk": {
+            "n": 15,
+            "detected": 11,
+            "coverage": 0.7333333333333333
+          },
+          "loss": {
+            "n": 15,
+            "detected": 12,
+            "coverage": 0.8
+          },
+          "mem": {
+            "n": 15,
+            "detected": 13,
+            "coverage": 0.8666666666666667
+          }
+        }
+      },
+      "params": {
+        "baseline_s": 300,
+        "materiality_floor": 0.08,
+        "pre_s": 600,
+        "post_s": 600,
+        "horizon_s": 300
+      }
+    },
+    {
+      "suite": "re1-ss",
+      "split": "dev",
+      "config": {
+        "k": 0.5,
+        "h": 12.0,
+        "min_metrics": 1
+      },
+      "n_cases": 75,
+      "arms": [
+        "resource",
+        "sli"
+      ],
+      "statuses": {
+        "detected": 0,
+        "false_alarm": 75,
+        "late": 0,
+        "none": 0
+      },
+      "v2_statuses": {
+        "detected": 68,
+        "false_alarm": 1,
+        "late": 0,
+        "none": 6
+      },
+      "transitions": {
+        "detected->false_alarm": 68,
+        "false_alarm->false_alarm": 1,
+        "none->false_alarm": 6
+      },
+      "gross_new": 0,
+      "lost": 68,
+      "v2_detection_rate": 0.9066666666666666,
+      "a2_detection_rate": 0.0,
+      "a2_false_alarm_rate": 1.0,
+      "v2_latency_median_s": 17.0,
+      "v2_latency_p90_s": 27.80000000000001,
+      "a2_latency_median_s": -203.0,
+      "a2_latency_p90_s": -176.99999999999994,
+      "per_fault": {
+        "v2": {
+          "cpu": {
+            "n": 15,
+            "detected": 15,
+            "coverage": 1.0
+          },
+          "delay": {
+            "n": 15,
+            "detected": 15,
+            "coverage": 1.0
+          },
+          "disk": {
+            "n": 15,
+            "detected": 9,
+            "coverage": 0.6
+          },
+          "loss": {
+            "n": 15,
+            "detected": 14,
+            "coverage": 0.9333333333333333
+          },
+          "mem": {
+            "n": 15,
+            "detected": 15,
+            "coverage": 1.0
+          }
+        },
+        "a2": {
+          "cpu": {
+            "n": 15,
+            "detected": 0,
+            "coverage": 0.0
+          },
+          "delay": {
+            "n": 15,
+            "detected": 0,
+            "coverage": 0.0
+          },
+          "disk": {
+            "n": 15,
+            "detected": 0,
+            "coverage": 0.0
+          },
+          "loss": {
+            "n": 15,
+            "detected": 0,
+            "coverage": 0.0
+          },
+          "mem": {
+            "n": 15,
+            "detected": 0,
+            "coverage": 0.0
+          }
+        }
+      },
+      "params": {
+        "baseline_s": 300,
+        "materiality_floor": 0.08,
+        "pre_s": 600,
+        "post_s": 600,
+        "horizon_s": 300
+      }
+    },
+    {
+      "suite": "re1-ss",
+      "split": "dev",
+      "config": {
+        "k": 0.5,
+        "h": 12.0,
+        "min_metrics": 2
+      },
+      "n_cases": 75,
+      "arms": [
+        "resource",
+        "sli"
+      ],
+      "statuses": {
+        "detected": 59,
+        "false_alarm": 15,
+        "late": 0,
+        "none": 1
+      },
+      "v2_statuses": {
+        "detected": 68,
+        "false_alarm": 1,
+        "late": 0,
+        "none": 6
+      },
+      "transitions": {
+        "detected->detected": 56,
+        "detected->false_alarm": 11,
+        "detected->none": 1,
+        "false_alarm->false_alarm": 1,
+        "none->detected": 3,
+        "none->false_alarm": 3
+      },
+      "gross_new": 3,
+      "lost": 12,
+      "v2_detection_rate": 0.9066666666666666,
+      "a2_detection_rate": 0.7866666666666666,
+      "a2_false_alarm_rate": 0.2,
+      "v2_latency_median_s": 17.0,
+      "v2_latency_p90_s": 27.80000000000001,
+      "a2_latency_median_s": 19.0,
+      "a2_latency_p90_s": 37.400000000000006,
+      "per_fault": {
+        "v2": {
+          "cpu": {
+            "n": 15,
+            "detected": 15,
+            "coverage": 1.0
+          },
+          "delay": {
+            "n": 15,
+            "detected": 15,
+            "coverage": 1.0
+          },
+          "disk": {
+            "n": 15,
+            "detected": 9,
+            "coverage": 0.6
+          },
+          "loss": {
+            "n": 15,
+            "detected": 14,
+            "coverage": 0.9333333333333333
+          },
+          "mem": {
+            "n": 15,
+            "detected": 15,
+            "coverage": 1.0
+          }
+        },
+        "a2": {
+          "cpu": {
+            "n": 15,
+            "detected": 12,
+            "coverage": 0.8
+          },
+          "delay": {
+            "n": 15,
+            "detected": 12,
+            "coverage": 0.8
+          },
+          "disk": {
+            "n": 15,
+            "detected": 12,
+            "coverage": 0.8
+          },
+          "loss": {
+            "n": 15,
+            "detected": 11,
+            "coverage": 0.7333333333333333
+          },
+          "mem": {
+            "n": 15,
+            "detected": 12,
+            "coverage": 0.8
+          }
+        }
+      },
+      "params": {
+        "baseline_s": 300,
+        "materiality_floor": 0.08,
+        "pre_s": 600,
+        "post_s": 600,
+        "horizon_s": 300
+      }
+    },
+    {
+      "suite": "re1-ss",
+      "split": "dev",
+      "config": {
+        "k": 1.0,
+        "h": 6.0,
+        "min_metrics": 1
+      },
+      "n_cases": 75,
+      "arms": [
+        "resource",
+        "sli"
+      ],
+      "statuses": {
+        "detected": 0,
+        "false_alarm": 75,
+        "late": 0,
+        "none": 0
+      },
+      "v2_statuses": {
+        "detected": 68,
+        "false_alarm": 1,
+        "late": 0,
+        "none": 6
+      },
+      "transitions": {
+        "detected->false_alarm": 68,
+        "false_alarm->false_alarm": 1,
+        "none->false_alarm": 6
+      },
+      "gross_new": 0,
+      "lost": 68,
+      "v2_detection_rate": 0.9066666666666666,
+      "a2_detection_rate": 0.0,
+      "a2_false_alarm_rate": 1.0,
+      "v2_latency_median_s": 17.0,
+      "v2_latency_p90_s": 27.80000000000001,
+      "a2_latency_median_s": -206.0,
+      "a2_latency_p90_s": -172.39999999999998,
+      "per_fault": {
+        "v2": {
+          "cpu": {
+            "n": 15,
+            "detected": 15,
+            "coverage": 1.0
+          },
+          "delay": {
+            "n": 15,
+            "detected": 15,
+            "coverage": 1.0
+          },
+          "disk": {
+            "n": 15,
+            "detected": 9,
+            "coverage": 0.6
+          },
+          "loss": {
+            "n": 15,
+            "detected": 14,
+            "coverage": 0.9333333333333333
+          },
+          "mem": {
+            "n": 15,
+            "detected": 15,
+            "coverage": 1.0
+          }
+        },
+        "a2": {
+          "cpu": {
+            "n": 15,
+            "detected": 0,
+            "coverage": 0.0
+          },
+          "delay": {
+            "n": 15,
+            "detected": 0,
+            "coverage": 0.0
+          },
+          "disk": {
+            "n": 15,
+            "detected": 0,
+            "coverage": 0.0
+          },
+          "loss": {
+            "n": 15,
+            "detected": 0,
+            "coverage": 0.0
+          },
+          "mem": {
+            "n": 15,
+            "detected": 0,
+            "coverage": 0.0
+          }
+        }
+      },
+      "params": {
+        "baseline_s": 300,
+        "materiality_floor": 0.08,
+        "pre_s": 600,
+        "post_s": 600,
+        "horizon_s": 300
+      }
+    },
+    {
+      "suite": "re1-ss",
+      "split": "dev",
+      "config": {
+        "k": 1.0,
+        "h": 6.0,
+        "min_metrics": 2
+      },
+      "n_cases": 75,
+      "arms": [
+        "resource",
+        "sli"
+      ],
+      "statuses": {
+        "detected": 59,
+        "false_alarm": 14,
+        "late": 0,
+        "none": 2
+      },
+      "v2_statuses": {
+        "detected": 68,
+        "false_alarm": 1,
+        "late": 0,
+        "none": 6
+      },
+      "transitions": {
+        "detected->detected": 54,
+        "detected->false_alarm": 13,
+        "detected->none": 1,
+        "false_alarm->none": 1,
+        "none->detected": 5,
+        "none->false_alarm": 1
+      },
+      "gross_new": 5,
+      "lost": 14,
+      "v2_detection_rate": 0.9066666666666666,
+      "a2_detection_rate": 0.7866666666666666,
+      "a2_false_alarm_rate": 0.18666666666666668,
+      "v2_latency_median_s": 17.0,
+      "v2_latency_p90_s": 27.80000000000001,
+      "a2_latency_median_s": 16.0,
+      "a2_latency_p90_s": 34.0,
+      "per_fault": {
+        "v2": {
+          "cpu": {
+            "n": 15,
+            "detected": 15,
+            "coverage": 1.0
+          },
+          "delay": {
+            "n": 15,
+            "detected": 15,
+            "coverage": 1.0
+          },
+          "disk": {
+            "n": 15,
+            "detected": 9,
+            "coverage": 0.6
+          },
+          "loss": {
+            "n": 15,
+            "detected": 14,
+            "coverage": 0.9333333333333333
+          },
+          "mem": {
+            "n": 15,
+            "detected": 15,
+            "coverage": 1.0
+          }
+        },
+        "a2": {
+          "cpu": {
+            "n": 15,
+            "detected": 11,
+            "coverage": 0.7333333333333333
+          },
+          "delay": {
+            "n": 15,
+            "detected": 11,
+            "coverage": 0.7333333333333333
+          },
+          "disk": {
+            "n": 15,
+            "detected": 14,
+            "coverage": 0.9333333333333333
+          },
+          "loss": {
+            "n": 15,
+            "detected": 10,
+            "coverage": 0.6666666666666666
+          },
+          "mem": {
+            "n": 15,
+            "detected": 13,
+            "coverage": 0.8666666666666667
+          }
+        }
+      },
+      "params": {
+        "baseline_s": 300,
+        "materiality_floor": 0.08,
+        "pre_s": 600,
+        "post_s": 600,
+        "horizon_s": 300
+      }
+    },
+    {
+      "suite": "re1-ss",
+      "split": "dev",
+      "config": {
+        "k": 1.0,
+        "h": 8.0,
+        "min_metrics": 1
+      },
+      "n_cases": 75,
+      "arms": [
+        "resource",
+        "sli"
+      ],
+      "statuses": {
+        "detected": 0,
+        "false_alarm": 75,
+        "late": 0,
+        "none": 0
+      },
+      "v2_statuses": {
+        "detected": 68,
+        "false_alarm": 1,
+        "late": 0,
+        "none": 6
+      },
+      "transitions": {
+        "detected->false_alarm": 68,
+        "false_alarm->false_alarm": 1,
+        "none->false_alarm": 6
+      },
+      "gross_new": 0,
+      "lost": 68,
+      "v2_detection_rate": 0.9066666666666666,
+      "a2_detection_rate": 0.0,
+      "a2_false_alarm_rate": 1.0,
+      "v2_latency_median_s": 17.0,
+      "v2_latency_p90_s": 27.80000000000001,
+      "a2_latency_median_s": -203.0,
+      "a2_latency_p90_s": -168.2,
+      "per_fault": {
+        "v2": {
+          "cpu": {
+            "n": 15,
+            "detected": 15,
+            "coverage": 1.0
+          },
+          "delay": {
+            "n": 15,
+            "detected": 15,
+            "coverage": 1.0
+          },
+          "disk": {
+            "n": 15,
+            "detected": 9,
+            "coverage": 0.6
+          },
+          "loss": {
+            "n": 15,
+            "detected": 14,
+            "coverage": 0.9333333333333333
+          },
+          "mem": {
+            "n": 15,
+            "detected": 15,
+            "coverage": 1.0
+          }
+        },
+        "a2": {
+          "cpu": {
+            "n": 15,
+            "detected": 0,
+            "coverage": 0.0
+          },
+          "delay": {
+            "n": 15,
+            "detected": 0,
+            "coverage": 0.0
+          },
+          "disk": {
+            "n": 15,
+            "detected": 0,
+            "coverage": 0.0
+          },
+          "loss": {
+            "n": 15,
+            "detected": 0,
+            "coverage": 0.0
+          },
+          "mem": {
+            "n": 15,
+            "detected": 0,
+            "coverage": 0.0
+          }
+        }
+      },
+      "params": {
+        "baseline_s": 300,
+        "materiality_floor": 0.08,
+        "pre_s": 600,
+        "post_s": 600,
+        "horizon_s": 300
+      }
+    },
+    {
+      "suite": "re1-ss",
+      "split": "dev",
+      "config": {
+        "k": 1.0,
+        "h": 8.0,
+        "min_metrics": 2
+      },
+      "n_cases": 75,
+      "arms": [
+        "resource",
+        "sli"
+      ],
+      "statuses": {
+        "detected": 64,
+        "false_alarm": 7,
+        "late": 0,
+        "none": 4
+      },
+      "v2_statuses": {
+        "detected": 68,
+        "false_alarm": 1,
+        "late": 0,
+        "none": 6
+      },
+      "transitions": {
+        "detected->detected": 59,
+        "detected->false_alarm": 7,
+        "detected->none": 2,
+        "false_alarm->none": 1,
+        "none->detected": 5,
+        "none->none": 1
+      },
+      "gross_new": 5,
+      "lost": 9,
+      "v2_detection_rate": 0.9066666666666666,
+      "a2_detection_rate": 0.8533333333333334,
+      "a2_false_alarm_rate": 0.09333333333333334,
+      "v2_latency_median_s": 17.0,
+      "v2_latency_p90_s": 27.80000000000001,
+      "a2_latency_median_s": 21.0,
+      "a2_latency_p90_s": 41.0,
+      "per_fault": {
+        "v2": {
+          "cpu": {
+            "n": 15,
+            "detected": 15,
+            "coverage": 1.0
+          },
+          "delay": {
+            "n": 15,
+            "detected": 15,
+            "coverage": 1.0
+          },
+          "disk": {
+            "n": 15,
+            "detected": 9,
+            "coverage": 0.6
+          },
+          "loss": {
+            "n": 15,
+            "detected": 14,
+            "coverage": 0.9333333333333333
+          },
+          "mem": {
+            "n": 15,
+            "detected": 15,
+            "coverage": 1.0
+          }
+        },
+        "a2": {
+          "cpu": {
+            "n": 15,
+            "detected": 13,
+            "coverage": 0.8666666666666667
+          },
+          "delay": {
+            "n": 15,
+            "detected": 12,
+            "coverage": 0.8
+          },
+          "disk": {
+            "n": 15,
+            "detected": 14,
+            "coverage": 0.9333333333333333
+          },
+          "loss": {
+            "n": 15,
+            "detected": 11,
+            "coverage": 0.7333333333333333
+          },
+          "mem": {
+            "n": 15,
+            "detected": 14,
+            "coverage": 0.9333333333333333
+          }
+        }
+      },
+      "params": {
+        "baseline_s": 300,
+        "materiality_floor": 0.08,
+        "pre_s": 600,
+        "post_s": 600,
+        "horizon_s": 300
+      }
+    },
+    {
+      "suite": "re1-ss",
+      "split": "dev",
+      "config": {
+        "k": 1.0,
+        "h": 10.0,
+        "min_metrics": 1
+      },
+      "n_cases": 75,
+      "arms": [
+        "resource",
+        "sli"
+      ],
+      "statuses": {
+        "detected": 0,
+        "false_alarm": 75,
+        "late": 0,
+        "none": 0
+      },
+      "v2_statuses": {
+        "detected": 68,
+        "false_alarm": 1,
+        "late": 0,
+        "none": 6
+      },
+      "transitions": {
+        "detected->false_alarm": 68,
+        "false_alarm->false_alarm": 1,
+        "none->false_alarm": 6
+      },
+      "gross_new": 0,
+      "lost": 68,
+      "v2_detection_rate": 0.9066666666666666,
+      "a2_detection_rate": 0.0,
+      "a2_false_alarm_rate": 1.0,
+      "v2_latency_median_s": 17.0,
+      "v2_latency_p90_s": 27.80000000000001,
+      "a2_latency_median_s": -200.0,
+      "a2_latency_p90_s": -164.39999999999998,
+      "per_fault": {
+        "v2": {
+          "cpu": {
+            "n": 15,
+            "detected": 15,
+            "coverage": 1.0
+          },
+          "delay": {
+            "n": 15,
+            "detected": 15,
+            "coverage": 1.0
+          },
+          "disk": {
+            "n": 15,
+            "detected": 9,
+            "coverage": 0.6
+          },
+          "loss": {
+            "n": 15,
+            "detected": 14,
+            "coverage": 0.9333333333333333
+          },
+          "mem": {
+            "n": 15,
+            "detected": 15,
+            "coverage": 1.0
+          }
+        },
+        "a2": {
+          "cpu": {
+            "n": 15,
+            "detected": 0,
+            "coverage": 0.0
+          },
+          "delay": {
+            "n": 15,
+            "detected": 0,
+            "coverage": 0.0
+          },
+          "disk": {
+            "n": 15,
+            "detected": 0,
+            "coverage": 0.0
+          },
+          "loss": {
+            "n": 15,
+            "detected": 0,
+            "coverage": 0.0
+          },
+          "mem": {
+            "n": 15,
+            "detected": 0,
+            "coverage": 0.0
+          }
+        }
+      },
+      "params": {
+        "baseline_s": 300,
+        "materiality_floor": 0.08,
+        "pre_s": 600,
+        "post_s": 600,
+        "horizon_s": 300
+      }
+    },
+    {
+      "suite": "re1-ss",
+      "split": "dev",
+      "config": {
+        "k": 1.0,
+        "h": 10.0,
+        "min_metrics": 2
+      },
+      "n_cases": 75,
+      "arms": [
+        "resource",
+        "sli"
+      ],
+      "statuses": {
+        "detected": 64,
+        "false_alarm": 9,
+        "late": 0,
+        "none": 2
+      },
+      "v2_statuses": {
+        "detected": 68,
+        "false_alarm": 1,
+        "late": 0,
+        "none": 6
+      },
+      "transitions": {
+        "detected->detected": 59,
+        "detected->false_alarm": 8,
+        "detected->none": 1,
+        "false_alarm->none": 1,
+        "none->detected": 5,
+        "none->false_alarm": 1
+      },
+      "gross_new": 5,
+      "lost": 9,
+      "v2_detection_rate": 0.9066666666666666,
+      "a2_detection_rate": 0.8533333333333334,
+      "a2_false_alarm_rate": 0.12,
+      "v2_latency_median_s": 17.0,
+      "v2_latency_p90_s": 27.80000000000001,
+      "a2_latency_median_s": 20.0,
+      "a2_latency_p90_s": 49.59999999999998,
+      "per_fault": {
+        "v2": {
+          "cpu": {
+            "n": 15,
+            "detected": 15,
+            "coverage": 1.0
+          },
+          "delay": {
+            "n": 15,
+            "detected": 15,
+            "coverage": 1.0
+          },
+          "disk": {
+            "n": 15,
+            "detected": 9,
+            "coverage": 0.6
+          },
+          "loss": {
+            "n": 15,
+            "detected": 14,
+            "coverage": 0.9333333333333333
+          },
+          "mem": {
+            "n": 15,
+            "detected": 15,
+            "coverage": 1.0
+          }
+        },
+        "a2": {
+          "cpu": {
+            "n": 15,
+            "detected": 14,
+            "coverage": 0.9333333333333333
+          },
+          "delay": {
+            "n": 15,
+            "detected": 11,
+            "coverage": 0.7333333333333333
+          },
+          "disk": {
+            "n": 15,
+            "detected": 14,
+            "coverage": 0.9333333333333333
+          },
+          "loss": {
+            "n": 15,
+            "detected": 11,
+            "coverage": 0.7333333333333333
+          },
+          "mem": {
+            "n": 15,
+            "detected": 14,
+            "coverage": 0.9333333333333333
+          }
+        }
+      },
+      "params": {
+        "baseline_s": 300,
+        "materiality_floor": 0.08,
+        "pre_s": 600,
+        "post_s": 600,
+        "horizon_s": 300
+      }
+    },
+    {
+      "suite": "re1-ss",
+      "split": "dev",
+      "config": {
+        "k": 1.0,
+        "h": 12.0,
+        "min_metrics": 1
+      },
+      "n_cases": 75,
+      "arms": [
+        "resource",
+        "sli"
+      ],
+      "statuses": {
+        "detected": 0,
+        "false_alarm": 75,
+        "late": 0,
+        "none": 0
+      },
+      "v2_statuses": {
+        "detected": 68,
+        "false_alarm": 1,
+        "late": 0,
+        "none": 6
+      },
+      "transitions": {
+        "detected->false_alarm": 68,
+        "false_alarm->false_alarm": 1,
+        "none->false_alarm": 6
+      },
+      "gross_new": 0,
+      "lost": 68,
+      "v2_detection_rate": 0.9066666666666666,
+      "a2_detection_rate": 0.0,
+      "a2_false_alarm_rate": 1.0,
+      "v2_latency_median_s": 17.0,
+      "v2_latency_p90_s": 27.80000000000001,
+      "a2_latency_median_s": -198.0,
+      "a2_latency_p90_s": -162.39999999999998,
+      "per_fault": {
+        "v2": {
+          "cpu": {
+            "n": 15,
+            "detected": 15,
+            "coverage": 1.0
+          },
+          "delay": {
+            "n": 15,
+            "detected": 15,
+            "coverage": 1.0
+          },
+          "disk": {
+            "n": 15,
+            "detected": 9,
+            "coverage": 0.6
+          },
+          "loss": {
+            "n": 15,
+            "detected": 14,
+            "coverage": 0.9333333333333333
+          },
+          "mem": {
+            "n": 15,
+            "detected": 15,
+            "coverage": 1.0
+          }
+        },
+        "a2": {
+          "cpu": {
+            "n": 15,
+            "detected": 0,
+            "coverage": 0.0
+          },
+          "delay": {
+            "n": 15,
+            "detected": 0,
+            "coverage": 0.0
+          },
+          "disk": {
+            "n": 15,
+            "detected": 0,
+            "coverage": 0.0
+          },
+          "loss": {
+            "n": 15,
+            "detected": 0,
+            "coverage": 0.0
+          },
+          "mem": {
+            "n": 15,
+            "detected": 0,
+            "coverage": 0.0
+          }
+        }
+      },
+      "params": {
+        "baseline_s": 300,
+        "materiality_floor": 0.08,
+        "pre_s": 600,
+        "post_s": 600,
+        "horizon_s": 300
+      }
+    },
+    {
+      "suite": "re1-ss",
+      "split": "dev",
+      "config": {
+        "k": 1.0,
+        "h": 12.0,
+        "min_metrics": 2
+      },
+      "n_cases": 75,
+      "arms": [
+        "resource",
+        "sli"
+      ],
+      "statuses": {
+        "detected": 67,
+        "false_alarm": 4,
+        "late": 0,
+        "none": 4
+      },
+      "v2_statuses": {
+        "detected": 68,
+        "false_alarm": 1,
+        "late": 0,
+        "none": 6
+      },
+      "transitions": {
+        "detected->detected": 62,
+        "detected->false_alarm": 4,
+        "detected->none": 2,
+        "false_alarm->none": 1,
+        "none->detected": 5,
+        "none->none": 1
+      },
+      "gross_new": 5,
+      "lost": 6,
+      "v2_detection_rate": 0.9066666666666666,
+      "a2_detection_rate": 0.8933333333333333,
+      "a2_false_alarm_rate": 0.05333333333333334,
+      "v2_latency_median_s": 17.0,
+      "v2_latency_p90_s": 27.80000000000001,
+      "a2_latency_median_s": 21.0,
+      "a2_latency_p90_s": 49.0,
+      "per_fault": {
+        "v2": {
+          "cpu": {
+            "n": 15,
+            "detected": 15,
+            "coverage": 1.0
+          },
+          "delay": {
+            "n": 15,
+            "detected": 15,
+            "coverage": 1.0
+          },
+          "disk": {
+            "n": 15,
+            "detected": 9,
+            "coverage": 0.6
+          },
+          "loss": {
+            "n": 15,
+            "detected": 14,
+            "coverage": 0.9333333333333333
+          },
+          "mem": {
+            "n": 15,
+            "detected": 15,
+            "coverage": 1.0
+          }
+        },
+        "a2": {
+          "cpu": {
+            "n": 15,
+            "detected": 15,
+            "coverage": 1.0
+          },
+          "delay": {
+            "n": 15,
+            "detected": 13,
+            "coverage": 0.8666666666666667
+          },
+          "disk": {
+            "n": 15,
+            "detected": 14,
+            "coverage": 0.9333333333333333
+          },
+          "loss": {
+            "n": 15,
+            "detected": 10,
+            "coverage": 0.6666666666666666
+          },
+          "mem": {
+            "n": 15,
+            "detected": 15,
+            "coverage": 1.0
+          }
+        }
+      },
+      "params": {
+        "baseline_s": 300,
+        "materiality_floor": 0.08,
+        "pre_s": 600,
+        "post_s": 600,
+        "horizon_s": 300
+      }
+    }
+  ]
+}
