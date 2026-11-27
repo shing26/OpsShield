@@ -1,6 +1,7 @@
-# 0047. RCA A2：独立 CUSUM 能新增检出，但覆盖/误报仍不达标
+# 0049. RCA A2：独立 CUSUM 能新增检出，但覆盖/误报仍不达标
 
-- 状态：Proposed（待 Lead 签收）
+- 状态：已采纳（2026-11-27，Lead 签收 A2 FAIL；Verifier 复核 HEAD `1bd89b8`；
+  合并时因 ADR-0047/0048 已被占用，顺延为 0049）
 - 日期：2026-11-27
 - 契约：`plans/rca-detection-a2-accept.md`（FROZEN）
 - 证据：`offline/rca/reports/A2-report.md`
@@ -66,6 +67,9 @@ CUSUM 在 v2 的 robust-z 序列上自己产生报警，v2 只作逐 case 对照
   SS/OB 两套 dev 没有共同合规配置。
 - 记录：AC-7 的 3σ 检测参照在本仓库不存在（3σ 只有定位排序器），
   该子句不可计算；报告的 AC-7 按 v2 参照判定，已显式披露。
+- 编号：合并 `main` 时 ADR-0047（告警历史键集分页）与 ADR-0048
+  （Boot 4.2 / ES 9 spike）已被占用，A2 ADR 顺延为 0049；
+  `docs/adr/` 计数同步为 49。只改编号，不改任何 AC 或 FAIL 判定。
 - 后续：若继续路线 A，必须另立契约，先证明新机制能同时改善
   “新增检出”与“误报/覆盖”的兑换率；不能在 A2 网格上继续挑参数，
   也不能提前碰 TT/rep 4–5。

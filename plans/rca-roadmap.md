@@ -83,7 +83,8 @@ B0 已完成并判 FAIL（见上）。下一步是路线 A 的 A1 契约：新�
 > （k=1,h=8,m=2）；联合最优 `min(SS,OB)=0.760`。CUSUM 确实能新增检出
 > （SS +5、OB +24），但 OB 的 +24 里 19 个只是把 v2 注入前误报后移成检出，
 > SS 新增 5 个同时丢掉 6 个；`m=1` 全部在注入前报警。详见
-> `offline/rca/reports/A2-report.md` 与 ADR-0047。A3 一次性 holdout 不启动。
+> `offline/rca/reports/A2-report.md` 与 ADR-0049；Lead 已签收 A2 FAIL
+> （2026-11-27）。A3 一次性 holdout 不启动。
 
 下一步：A2 已失败，不能用 TT/rep 4–5 抢救，也不在 A2 网格上继续挑
 `k/h/m`。若继续路线 A，必须另立契约，先证明新机制能同时改善

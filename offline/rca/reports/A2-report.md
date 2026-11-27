@@ -220,7 +220,7 @@ offline/rca/.venv/Scripts/python.exe offline/rca/detect_cusum.py --suite re1-ob 
 - 网格运行发生在 HEAD `16da56d`（A2-1 实现提交之后）。
 - 该 HEAD 上 `git status --short`：两个 A2 运行目录未跟踪（预期产物），
   无代码改动。
-- 本报告、ADR-0047、路线图/仓库地图/README 的计数更新属于后续文档提交；
+- 本报告、ADR-0049、路线图/仓库地图/README 的计数更新属于后续文档提交；
   不改变网格数字。
 - v1–v3/B0/A1 的已签收报告、运行目录与断言未修改。
 
@@ -252,8 +252,8 @@ offline/rca/.venv/Scripts/python.exe offline/rca/detect_cusum.py --suite re1-ob 
 - Verifier 首轮指出报告两处口径（P90 下限、AC-6 混用两套配置），已在
   `57ddb94` 修正；增量复核确认 `2b70912..57ddb94` 只改本报告，
   AC-1..AC-10 证据链不变，AC-11 覆盖 `57ddb94`。
-- 最终判定：**A2 FAIL**，与报告 §6 和 ADR-0047 一致。
-- 合并前提醒：`main` 已新增 `docs/adr/0047-alert-history-cursor.md`；
-  本分支的 ADR-0047 在合并时须顺延（预期 0048），并同步
-  `docs/repo-map.md` 与 README 的 ADR 计数、契约 §13 的执行记录。
-  这是文档编号冲突，不影响 A2 的任何 AC 或 FAIL 判定。
+- 最终判定：**A2 FAIL**，与报告 §6 和 ADR-0049 一致。
+- 合并记录：`main` 已占用 ADR-0047（告警历史分页）与 ADR-0048
+  （Boot 4.2 / ES 9），A2 ADR 在合并时顺延为 **0049**；
+  `docs/adr/` 计数同步为 49，契约 §13.6 记录该调整。
+  只改编号，不影响 A2 的任何 AC 或 FAIL 判定。

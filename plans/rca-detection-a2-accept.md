@@ -120,7 +120,8 @@ v2 状态由冻结的 `detect.py --arms both` 在同一 75 个 case 上复现。
 - `offline/rca/reports/A2-report.md` 与新的 A2 运行目录
 - `plans/rca-detection-a2-accept.md`（本文件）
 - `plans/rca-roadmap.md`（仅回填 A2 结论）
-- `docs/adr/0047-*.md`（新增，Proposed；若冻结前编号被占用则顺延并在 §13 记录）
+- `docs/adr/0049-*.md`（新增，已签收；2026-11-27 合并时由 0047 顺延，
+  见 §13.6）
 - `docs/repo-map.md`（仅 `docs/adr/` 计数行与 `offline/rca/` 行）
 - `README.md`（**仅** ADR 计数两处）
 
@@ -208,7 +209,7 @@ git status --short
 | --- | --- | --- |
 | A2-0 | 本契约冻结 | 已完成（2026-11-27，Lead 书面冻结） |
 | A2-1 | `detect_cusum.py` + 单测 + v2 复现护栏 | AC-1、v2 复现一致 |
-| A2-2 | 16 配置 × 2 套 dev 网格 + `A2-report.md` + ADR-0047 | AC-2..AC-8 |
+| A2-2 | 16 配置 × 2 套 dev 网格 + `A2-report.md` + ADR-0049 | AC-2..AC-8 |
 | A2-3 | 独立 Verifier | AC-9..AC-11；按 §8 判 A2 去留 |
 
 ## 12. Lead 裁决记录（2026-11-27，冻结时）
@@ -234,8 +235,15 @@ git status --short
 3. **A2 与原路线图 A2 的关系**：原路线图的“A2 分故障非回归”并入本契约 AC-7；
    本契约对应路线图的 A2'（换机制）。
 4. **ADR 编号**：草案预留 `ADR-0047`；若冻结前 `main` 已占用，按最新编号顺延，
-   并在冻结记录中披露，不改变任何 AC 或判定。
+   并在冻结记录中披露，不改变任何 AC 或判定。最终因 `main` 已占用
+   `ADR-0047` 与 `ADR-0048`，顺延为 `ADR-0049`，见 §13.6。
 5. **A2-1 执行记录（2026-11-27）**：新增 `detect_cusum.py` 与
    `test_detect_cusum.py`；全量 `pytest offline/rca/tests -q` 为 81 passed。
    v2 复现护栏独立重跑：SS 0.907 / 误报 1，OB 0.480 / 误报 31。
-   A2 的 dev 16 配置网格尚未运行（留到 A2-2）。
+   A2 的 dev 16 配置网格尚未运行（留到 A2-2，结果见 §13.6）。
+6. **A2-2/A2-3 与合并记录（2026-11-27）**：16 配置 × 2 套 dev 网格完成；
+   合规集 0/16，A2 FAIL；独立 Verifier 复核 HEAD `1bd89b8`（81 passed；
+   v2 0.907/0.480；逐 case 重算一致）。Lead 书面签收 A2 FAIL。合并 `main`
+   时发现 `ADR-0047`（告警历史分页）与 `ADR-0048`（Boot 4.2 / ES 9）已被
+   占用，A2 ADR 顺延为 `ADR-0049`，`docs/adr/` 计数同步为 49；§5/§11 的
+   编号同步为 0049。该调整只解决编号冲突，不改变 AC-1..AC-11 或 A2 FAIL。
