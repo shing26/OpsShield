@@ -4,6 +4,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -85,6 +86,30 @@ public class AlertIntakeStore {
         return jdbc.query("SELECT * FROM alert_intake WHERE last_seen > ? "
                         + "ORDER BY last_seen DESC, alert_id DESC LIMIT ?",
                 MAPPER, Timestamp.from(Instant.ofEpochMilli(Math.max(0L, sinceMs))), limit);
+    }
+
+    /**
+     * 历史键集分页：排序键 {@code (last_seen DESC, tenant DESC, alert_id DESC)}。
+     *
+     * <p>不拼 OFFSET；游标比较展开成布尔表达式，H2 与 PostgreSQL 都不依赖 row-value 比较。
+     * 时间参数取游标里的微秒值，边界与数据库回读的 {@code last_seen} 同精度。
+     */
+    public List<AlertIntake> history(AlertHistoryCursor after, int fetch) {
+        StringBuilder sql = new StringBuilder("SELECT * FROM alert_intake");
+        List<Object> args = new ArrayList<>();
+        if (after != null) {
+            sql.append(" WHERE last_seen < ? OR (last_seen = ? AND (tenant < ?"
+                    + " OR (tenant = ? AND alert_id < ?)))");
+            Timestamp at = Timestamp.from(after.lastSeen());
+            args.add(at);
+            args.add(at);
+            args.add(after.tenant());
+            args.add(after.tenant());
+            args.add(after.alertId());
+        }
+        sql.append(" ORDER BY last_seen DESC, tenant DESC, alert_id DESC LIMIT ?");
+        args.add(fetch);
+        return jdbc.query(sql.toString(), MAPPER, args.toArray());
     }
 
     public int markIncident(String tenant, String alertId, String incidentId) {

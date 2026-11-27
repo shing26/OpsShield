@@ -285,6 +285,19 @@ public class AdminController {
     }
 
     /**
+     * 告警历史回看（ADR-0047）：跨租户键集分页，游标不扩大可见范围。
+     * 与 /alerts/recent 同门禁；非法游标/limit 由 service 返回 400。
+     */
+    @GetMapping("/alerts/history")
+    public Map<String, Object> alertsHistory(
+            @RequestParam(name = "cursor", required = false) String cursor,
+            @RequestParam(name = "limit", required = false) String limit,
+            HttpServletRequest http) {
+        requirePlatformAdmin(http, "alerts/history");
+        return alerts.history(cursor, limit);
+    }
+
+    /**
      * 一键建单（AC5 / R1）：{@code POST /alerts/{alertId}/incident?tenant=<tenant>}。
      *
      * <p>{@code tenant} **必填**——{@code alertId} 由桥按四元组派生、不含租户，而本端点跨租户
